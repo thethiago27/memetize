@@ -43,6 +43,7 @@ describe.skipIf(!handle || !ffmpegAvailable)('ingestAsset (integration)', () => 
         vision: { kind: 'fixture', model: null },
         llm: { kind: 'fixture', model: null },
         embedding: { kind: 'fixture', model: null },
+        audio: { kind: 'fixture', model: null },
       },
     };
     samplePath = join(tmp, 'sample.mp4');

@@ -25,6 +25,9 @@ export const JobType = z.enum([
   'VISION_ANALYZE',
   'MOMENT_EXTRACT',
   'EMBED',
+  'AUDIO_ANALYZE',
+  'LYRICS',
+  'NARRATIVE',
 ]);
 export type JobType = z.infer<typeof JobType>;
 
@@ -38,3 +41,20 @@ export const AssetStatus = z.enum([
   'FAILED',
 ]);
 export type AssetStatus = z.infer<typeof AssetStatus>;
+
+/** Project lifecycle (spec section 41). This increment only reaches
+ * `ANALYZING_AUDIO`; matching/director/render move it further (later phases). */
+export const ProjectStatus = z.enum([
+  'CREATED',
+  'ANALYZING_AUDIO',
+  'PLANNING',
+  'TIMELINE_READY',
+  'RENDERING',
+  'COMPLETED',
+  'FAILED',
+]);
+export type ProjectStatus = z.infer<typeof ProjectStatus>;
+
+/** Where a project's lyrics came from (spec section 26). */
+export const LyricSource = z.enum(['USER', 'TRANSCRIPT', 'FIXTURE']);
+export type LyricSource = z.infer<typeof LyricSource>;

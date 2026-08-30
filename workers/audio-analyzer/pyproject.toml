@@ -1,0 +1,32 @@
+[project]
+name = "audio-analyzer"
+version = "0.1.0"
+description = "Audio analysis worker for memetize (Node <-> Python stdin/stdout protocol)"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[project.optional-dependencies]
+# Real BPM/beat/energy analysis (spec section 25), installed on demand with:
+# uv sync --extra librosa. The default "fixture" path needs none of this.
+librosa = ["librosa>=0.10", "numpy>=1.26"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+pythonpath = ["."]

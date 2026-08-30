@@ -13,6 +13,9 @@ export const JOB_RESOURCE_CLASS: Record<JobType, ResourceClass> = {
   VISION_ANALYZE: 'GPU',
   MOMENT_EXTRACT: 'CPU_LIGHT',
   EMBED: 'GPU',
+  AUDIO_ANALYZE: 'CPU_HEAVY',
+  LYRICS: 'GPU',
+  NARRATIVE: 'CPU_LIGHT',
 };
 
 /**
@@ -29,4 +32,7 @@ export const WORKER_VERSION: Record<JobType, string> = {
   VISION_ANALYZE: '1.0.0',
   MOMENT_EXTRACT: '1.0.0',
   EMBED: '1.0.0',
+  AUDIO_ANALYZE: '1.0.0',
+  LYRICS: '1.0.0',
+  NARRATIVE: '1.0.0',
 };

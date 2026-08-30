@@ -37,6 +37,8 @@ const EnvSchema = z.object({
   LLM_MODEL: z.string().optional(),
   EMBEDDING_PROVIDER: z.string().optional(),
   EMBEDDING_MODEL: z.string().optional(),
+  AUDIO_PROVIDER: z.string().optional(),
+  AUDIO_MODEL: z.string().optional(),
 });
 
 /**
@@ -71,6 +73,9 @@ export interface AppConfig {
     vision: ProviderConfig;
     llm: ProviderConfig;
     embedding: ProviderConfig;
+    /** Not a `model-providers` abstraction: passed straight to the Python
+     * audio analyzer, mirroring `TRANSCRIPTION_PROVIDER` (spec section 66). */
+    audio: ProviderConfig;
   };
 }
 
@@ -112,6 +117,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       embedding: {
         kind: parsed.EMBEDDING_PROVIDER?.trim() || 'fixture',
         model: parsed.EMBEDDING_MODEL?.trim() || null,
+      },
+      audio: {
+        kind: parsed.AUDIO_PROVIDER?.trim() || 'fixture',
+        model: parsed.AUDIO_MODEL?.trim() || null,
       },
     },
   };

@@ -65,9 +65,54 @@ export interface MomentSuggestResult {
   promptVersion: string;
 }
 
+export interface AudioSectionRef {
+  type: string;
+  startMs: number;
+  endMs: number;
+}
+
+export interface EnergyPointRef {
+  timeMs: number;
+  value: number;
+}
+
+export interface LyricLineRef {
+  startMs: number;
+  endMs: number;
+  text: string;
+}
+
+export interface NarrativeSegmentSuggestion {
+  startMs: number;
+  endMs: number;
+  lyrics: string;
+  meaning: string;
+  emotion: string;
+  narrativeFunction: string;
+  visualIdeas: string[];
+  literalness: number;
+  ironyPotential: number;
+  energy: number;
+}
+
+export interface NarrativeAnalyzeInput {
+  durationMs: number;
+  sections: AudioSectionRef[];
+  energyCurve: EnergyPointRef[];
+  lyrics: LyricLineRef[];
+}
+
+export interface NarrativeAnalyzeResult {
+  segments: NarrativeSegmentSuggestion[];
+  extractor: string;
+  extractorVersion: string;
+  promptVersion: string;
+}
+
 export interface LLMProvider {
   readonly name: string;
   suggestMoments(input: MomentSuggestInput): Promise<MomentSuggestResult>;
+  analyzeNarrative(input: NarrativeAnalyzeInput): Promise<NarrativeAnalyzeResult>;
 }
 
 export interface EmbedResult {

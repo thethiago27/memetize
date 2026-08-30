@@ -1,0 +1,22 @@
+{
+  "name": "@memetize/audio-analyzer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@memetize/contracts": "workspace:*",
+    "@memetize/database": "workspace:*",
+    "@memetize/job-system": "workspace:*",
+    "@memetize/orchestrator": "workspace:*",
+    "@memetize/projects": "workspace:*",
+    "@memetize/shared": "workspace:*"
+  }
+}

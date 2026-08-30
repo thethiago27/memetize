@@ -1,3 +1,4 @@
+export * from './audio';
 export * from './embeddings';
 export * from './enums';
 export * from './media';

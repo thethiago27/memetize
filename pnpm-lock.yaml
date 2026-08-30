@@ -29,6 +29,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@memetize/audio-analyzer':
+        specifier: workspace:*
+        version: link:../../workers/audio-analyzer
       '@memetize/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -44,15 +47,24 @@ importers:
       '@memetize/job-system':
         specifier: workspace:*
         version: link:../../packages/job-system
+      '@memetize/lyrics':
+        specifier: workspace:*
+        version: link:../../workers/lyrics
       '@memetize/media-catalog':
         specifier: workspace:*
         version: link:../../packages/media-catalog
       '@memetize/moment-extractor':
         specifier: workspace:*
         version: link:../../workers/moment-extractor
+      '@memetize/narrative-analyzer':
+        specifier: workspace:*
+        version: link:../../workers/narrative-analyzer
       '@memetize/orchestrator':
         specifier: workspace:*
         version: link:../../packages/orchestrator
+      '@memetize/projects':
+        specifier: workspace:*
+        version: link:../../packages/projects
       '@memetize/retriever':
         specifier: workspace:*
         version: link:../../packages/retriever
@@ -160,6 +172,24 @@ importers:
         specifier: workspace:*
         version: link:../shared
 
+  packages/projects:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@memetize/database':
+        specifier: workspace:*
+        version: link:../database
+      '@memetize/job-system':
+        specifier: workspace:*
+        version: link:../job-system
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
+
   packages/prompts: {}
 
   packages/retriever:
@@ -194,6 +224,27 @@ importers:
       zod:
         specifier: ^4.5.4
         version: 4.5.4
+
+  workers/audio-analyzer:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@memetize/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@memetize/job-system':
+        specifier: workspace:*
+        version: link:../../packages/job-system
+      '@memetize/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
+      '@memetize/projects':
+        specifier: workspace:*
+        version: link:../../packages/projects
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
 
   workers/embedding:
     dependencies:
@@ -234,6 +285,24 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
 
+  workers/lyrics:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@memetize/job-system':
+        specifier: workspace:*
+        version: link:../../packages/job-system
+      '@memetize/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
+      '@memetize/projects':
+        specifier: workspace:*
+        version: link:../../packages/projects
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+
   workers/moment-extractor:
     dependencies:
       '@memetize/contracts':
@@ -251,6 +320,27 @@ importers:
       '@memetize/orchestrator':
         specifier: workspace:*
         version: link:../../packages/orchestrator
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+
+  workers/narrative-analyzer:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@memetize/job-system':
+        specifier: workspace:*
+        version: link:../../packages/job-system
+      '@memetize/model-providers':
+        specifier: workspace:*
+        version: link:../../packages/model-providers
+      '@memetize/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
+      '@memetize/projects':
+        specifier: workspace:*
+        version: link:../../packages/projects
       '@memetize/shared':
         specifier: workspace:*
         version: link:../../packages/shared

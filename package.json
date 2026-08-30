@@ -18,12 +18,14 @@
     "cli": "tsx apps/cli/src/index.ts",
     "db:generate": "pnpm --filter @memetize/database db:generate",
     "db:migrate": "pnpm --filter @memetize/database db:migrate",
-    "py:sync": "pnpm py:sync:scene-detector && pnpm py:sync:transcript",
+    "py:sync": "pnpm py:sync:scene-detector && pnpm py:sync:transcript && pnpm py:sync:audio-analyzer",
     "py:sync:scene-detector": "cd workers/scene-detector && uv sync",
     "py:sync:transcript": "cd workers/transcript && uv sync",
-    "py:test": "pnpm py:test:scene-detector && pnpm py:test:transcript",
+    "py:sync:audio-analyzer": "cd workers/audio-analyzer && uv sync",
+    "py:test": "pnpm py:test:scene-detector && pnpm py:test:transcript && pnpm py:test:audio-analyzer",
     "py:test:scene-detector": "cd workers/scene-detector && uv run pytest -q",
     "py:test:transcript": "cd workers/transcript && uv run pytest -q",
+    "py:test:audio-analyzer": "cd workers/audio-analyzer && uv run pytest -q",
     "fixture": "bash scripts/generate-fixture.sh"
   },
   "devDependencies": {

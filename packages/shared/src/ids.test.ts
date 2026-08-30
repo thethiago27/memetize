@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { assetId, embeddingId, jobId, momentId, prefixedId, sceneId, segmentId } from './ids';
+import {
+  assetId,
+  audioAnalysisId,
+  embeddingId,
+  jobId,
+  lyricsId,
+  momentId,
+  narrativeId,
+  prefixedId,
+  projectId,
+  sceneId,
+  segmentId,
+} from './ids';
 
 describe('ids', () => {
   it('produces prefixed ids', () => {
@@ -9,6 +21,10 @@ describe('ids', () => {
     expect(momentId()).toMatch(/^mom_[0-9a-z]{21}$/);
     expect(segmentId()).toMatch(/^seg_[0-9a-z]{21}$/);
     expect(embeddingId()).toMatch(/^emb_[0-9a-z]{21}$/);
+    expect(projectId()).toMatch(/^prj_[0-9a-z]{21}$/);
+    expect(narrativeId()).toMatch(/^nar_[0-9a-z]{21}$/);
+    expect(audioAnalysisId()).toMatch(/^aud_[0-9a-z]{21}$/);
+    expect(lyricsId()).toMatch(/^lyr_[0-9a-z]{21}$/);
   });
 
   it('is collision-resistant across many ids', () => {

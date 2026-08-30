@@ -1,0 +1,60 @@
+import { join } from 'node:path';
+import type { AppConfig } from '@memetize/shared';
+
+/**
+ * Storage layout for the music/project pipeline (spec sections 24, 39).
+ * Deliberately separate from `@memetize/media-catalog`'s `storage/assets`
+ * layout: projects are a different domain (music, not video).
+ */
+export interface StoragePath {
+  /** Absolute path for filesystem I/O. */
+  absolute: string;
+  /** Repo-relative path stored in the database (spec section 11). */
+  relative: string;
+}
+
+/** `storage/audio/{projectId}` */
+export function audioDir(config: AppConfig, projectId: string): StoragePath {
+  return {
+    absolute: join(config.storageDir, 'audio', projectId),
+    relative: `${config.storageDirRelative}/audio/${projectId}`,
+  };
+}
+
+/** A named file inside a project's audio directory, e.g. `original.mp3`. */
+export function audioFile(config: AppConfig, projectId: string, name: string): StoragePath {
+  const dir = audioDir(config, projectId);
+  return {
+    absolute: join(dir.absolute, name),
+    relative: `${dir.relative}/${name}`,
+  };
+}
+
+/** Debug cache file for the Audio Analyzer output (spec section 64). */
+export function audioDebugFile(config: AppConfig, projectId: string): StoragePath {
+  return {
+    absolute: join(config.storageDir, 'cache', projectId, 'audio.json'),
+    relative: `${config.storageDirRelative}/cache/${projectId}/audio.json`,
+  };
+}
+
+/** Debug cache file for the Lyrics worker output (spec section 64). */
+export function lyricsDebugFile(config: AppConfig, projectId: string): StoragePath {
+  return {
+    absolute: join(config.storageDir, 'cache', projectId, 'lyrics.json'),
+    relative: `${config.storageDirRelative}/cache/${projectId}/lyrics.json`,
+  };
+}
+
+/** Debug cache file for the Narrative Analyzer output: prompt version, raw and parsed (spec section 64). */
+export function narrativeDebugFile(config: AppConfig, projectId: string): StoragePath {
+  return {
+    absolute: join(config.storageDir, 'cache', projectId, 'narrative.json'),
+    relative: `${config.storageDirRelative}/cache/${projectId}/narrative.json`,
+  };
+}
+
+/** Resolves a repo-relative stored path back to an absolute path. */
+export function resolveStorage(config: AppConfig, relative: string): string {
+  return join(config.rootDir, relative);
+}

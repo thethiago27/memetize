@@ -10,14 +10,18 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@memetize/audio-analyzer": "workspace:*",
     "@memetize/contracts": "workspace:*",
     "@memetize/database": "workspace:*",
     "@memetize/embedding": "workspace:*",
     "@memetize/frame-extractor": "workspace:*",
     "@memetize/job-system": "workspace:*",
+    "@memetize/lyrics": "workspace:*",
     "@memetize/media-catalog": "workspace:*",
     "@memetize/moment-extractor": "workspace:*",
+    "@memetize/narrative-analyzer": "workspace:*",
     "@memetize/orchestrator": "workspace:*",
+    "@memetize/projects": "workspace:*",
     "@memetize/retriever": "workspace:*",
     "@memetize/scene-detector": "workspace:*",
     "@memetize/shared": "workspace:*",

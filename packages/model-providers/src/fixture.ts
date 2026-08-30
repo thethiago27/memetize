@@ -1,11 +1,20 @@
-import { MOMENTS_PROMPT_VERSION, VISION_PROMPT_VERSION } from '@memetize/prompts';
+import {
+  MOMENTS_PROMPT_VERSION,
+  NARRATIVE_PROMPT_VERSION,
+  VISION_PROMPT_VERSION,
+} from '@memetize/prompts';
 import { sha256Hex } from '@memetize/shared';
 import type {
   EmbeddingProvider,
   EmbedResult,
+  EnergyPointRef,
   LLMProvider,
+  LyricLineRef,
   MomentSuggestInput,
   MomentSuggestResult,
+  NarrativeAnalyzeInput,
+  NarrativeAnalyzeResult,
+  NarrativeSegmentSuggestion,
   VisionAnalyzeInput,
   VisionAnalyzeResult,
   VisionProvider,
@@ -73,6 +82,87 @@ export class FixtureLLMProvider implements LLMProvider {
       promptVersion: MOMENTS_PROMPT_VERSION,
     };
   }
+
+  /**
+   * Deterministic narrative reading (spec section 27): one segment per lyric
+   * line when there are lyrics, otherwise one segment per musical section
+   * (instrumental tracks still get a narrative timeline). `energy` is looked
+   * up from the nearest point on the audio analyzer's energy curve.
+   */
+  async analyzeNarrative(input: NarrativeAnalyzeInput): Promise<NarrativeAnalyzeResult> {
+    const segments: NarrativeSegmentSuggestion[] =
+      input.lyrics.length > 0
+        ? input.lyrics.map((line, index) =>
+            fixtureSegmentFromLyric(line, index, input.lyrics.length, input.energyCurve),
+          )
+        : input.sections.map((section) => fixtureSegmentFromSection(section, input.energyCurve));
+
+    return {
+      segments,
+      extractor: FIXTURE_NAME,
+      extractorVersion: FIXTURE_VERSION,
+      promptVersion: NARRATIVE_PROMPT_VERSION,
+    };
+  }
+}
+
+/** Nearest energy-curve value to `timeMs`, or a neutral default when the curve is empty. */
+function nearestEnergy(timeMs: number, energyCurve: EnergyPointRef[]): number {
+  if (energyCurve.length === 0) return 0.5;
+  let best = energyCurve[0];
+  let bestDiff = Math.abs((best?.timeMs ?? 0) - timeMs);
+  for (const point of energyCurve) {
+    const diff = Math.abs(point.timeMs - timeMs);
+    if (diff < bestDiff) {
+      best = point;
+      bestDiff = diff;
+    }
+  }
+  return best?.value ?? 0.5;
+}
+
+function fixtureSegmentFromLyric(
+  line: LyricLineRef,
+  index: number,
+  total: number,
+  energyCurve: EnergyPointRef[],
+): NarrativeSegmentSuggestion {
+  const narrativeFunction = index === 0 ? 'setup' : index === total - 1 ? 'payoff' : 'escalation';
+  const visualIdeas = line.text
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 3)
+    .map((word) => word.toLowerCase());
+  return {
+    startMs: line.startMs,
+    endMs: line.endMs,
+    lyrics: line.text,
+    meaning: `literal reading of "${line.text}"`,
+    emotion: 'neutral',
+    narrativeFunction,
+    visualIdeas: visualIdeas.length > 0 ? visualIdeas : ['reaction'],
+    literalness: 0.5,
+    ironyPotential: 0.5,
+    energy: nearestEnergy(line.startMs, energyCurve),
+  };
+}
+
+function fixtureSegmentFromSection(
+  section: { type: string; startMs: number; endMs: number },
+  energyCurve: EnergyPointRef[],
+): NarrativeSegmentSuggestion {
+  return {
+    startMs: section.startMs,
+    endMs: section.endMs,
+    lyrics: '',
+    meaning: `instrumental ${section.type} of the track`,
+    emotion: 'neutral',
+    narrativeFunction: section.type,
+    visualIdeas: [section.type],
+    literalness: 0.5,
+    ironyPotential: 0.3,
+    energy: nearestEnergy(section.startMs, energyCurve),
+  };
 }
 
 /**

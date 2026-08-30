@@ -1,9 +1,15 @@
 import type {
   AssetStatus,
+  AudioSection,
+  BeatPoint,
   EmbeddingType,
+  EnergyPoint,
   ExtractedFrame,
   JobStatus,
   JobType,
+  LyricLine,
+  LyricSource,
+  ProjectStatus,
   ResourceClass,
   TranscriptWord,
   VisionSceneAnalysis,
@@ -221,3 +227,120 @@ export type MomentRow = typeof moments.$inferSelect;
 export type NewMomentRow = typeof moments.$inferInsert;
 export type MomentEmbeddingRow = typeof momentEmbeddings.$inferSelect;
 export type NewMomentEmbeddingRow = typeof momentEmbeddings.$inferInsert;
+
+/** A music project (spec sections 39, 41): the timeline the catalog gets matched into. */
+export const projects = pgTable(
+  'projects',
+  {
+    id: text('id').primaryKey(),
+    filename: text('filename').notNull(),
+    status: text('status').$type<ProjectStatus>().notNull().default('CREATED'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'projects_status_check',
+      sql`${table.status} in ('CREATED','ANALYZING_AUDIO','PLANNING','TIMELINE_READY','RENDERING','COMPLETED','FAILED')`,
+    ),
+  ],
+);
+
+/**
+ * The project's source audio file (spec section 39). No unique checksum: the
+ * same mp3 can seed two independent projects (spec section 41 note).
+ */
+export const projectAudio = pgTable('project_audio', {
+  projectId: text('project_id')
+    .primaryKey()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  originalPath: text('original_path').notNull(),
+  // Repo-relative path to a copy of the user-supplied lyrics file, if any
+  // (spec section 26); kept so `reprocess --from lyrics` can replay it.
+  lyricsPath: text('lyrics_path'),
+  checksum: text('checksum').notNull(),
+  durationMs: integer('duration_ms').notNull(),
+  contentType: text('content_type'),
+  sizeBytes: bigint('size_bytes', { mode: 'number' }),
+});
+
+/** Audio Analyzer output (spec section 25). Times are integer ms; BPM/energy are plain numbers. */
+export const audioAnalysis = pgTable(
+  'audio_analysis',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    durationMs: integer('duration_ms').notNull(),
+    bpm: real('bpm').notNull(),
+    beats: jsonb('beats').$type<BeatPoint[]>().notNull().default([]),
+    downbeats: jsonb('downbeats').$type<number[]>().notNull().default([]),
+    sections: jsonb('sections').$type<AudioSection[]>().notNull().default([]),
+    energyCurve: jsonb('energy_curve').$type<EnergyPoint[]>().notNull().default([]),
+    analyzer: text('analyzer').notNull(),
+    analyzerVersion: text('analyzer_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('audio_analysis_unique').on(table.projectId, table.analyzer, table.analyzerVersion),
+    index('audio_analysis_project_idx').on(table.projectId),
+  ],
+);
+
+/** Lyrics Worker output (spec section 26): user-supplied, transcribed, or empty/fixture. */
+export const lyrics = pgTable(
+  'lyrics',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    source: text('source').$type<LyricSource>().notNull(),
+    lines: jsonb('lines').$type<LyricLine[]>().notNull().default([]),
+    model: text('model').notNull(),
+    modelVersion: text('model_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('lyrics_unique').on(table.projectId, table.source, table.model, table.modelVersion),
+    index('lyrics_project_idx').on(table.projectId),
+    check('lyrics_source_check', sql`${table.source} in ('USER','TRANSCRIPT','FIXTURE')`),
+  ],
+);
+
+/** Narrative Analyzer output (spec section 27): editorial reading of lyrics + musical structure. */
+export const narrativeSegments = pgTable(
+  'narrative_segments',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    startMs: integer('start_ms').notNull(),
+    endMs: integer('end_ms').notNull(),
+    lyrics: text('lyrics').notNull(),
+    meaning: text('meaning').notNull(),
+    emotion: text('emotion').notNull(),
+    narrativeFunction: text('narrative_function').notNull(),
+    visualIdeas: jsonb('visual_ideas').$type<string[]>().notNull().default([]),
+    literalness: real('literalness').notNull(),
+    ironyPotential: real('irony_potential').notNull(),
+    energy: real('energy').notNull(),
+    extractor: text('extractor').notNull(),
+    extractorVersion: text('extractor_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('narrative_segments_project_idx').on(table.projectId)],
+);
+
+export type ProjectRow = typeof projects.$inferSelect;
+export type NewProjectRow = typeof projects.$inferInsert;
+export type ProjectAudioRow = typeof projectAudio.$inferSelect;
+export type NewProjectAudioRow = typeof projectAudio.$inferInsert;
+export type AudioAnalysisRow = typeof audioAnalysis.$inferSelect;
+export type NewAudioAnalysisRow = typeof audioAnalysis.$inferInsert;
+export type LyricsRow = typeof lyrics.$inferSelect;
+export type NewLyricsRow = typeof lyrics.$inferInsert;
+export type NarrativeSegmentRow = typeof narrativeSegments.$inferSelect;
+export type NewNarrativeSegmentRow = typeof narrativeSegments.$inferInsert;
