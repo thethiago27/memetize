@@ -1,4 +1,4 @@
-import type { LyricLine } from '@memetize/contracts';
+import type { LyricLine, TranscriptSegment } from '@memetize/contracts';
 
 /**
  * Lyrics parsing (spec section 26). Pure functions of raw file content, so
@@ -57,4 +57,53 @@ export function parseTextLines(content: string, durationMs: number): LyricLine[]
     const endMs = index === lastIndex ? durationMs : clamp(startMs + sliceMs, startMs, durationMs);
     return { startMs, endMs, text, words: [] };
   });
+}
+
+function pad(value: number, width: number): string {
+  return String(value).padStart(width, '0');
+}
+
+/** Formats `[mm:ss.xxx]` from integer milliseconds (inverse of `parseLrc`). */
+export function formatLrcTimestamp(ms: number): string {
+  const clamped = Math.max(0, Math.round(ms));
+  const minutes = Math.floor(clamped / 60_000);
+  const seconds = Math.floor((clamped % 60_000) / 1000);
+  const millis = clamped % 1000;
+  return `[${pad(minutes, 2)}:${pad(seconds, 2)}.${pad(millis, 3)}]`;
+}
+
+/** Serializes timed lyric lines to `.lrc` (`[mm:ss.xxx]text` per line). */
+export function formatLrc(lines: Pick<LyricLine, 'startMs' | 'text'>[]): string {
+  const body = lines
+    .map((line) => ({ startMs: line.startMs, text: line.text.trim() }))
+    .filter((line) => line.text.length > 0)
+    .map((line) => `${formatLrcTimestamp(line.startMs)}${line.text}`)
+    .join('\n');
+  return body.length > 0 ? `${body}\n` : '';
+}
+
+/** Maps a transcript (spec section 17) onto lyric lines (spec section 26). */
+export function segmentsToLyricLines(
+  segments: TranscriptSegment[],
+  durationMs: number,
+): LyricLine[] {
+  return segments
+    .map((segment) => {
+      const text = segment.text.trim();
+      const startMs = clamp(segment.startMs, 0, durationMs);
+      const endMs = clamp(Math.max(segment.endMs, startMs), startMs, durationMs);
+      return {
+        startMs,
+        endMs,
+        text,
+        words: segment.words
+          .map((word) => ({
+            text: word.text.trim(),
+            startMs: clamp(word.startMs, 0, durationMs),
+            endMs: clamp(Math.max(word.endMs, word.startMs), 0, durationMs),
+          }))
+          .filter((word) => word.text.length > 0),
+      };
+    })
+    .filter((line) => line.text.length > 0);
 }

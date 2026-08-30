@@ -4,13 +4,19 @@ import { fileURLToPath } from 'node:url';
 import { AudioAnalyzeInput, AudioAnalyzeOutput, WorkerResult } from '@memetize/contracts';
 import { JobFailure } from '@memetize/job-system';
 import type { JobHandler } from '@memetize/orchestrator';
-import { audioDebugFile, maybeEnqueueNarrative, replaceAudioAnalysis } from '@memetize/projects';
+import {
+  audioDebugFile,
+  maybeEnqueueNarrative,
+  replaceAudioAnalysis,
+  resolveStorage,
+} from '@memetize/projects';
 import { ensureDir, runPythonWorker } from '@memetize/shared';
 
 /** Python project root (this file lives at workers/audio-analyzer/src/handler.ts). */
 export const AUDIO_ANALYZER_DIR = fileURLToPath(new URL('..', import.meta.url));
 
-const TIMEOUT_MS = 60_000;
+const FIXTURE_TIMEOUT_MS = 60_000;
+const LIBROSA_TIMEOUT_MS = 180_000;
 
 /**
  * AUDIO_ANALYZE handler: spawns the Python worker over the stdin/stdout
@@ -25,21 +31,26 @@ export function createAudioAnalyzeHandler(): JobHandler {
     if (!parsed.success) {
       throw new JobFailure('INVALID_INPUT', parsed.error.message, false);
     }
-    const { projectId, durationMs } = parsed.data;
+    const { projectId, durationMs, originalPath } = parsed.data;
     const provider = ctx.config.providers.audio.kind;
+    const path = resolveStorage(ctx.config, originalPath);
+    const useLibrosa = provider === 'librosa';
 
     let stdout: string;
     try {
       ({ stdout } = await runPythonWorker({
         cwd: AUDIO_ANALYZER_DIR,
         module: 'audio_analyzer',
+        args: useLibrosa
+          ? ['run', '--extra', 'librosa', 'python', '-m', 'audio_analyzer']
+          : undefined,
         request: {
           jobId: ctx.job.id,
           entityId: projectId,
           workerVersion: ctx.job.workerVersion,
-          input: { projectId, durationMs, provider },
+          input: { projectId, durationMs, provider, path },
         },
-        timeoutMs: TIMEOUT_MS,
+        timeoutMs: useLibrosa ? LIBROSA_TIMEOUT_MS : FIXTURE_TIMEOUT_MS,
       }));
     } catch (error) {
       throw new JobFailure(

@@ -43,11 +43,12 @@ def main() -> int:
     asset_id = input_data.get("assetId")
     audio_path = input_data.get("audioPath")
     provider = input_data.get("provider") or "fixture"
+    model = input_data.get("model") or None
 
     try:
         from transcript_worker.transcriber import transcribe
 
-        result = transcribe(audio_path, provider=provider)
+        result = transcribe(audio_path, provider=provider, model=model)
     except Exception as error:  # noqa: BLE001 - report any failure through the protocol
         _emit(
             {

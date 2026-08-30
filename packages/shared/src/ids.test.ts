@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assetId,
   audioAnalysisId,
+  clipId,
   embeddingId,
   jobId,
   lyricsId,
@@ -12,6 +13,7 @@ import {
   projectId,
   sceneId,
   segmentId,
+  timelineVersionId,
 } from './ids';
 
 describe('ids', () => {
@@ -27,6 +29,8 @@ describe('ids', () => {
     expect(audioAnalysisId()).toMatch(/^aud_[0-9a-z]{21}$/);
     expect(lyricsId()).toMatch(/^lyr_[0-9a-z]{21}$/);
     expect(matchId()).toMatch(/^mat_[0-9a-z]{21}$/);
+    expect(timelineVersionId()).toMatch(/^tlv_[0-9a-z]{21}$/);
+    expect(clipId()).toMatch(/^clp_[0-9a-z]{21}$/);
   });
 
   it('is collision-resistant across many ids', () => {

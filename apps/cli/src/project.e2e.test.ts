@@ -9,6 +9,7 @@ import { createTestDatabase, type Database, truncateAll } from '@memetize/databa
 import { Orchestrator, ResourceScheduler } from '@memetize/orchestrator';
 import {
   getAudioAnalysis,
+  getLatestTimeline,
   getLyrics,
   getProject,
   ingestProject,
@@ -94,17 +95,18 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('project pipeline (e
     const outcomes = await orchestrator.drain({ entityId: project.id });
     const types = outcomes.map((outcome) => outcome.job.type);
     // AUDIO_ANALYZE and LYRICS fan out in parallel (relative order unspecified);
-    // NARRATIVE only runs once both are done, then chains straight into MATCH.
-    expect(types).toHaveLength(4);
+    // NARRATIVE only runs once both are done, then chains into MATCH, then DIRECTOR.
+    expect(types).toHaveLength(5);
     expect(new Set(types.slice(0, 2))).toEqual(new Set(['AUDIO_ANALYZE', 'LYRICS']));
     expect(types[2]).toBe('NARRATIVE');
     expect(types[3]).toBe('MATCH');
+    expect(types[4]).toBe('DIRECTOR');
     expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
 
     const refreshed = await getProject(db, project.id);
-    // This increment reaches PLANNING (spec section 41): director/render are
-    // later phases, so it never advances to TIMELINE_READY here.
-    expect(refreshed?.status).toBe('PLANNING');
+    // This increment reaches TIMELINE_READY (spec section 41) once the
+    // Director picks a clip per segment; render is a later phase.
+    expect(refreshed?.status).toBe('TIMELINE_READY');
 
     const audio = await getAudioAnalysis(db, project.id);
     expect(audio).toBeTruthy();
@@ -137,6 +139,12 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('project pipeline (e
     for (const match of matches) {
       expect(match.shortlist).toEqual([]);
     }
+
+    // DIRECTOR still completes with an empty timeline (spec section 54's
+    // "catálogo / shortlist vazia não é falha").
+    const timeline = await getLatestTimeline(db, project.id);
+    expect(timeline?.version).toBe(1);
+    expect(timeline?.data.clips).toEqual([]);
 
     // Re-ingesting the same bytes creates a *different* project (spec section 41 note).
     const again = await ingestProject({ db, config, filePath: fixture });

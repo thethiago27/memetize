@@ -43,11 +43,12 @@ def main() -> int:
     project_id = input_data.get("projectId")
     duration_ms = input_data.get("durationMs")
     provider = input_data.get("provider") or "fixture"
+    path = input_data.get("path")
 
     try:
         from audio_analyzer.analyzer import analyze_audio
 
-        result = analyze_audio(duration_ms, provider=provider)
+        result = analyze_audio(duration_ms, provider=provider, path=path)
     except Exception as error:  # noqa: BLE001 - report any failure through the protocol
         _emit(
             {

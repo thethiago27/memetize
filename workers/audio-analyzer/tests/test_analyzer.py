@@ -39,6 +39,11 @@ def test_rejects_non_positive_duration() -> None:
 
 def test_rejects_unknown_provider() -> None:
     with pytest.raises(ValueError):
+        analyze_audio(6000, provider="essentia")
+
+
+def test_librosa_requires_a_path() -> None:
+    with pytest.raises(ValueError, match="path"):
         analyze_audio(6000, provider="librosa")
 
 

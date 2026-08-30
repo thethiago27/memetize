@@ -18,6 +18,7 @@ import type {
   VisionSceneAnalysis,
 } from '@memetize/contracts';
 import { EMBEDDING_DIMENSIONS } from '@memetize/shared';
+import type { Timeline } from '@memetize/timeline';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -371,6 +372,32 @@ export const segmentMatches = pgTable(
   ],
 );
 
+/**
+ * Timeline Director output (spec sections 31, 34-35, 39): append-only —
+ * `insertTimelineVersion` always inserts the next `version`, never
+ * overwrites an existing row, so `project inspect` history and future
+ * rollback (spec section 35) both have every version to look at.
+ */
+export const timelineVersions = pgTable(
+  'timeline_versions',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull(),
+    data: jsonb('data').$type<Timeline>().notNull(),
+    director: text('director').notNull(),
+    directorVersion: text('director_version').notNull(),
+    promptVersion: text('prompt_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('timeline_versions_unique').on(table.projectId, table.version),
+    index('timeline_versions_project_idx').on(table.projectId),
+  ],
+);
+
 export type ProjectRow = typeof projects.$inferSelect;
 export type NewProjectRow = typeof projects.$inferInsert;
 export type ProjectAudioRow = typeof projectAudio.$inferSelect;
@@ -383,3 +410,5 @@ export type NarrativeSegmentRow = typeof narrativeSegments.$inferSelect;
 export type NewNarrativeSegmentRow = typeof narrativeSegments.$inferInsert;
 export type SegmentMatchRow = typeof segmentMatches.$inferSelect;
 export type NewSegmentMatchRow = typeof segmentMatches.$inferInsert;
+export type TimelineVersionRow = typeof timelineVersions.$inferSelect;
+export type NewTimelineVersionRow = typeof timelineVersions.$inferInsert;

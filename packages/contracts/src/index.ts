@@ -1,4 +1,5 @@
 export * from './audio';
+export * from './director';
 export * from './embeddings';
 export * from './enums';
 export * from './match';

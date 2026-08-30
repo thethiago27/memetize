@@ -1,10 +1,13 @@
 import {
+  DIRECTOR_PROMPT_VERSION,
   MOMENTS_PROMPT_VERSION,
   NARRATIVE_PROMPT_VERSION,
   VISION_PROMPT_VERSION,
 } from '@memetize/prompts';
 import { sha256Hex } from '@memetize/shared';
 import type {
+  DirectTimelineInput,
+  DirectTimelineResult,
   EmbeddingProvider,
   EmbedResult,
   EnergyPointRef,
@@ -102,6 +105,30 @@ export class FixtureLLMProvider implements LLMProvider {
       extractor: FIXTURE_NAME,
       extractorVersion: FIXTURE_VERSION,
       promptVersion: NARRATIVE_PROMPT_VERSION,
+    };
+  }
+
+  /**
+   * Greedy, not "creative" (spec section 31 decision): for every segment
+   * that has a shortlist, pick its first entry — already the top pick after
+   * ranking and diversification (spec sections 29-30). Segments with an
+   * empty shortlist get no pick, which the worker treats as valid, not a
+   * failure.
+   */
+  async directTimeline(input: DirectTimelineInput): Promise<DirectTimelineResult> {
+    const picks = input.segments
+      .filter((segment) => segment.shortlist.length > 0)
+      .map((segment) => {
+        const top = segment.shortlist[0];
+        if (!top) throw new Error('unreachable: filtered for non-empty shortlist');
+        return { segmentId: segment.id, momentId: top.momentId };
+      });
+
+    return {
+      picks,
+      director: FIXTURE_NAME,
+      directorVersion: FIXTURE_VERSION,
+      promptVersion: DIRECTOR_PROMPT_VERSION,
     };
   }
 }

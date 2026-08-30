@@ -52,6 +52,9 @@ export type AudioAnalyzeOutput = z.infer<typeof AudioAnalyzeOutput>;
 export const LyricsInput = z.object({
   projectId: z.string(),
   lyricsPath: z.string().nullable().default(null),
+  /** Repo-relative path to the project's audio; used when lyrics are
+   * transcribed rather than user-supplied (spec section 26). */
+  originalPath: z.string().optional(),
   durationMs: z.number().int().positive(),
 });
 export type LyricsInput = z.infer<typeof LyricsInput>;

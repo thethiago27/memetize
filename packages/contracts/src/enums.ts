@@ -29,6 +29,7 @@ export const JobType = z.enum([
   'LYRICS',
   'NARRATIVE',
   'MATCH',
+  'DIRECTOR',
 ]);
 export type JobType = z.infer<typeof JobType>;
 
@@ -43,8 +44,8 @@ export const AssetStatus = z.enum([
 ]);
 export type AssetStatus = z.infer<typeof AssetStatus>;
 
-/** Project lifecycle (spec section 41). This increment only reaches
- * `ANALYZING_AUDIO`; matching/director/render move it further (later phases). */
+/** Project lifecycle (spec section 41). This increment reaches
+ * `TIMELINE_READY` via the Director; render moves it further (later phases). */
 export const ProjectStatus = z.enum([
   'CREATED',
   'ANALYZING_AUDIO',

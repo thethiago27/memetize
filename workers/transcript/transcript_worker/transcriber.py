@@ -27,22 +27,34 @@ class TranscriptionResult(TypedDict):
     modelVersion: str
 
 
-def transcribe(audio_path: str | None, provider: str = "fixture") -> TranscriptionResult:
+def transcribe(
+    audio_path: str | None,
+    provider: str = "fixture",
+    model: str | None = None,
+) -> TranscriptionResult:
     """Deterministic by default (spec section 66): a clip with no audio
     stream, or the fixture provider, both yield an empty *successful*
     transcript rather than an error."""
     if not audio_path or provider == "fixture":
         return {"segments": [], "model": FIXTURE_MODEL, "modelVersion": FIXTURE_VERSION}
 
-    if provider == "mlx":
-        return _transcribe_mlx(audio_path)
+    if provider in ("mlx", "mlx-whisper"):
+        return _transcribe_mlx(audio_path, model)
 
     raise ValueError(
-        f'unsupported TRANSCRIPTION_PROVIDER "{provider}" (only "fixture" and "mlx" are implemented)'
+        'unsupported TRANSCRIPTION_PROVIDER '
+        f'"{provider}" (only "fixture", "mlx", and "mlx-whisper" are implemented)'
     )
 
 
-def _transcribe_mlx(audio_path: str) -> TranscriptionResult:
+def _resolve_mlx_repo(model: str | None) -> str:
+    repo = (model or "mlx-community/whisper-tiny").strip()
+    if "/" not in repo:
+        repo = f"mlx-community/{repo}"
+    return repo
+
+
+def _transcribe_mlx(audio_path: str, model: str | None = None) -> TranscriptionResult:
     try:
         import mlx_whisper
     except ImportError as error:
@@ -51,7 +63,8 @@ def _transcribe_mlx(audio_path: str) -> TranscriptionResult:
             "(uv sync --extra mlx, Apple Silicon only)"
         ) from error
 
-    output = mlx_whisper.transcribe(audio_path, word_timestamps=True)
+    repo = _resolve_mlx_repo(model)
+    output = mlx_whisper.transcribe(audio_path, path_or_hf_repo=repo, word_timestamps=True)
     segments: list[Segment] = []
     for raw_segment in output.get("segments", []):
         words: list[Word] = [
@@ -72,7 +85,7 @@ def _transcribe_mlx(audio_path: str) -> TranscriptionResult:
         )
     return {
         "segments": segments,
-        "model": "mlx-whisper",
+        "model": repo,
         "modelVersion": getattr(mlx_whisper, "__version__", "unknown"),
     }
 

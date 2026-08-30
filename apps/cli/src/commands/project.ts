@@ -1,6 +1,8 @@
 import { resolve } from 'node:path';
 import {
+  generateTimeline,
   getAudioAnalysis,
+  getLatestTimeline,
   getLyrics,
   getProject,
   getProjectAudio,
@@ -26,7 +28,7 @@ export function registerProjectCommands(program: Command): void {
   project
     .command('create')
     .description(
-      'Ingest a song and run the music pipeline (audio analysis + lyrics + narrative + matching)',
+      'Ingest a song and run the music pipeline (audio analysis + lyrics + narrative + matching + director)',
     )
     .argument('<file>', 'path to an audio file')
     .option('--lyrics <file>', 'path to a .lrc or .txt lyrics file')
@@ -80,11 +82,41 @@ export function registerProjectCommands(program: Command): void {
           const lyrics = await getLyrics(ctx.db, row.id);
           const narrative = await listNarrativeSegments(ctx.db, row.id);
           const matches = await listSegmentMatches(ctx.db, row.id);
+          const timeline = await getLatestTimeline(ctx.db, row.id);
           const duration = audio ? `${(audio.durationMs / 1000).toFixed(1)}s` : '-';
           const sectionCount = audio?.sections.length ?? 0;
+          const timelineLabel = timeline ? `timeline v${timeline.version}` : 'no timeline';
           process.stdout.write(
-            `${row.id}  ${row.status.padEnd(15)}  ${duration.padStart(6)}  ${String(sectionCount).padStart(2)} sections  ${String(lyrics?.lines.length ?? 0).padStart(3)} lyrics  ${String(narrative.length).padStart(3)} narrative  ${String(matches.length).padStart(3)} matched  ${row.filename}\n`,
+            `${row.id}  ${row.status.padEnd(15)}  ${duration.padStart(6)}  ${String(sectionCount).padStart(2)} sections  ${String(lyrics?.lines.length ?? 0).padStart(3)} lyrics  ${String(narrative.length).padStart(3)} narrative  ${String(matches.length).padStart(3)} matched  ${timelineLabel.padEnd(12)}  ${row.filename}\n`,
           );
+        }
+      } finally {
+        await ctx.close();
+      }
+    });
+
+  project
+    .command('generate')
+    .description('Force a fresh Director run for a project, creating a new timeline version')
+    .argument('<projectId>', 'project id (prj_...)')
+    .option('--no-wait', 'enqueue only; do not drain the pipeline')
+    .action(async (projectId: string, options: { wait: boolean }) => {
+      const ctx = await buildContext();
+      try {
+        await generateTimeline(ctx.db, projectId);
+        process.stdout.write(`Enqueued a new DIRECTOR run for ${projectId}...\n`);
+
+        if (options.wait) {
+          const outcomes = await ctx.orchestrator.drain({ entityId: projectId });
+          const failed = outcomes.find((outcome) => outcome.status === 'FAILED');
+          if (failed) {
+            process.stdout.write(
+              `Pipeline failed at ${failed.job.type}: ${failed.error?.code ?? ''} ${failed.error?.message ?? ''}\n`,
+            );
+          }
+          await printProjectDetails(ctx, projectId);
+        } else {
+          process.stdout.write("Run 'memetize worker run' to process.\n");
         }
       } finally {
         await ctx.close();
@@ -156,6 +188,7 @@ async function printProjectDetails(ctx: CliContext, id: string): Promise<void> {
   const narrative = await listNarrativeSegments(ctx.db, id);
   const matches = await listSegmentMatches(ctx.db, id);
   const matchBySegment = new Map(matches.map((match) => [match.segmentId, match]));
+  const timeline = await getLatestTimeline(ctx.db, id);
 
   const lines = [
     `Project ${row.id}`,
@@ -178,7 +211,7 @@ async function printProjectDetails(ctx: CliContext, id: string): Promise<void> {
 
   if (lyrics) {
     lines.push(
-      `  lyrics:   source=${lyrics.source}  ${lyrics.lines.length === 0 ? '(instrumental)' : `${lyrics.lines.length} lines`}`,
+      `  lyrics:   source=${lyrics.source}  ${lyrics.lines.length === 0 ? '(instrumental)' : `${lyrics.lines.length} lines`}  lrc=${ctx.config.storageDirRelative}/audio/${id}/lyrics.lrc`,
     );
     for (const line of lyrics.lines) {
       lines.push(`    ${line.startMs}..${line.endMs} ms  "${line.text}"`);
@@ -203,6 +236,20 @@ async function printProjectDetails(ctx: CliContext, id: string): Promise<void> {
     } else if (match) {
       lines.push('      shortlist: (empty — catalog has no candidates)');
     }
+  }
+
+  if (timeline) {
+    const { canvas } = timeline.data;
+    lines.push(
+      `  timeline: v${timeline.version}  ${timeline.data.clips.length} clips  ${canvas.width}x${canvas.height}@${canvas.fps}`,
+    );
+    timeline.data.clips.forEach((clip, index) => {
+      lines.push(
+        `    ${index + 1}. ${clip.id}  ${clip.timeline.startMs}..${clip.timeline.endMs}  ${clip.momentId}  ${clip.source.assetId}  source ${clip.source.startMs}..${clip.source.endMs}  final=${clip.reason.finalScore.toFixed(2)}`,
+      );
+    });
+  } else {
+    lines.push('  timeline: (not generated yet)');
   }
 
   process.stdout.write(`${lines.join('\n')}\n`);

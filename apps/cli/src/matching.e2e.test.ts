@@ -125,15 +125,16 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('matching pipeline (
     const outcomes = await orchestrator.drain({ entityId: project.id });
     const types = outcomes.map((outcome) => outcome.job.type);
     // AUDIO_ANALYZE and LYRICS fan out in parallel (relative order unspecified);
-    // NARRATIVE only runs once both are done, then chains straight into MATCH.
-    expect(types).toHaveLength(4);
+    // NARRATIVE only runs once both are done, then chains into MATCH, then DIRECTOR.
+    expect(types).toHaveLength(5);
     expect(new Set(types.slice(0, 2))).toEqual(new Set(['AUDIO_ANALYZE', 'LYRICS']));
     expect(types[2]).toBe('NARRATIVE');
     expect(types[3]).toBe('MATCH');
+    expect(types[4]).toBe('DIRECTOR');
     expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
 
     const refreshed = await getProject(db, project.id);
-    expect(refreshed?.status).toBe('PLANNING');
+    expect(refreshed?.status).toBe('TIMELINE_READY');
 
     const narrative = await listNarrativeSegments(db, project.id);
     const matches = await listSegmentMatches(db, project.id);
@@ -192,7 +193,7 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('matching pipeline (
     await orchestrator.drain({ entityId: project.id });
 
     const refreshed = await getProject(db, project.id);
-    expect(refreshed?.status).toBe('PLANNING');
+    expect(refreshed?.status).toBe('TIMELINE_READY');
 
     const narrative = await listNarrativeSegments(db, project.id);
     const matches = await listSegmentMatches(db, project.id);

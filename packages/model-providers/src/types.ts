@@ -109,10 +109,52 @@ export interface NarrativeAnalyzeResult {
   promptVersion: string;
 }
 
+/** A shortlist entry hydrated with just what the Director needs to judge it
+ * (spec section 31: it never sees the full catalog row). */
+export interface DirectorShortlistEntry {
+  momentId: string;
+  assetId: string;
+  finalScore: number;
+  description: string;
+  durationMs: number;
+  primaryEmotion: string | null;
+}
+
+export interface DirectorSegmentInput {
+  id: string;
+  startMs: number;
+  endMs: number;
+  meaning: string;
+  emotion: string;
+  narrativeFunction: string;
+  lyrics: string;
+  energy: number;
+  shortlist: DirectorShortlistEntry[];
+}
+
+export interface DirectTimelineInput {
+  durationMs: number;
+  sections: AudioSectionRef[];
+  segments: DirectorSegmentInput[];
+}
+
+export interface DirectorPickSuggestion {
+  segmentId: string;
+  momentId: string;
+}
+
+export interface DirectTimelineResult {
+  picks: DirectorPickSuggestion[];
+  director: string;
+  directorVersion: string;
+  promptVersion: string;
+}
+
 export interface LLMProvider {
   readonly name: string;
   suggestMoments(input: MomentSuggestInput): Promise<MomentSuggestResult>;
   analyzeNarrative(input: NarrativeAnalyzeInput): Promise<NarrativeAnalyzeResult>;
+  directTimeline(input: DirectTimelineInput): Promise<DirectTimelineResult>;
 }
 
 export interface EmbedResult {

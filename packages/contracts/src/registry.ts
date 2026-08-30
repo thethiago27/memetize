@@ -17,6 +17,7 @@ export const JOB_RESOURCE_CLASS: Record<JobType, ResourceClass> = {
   LYRICS: 'GPU',
   NARRATIVE: 'CPU_LIGHT',
   MATCH: 'CPU_LIGHT',
+  DIRECTOR: 'CPU_LIGHT',
 };
 
 /**
@@ -37,4 +38,5 @@ export const WORKER_VERSION: Record<JobType, string> = {
   LYRICS: '1.0.0',
   NARRATIVE: '1.0.0',
   MATCH: '1.0.0',
+  DIRECTOR: '1.0.0',
 };

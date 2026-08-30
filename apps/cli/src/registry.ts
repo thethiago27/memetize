@@ -1,4 +1,5 @@
 import { createAudioAnalyzeHandler } from '@memetize/audio-analyzer';
+import { createDirectorHandler } from '@memetize/director-worker';
 import { createEmbedHandler } from '@memetize/embedding';
 import { createFrameExtractHandler } from '@memetize/frame-extractor';
 import { createLyricsHandler } from '@memetize/lyrics';
@@ -33,5 +34,6 @@ export function buildRegistry(): JobRegistry {
     LYRICS: createLyricsHandler(),
     NARRATIVE: createNarrativeHandler(),
     MATCH: createMatchHandler(),
+    DIRECTOR: createDirectorHandler(),
   };
 }

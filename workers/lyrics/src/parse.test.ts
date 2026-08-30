@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseLrc, parseTextLines } from './parse';
+import { formatLrc, parseLrc, parseTextLines, segmentsToLyricLines } from './parse';
 
 describe('parseLrc', () => {
   it('parses timestamps into integer startMs/endMs, ordered by time', () => {
@@ -40,6 +40,26 @@ describe('parseLrc', () => {
   });
 });
 
+describe('formatLrc', () => {
+  it('round-trips timed lines through parseLrc', () => {
+    const content = formatLrc([
+      { startMs: 0, text: 'first line' },
+      { startMs: 2500, text: 'second line' },
+      { startMs: 5000, text: 'third line' },
+    ]);
+    expect(content).toBe('[00:00.000]first line\n[00:02.500]second line\n[00:05.000]third line\n');
+    expect(parseLrc(content, 8000)).toEqual([
+      { startMs: 0, endMs: 2500, text: 'first line', words: [] },
+      { startMs: 2500, endMs: 5000, text: 'second line', words: [] },
+      { startMs: 5000, endMs: 8000, text: 'third line', words: [] },
+    ]);
+  });
+
+  it('drops blank lines', () => {
+    expect(formatLrc([{ startMs: 1000, text: '   ' }])).toBe('');
+  });
+});
+
 describe('parseTextLines', () => {
   it('divides the duration evenly across non-empty lines', () => {
     const content = ['one', '', 'two', 'three', 'four'].join('\n');
@@ -57,5 +77,33 @@ describe('parseTextLines', () => {
 
   it('returns no lines for empty/whitespace-only content', () => {
     expect(parseTextLines('   \n\n  ', 4000)).toEqual([]);
+  });
+});
+
+describe('segmentsToLyricLines', () => {
+  it('clamps transcript segments into lyric lines and drops empty text', () => {
+    const lines = segmentsToLyricLines(
+      [
+        {
+          startMs: 100,
+          endMs: 900,
+          text: '  first  ',
+          words: [{ text: ' first', startMs: 100, endMs: 400 }],
+        },
+        { startMs: 1000, endMs: 2000, text: '   ', words: [] },
+        { startMs: 5000, endMs: 6000, text: 'late', words: [] },
+      ],
+      4000,
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toEqual({
+      startMs: 100,
+      endMs: 900,
+      text: 'first',
+      words: [{ text: 'first', startMs: 100, endMs: 400 }],
+    });
+    expect(lines[1]?.text).toBe('late');
+    expect(lines[1]?.startMs).toBe(4000);
+    expect(lines[1]?.endMs).toBe(4000);
   });
 });

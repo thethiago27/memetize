@@ -1,5 +1,6 @@
 export * from './audio';
 export * from './barrier';
+export * from './generate';
 export * from './ingest';
 export * from './lyrics';
 export * from './match';
@@ -8,3 +9,4 @@ export * from './paths';
 export * from './probe';
 export * from './projects';
 export * from './reprocess';
+export * from './timeline';

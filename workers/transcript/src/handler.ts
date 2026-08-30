@@ -31,12 +31,15 @@ export function createTranscriptHandler(): JobHandler {
     const originalAbsolute = resolveStorage(ctx.config, parsed.data.originalPath);
     const audioFile = assetFile(ctx.config, assetId, 'audio.wav');
     const audioPath = await extractAudio(originalAbsolute, audioFile.absolute);
+    const provider = ctx.config.providers.transcription.kind;
+    const useMlx = provider === 'mlx' || provider === 'mlx-whisper';
 
     let stdout: string;
     try {
       ({ stdout } = await runPythonWorker({
         cwd: TRANSCRIPT_DIR,
         module: 'transcript_worker',
+        args: useMlx ? ['run', '--extra', 'mlx', 'python', '-m', 'transcript_worker'] : undefined,
         request: {
           jobId: ctx.job.id,
           entityId: assetId,
@@ -44,7 +47,8 @@ export function createTranscriptHandler(): JobHandler {
           input: {
             assetId,
             audioPath,
-            provider: ctx.config.providers.transcription.kind,
+            provider,
+            model: ctx.config.providers.transcription.model,
           },
         },
         timeoutMs: TIMEOUT_MS,

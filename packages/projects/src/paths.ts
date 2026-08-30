@@ -62,6 +62,22 @@ export function matchDebugFile(config: AppConfig, projectId: string): StoragePat
   };
 }
 
+/** Debug cache file for the Director's raw picks + prompt version (spec section 64). */
+export function directorDebugFile(config: AppConfig, projectId: string): StoragePath {
+  return {
+    absolute: join(config.storageDir, 'cache', projectId, 'director.json'),
+    relative: `${config.storageDirRelative}/cache/${projectId}/director.json`,
+  };
+}
+
+/** The official `Timeline` document (spec sections 34, 54), kept alongside the debug files. */
+export function timelineFile(config: AppConfig, projectId: string): StoragePath {
+  return {
+    absolute: join(config.storageDir, 'cache', projectId, 'timeline.json'),
+    relative: `${config.storageDirRelative}/cache/${projectId}/timeline.json`,
+  };
+}
+
 /** Resolves a repo-relative stored path back to an absolute path. */
 export function resolveStorage(config: AppConfig, relative: string): string {
   return join(config.rootDir, relative);

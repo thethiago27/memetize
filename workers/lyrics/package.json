@@ -16,6 +16,7 @@
     "@memetize/job-system": "workspace:*",
     "@memetize/orchestrator": "workspace:*",
     "@memetize/projects": "workspace:*",
-    "@memetize/shared": "workspace:*"
+    "@memetize/shared": "workspace:*",
+    "@memetize/transcript": "workspace:*"
   }
 }

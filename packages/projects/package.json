@@ -16,6 +16,7 @@
     "@memetize/database": "workspace:*",
     "@memetize/job-system": "workspace:*",
     "@memetize/shared": "workspace:*",
+    "@memetize/timeline": "workspace:*",
     "drizzle-orm": "^0.45.2"
   }
 }

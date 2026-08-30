@@ -108,3 +108,70 @@ describe('FixtureLLMProvider.analyzeNarrative', () => {
     expect(result.segments[0]?.energy).toBe(0.8);
   });
 });
+
+describe('FixtureLLMProvider.directTimeline', () => {
+  function segment(id: string, shortlist: { momentId: string; finalScore: number }[]) {
+    return {
+      id,
+      startMs: 0,
+      endMs: 1000,
+      meaning: 'meaning',
+      emotion: 'neutral',
+      narrativeFunction: 'setup',
+      lyrics: '',
+      energy: 0.5,
+      shortlist: shortlist.map((entry) => ({
+        assetId: `ast_${entry.momentId}`,
+        description: 'a moment',
+        durationMs: 1000,
+        primaryEmotion: null,
+        ...entry,
+      })),
+    };
+  }
+
+  it('picks the top (first) shortlist entry for every segment that has one', async () => {
+    const provider = new FixtureLLMProvider();
+    const result = await provider.directTimeline({
+      durationMs: 2000,
+      sections: [],
+      segments: [
+        segment('nar_1', [
+          { momentId: 'mom_a', finalScore: 0.9 },
+          { momentId: 'mom_b', finalScore: 0.8 },
+        ]),
+        segment('nar_2', [{ momentId: 'mom_c', finalScore: 0.7 }]),
+      ],
+    });
+
+    expect(result.picks).toEqual([
+      { segmentId: 'nar_1', momentId: 'mom_a' },
+      { segmentId: 'nar_2', momentId: 'mom_c' },
+    ]);
+    expect(result.director).toBe('fixture');
+    expect(result.promptVersion).toBeTruthy();
+  });
+
+  it('skips segments with an empty shortlist instead of failing', async () => {
+    const provider = new FixtureLLMProvider();
+    const result = await provider.directTimeline({
+      durationMs: 1000,
+      sections: [],
+      segments: [segment('nar_1', []), segment('nar_2', [{ momentId: 'mom_a', finalScore: 0.5 }])],
+    });
+
+    expect(result.picks).toEqual([{ segmentId: 'nar_2', momentId: 'mom_a' }]);
+  });
+
+  it('is deterministic for the same input', async () => {
+    const provider = new FixtureLLMProvider();
+    const input = {
+      durationMs: 1000,
+      sections: [],
+      segments: [segment('nar_1', [{ momentId: 'mom_a', finalScore: 0.5 }])],
+    };
+    const first = await provider.directTimeline(input);
+    const second = await provider.directTimeline(input);
+    expect(first).toEqual(second);
+  });
+});

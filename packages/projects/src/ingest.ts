@@ -96,7 +96,12 @@ export async function ingestProject({
   await enqueueJob(db, {
     type: 'LYRICS',
     entityId: id,
-    input: { projectId: id, lyricsPath: lyricsRelative, durationMs: probe.durationMs },
+    input: {
+      projectId: id,
+      lyricsPath: lyricsRelative,
+      originalPath: original.relative,
+      durationMs: probe.durationMs,
+    },
   });
 
   const project = await getProject(db, id);

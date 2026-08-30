@@ -39,6 +39,7 @@ function toMemeFunctions(value: unknown): string[] | null {
  * 30) immediately — interleaved rather than as one bulk pass at the end —
  * so a segment's novelty score correctly reflects only the *already
  * finalized* shortlists of earlier segments, not its own or later ones.
+ * Once persisted, chains into `DIRECTOR` (spec section 31).
  */
 export function createMatchHandler(): JobHandler {
   return async (ctx) => {
@@ -158,6 +159,11 @@ export function createMatchHandler(): JobHandler {
       segmentCount: persisted.length,
       shortlistCount,
     });
+
+    // The Timeline Director (spec section 31) only needs the shortlists
+    // just persisted above, never the raw catalog — chain straight into it
+    // the same way NARRATIVE chains into MATCH.
+    await ctx.enqueue({ type: 'DIRECTOR', entityId: projectId, input: { projectId } });
 
     return { projectId, segmentCount: persisted.length, shortlistCount };
   };

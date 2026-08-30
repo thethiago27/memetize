@@ -38,6 +38,9 @@ importers:
       '@memetize/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@memetize/director-worker':
+        specifier: workspace:*
+        version: link:../../workers/director
       '@memetize/embedding':
         specifier: workspace:*
         version: link:../../workers/embedding
@@ -77,6 +80,9 @@ importers:
       '@memetize/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@memetize/timeline':
+        specifier: workspace:*
+        version: link:../../packages/timeline
       '@memetize/transcript':
         specifier: workspace:*
         version: link:../../workers/transcript
@@ -110,6 +116,9 @@ importers:
       '@memetize/shared':
         specifier: workspace:*
         version: link:../shared
+      '@memetize/timeline':
+        specifier: workspace:*
+        version: link:../timeline
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(postgres@3.4.9)
@@ -120,6 +129,18 @@ importers:
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
+
+  packages/director:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@memetize/timeline':
+        specifier: workspace:*
+        version: link:../timeline
 
   packages/job-system:
     dependencies:
@@ -195,6 +216,9 @@ importers:
       '@memetize/shared':
         specifier: workspace:*
         version: link:../shared
+      '@memetize/timeline':
+        specifier: workspace:*
+        version: link:../timeline
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(postgres@3.4.9)
@@ -234,6 +258,12 @@ importers:
         specifier: ^4.5.4
         version: 4.5.4
 
+  packages/timeline:
+    dependencies:
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
+
   workers/audio-analyzer:
     dependencies:
       '@memetize/contracts':
@@ -254,6 +284,36 @@ importers:
       '@memetize/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+
+  workers/director:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@memetize/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@memetize/director':
+        specifier: workspace:*
+        version: link:../../packages/director
+      '@memetize/job-system':
+        specifier: workspace:*
+        version: link:../../packages/job-system
+      '@memetize/model-providers':
+        specifier: workspace:*
+        version: link:../../packages/model-providers
+      '@memetize/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
+      '@memetize/projects':
+        specifier: workspace:*
+        version: link:../../packages/projects
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
 
   workers/embedding:
     dependencies:
@@ -311,6 +371,9 @@ importers:
       '@memetize/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@memetize/transcript':
+        specifier: workspace:*
+        version: link:../transcript
 
   workers/matching:
     dependencies:
