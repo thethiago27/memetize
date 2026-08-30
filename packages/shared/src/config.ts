@@ -1,0 +1,68 @@
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import type { ResourceClass } from '@memetize/contracts';
+import { config as loadDotenv } from 'dotenv';
+import { z } from 'zod';
+
+/** Walks up from `start` to the monorepo root (marked by pnpm-workspace.yaml). */
+export function findRepoRoot(start: string = process.cwd()): string {
+  let dir = start;
+  while (true) {
+    if (existsSync(resolve(dir, 'pnpm-workspace.yaml'))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return start;
+    dir = parent;
+  }
+}
+
+const repoRoot = findRepoRoot();
+// Load the root .env regardless of the current working directory (workers and
+// scripts run from various cwds).
+loadDotenv({ path: resolve(repoRoot, '.env') });
+
+const EnvSchema = z.object({
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  TEST_DATABASE_URL: z.string().optional(),
+  STORAGE_PATH: z.string().default('./storage'),
+  MAX_CPU_LIGHT_WORKERS: z.coerce.number().int().positive().default(4),
+  MAX_CPU_HEAVY_WORKERS: z.coerce.number().int().positive().default(1),
+  MAX_GPU_WORKERS: z.coerce.number().int().positive().default(1),
+  MAX_IO_WORKERS: z.coerce.number().int().positive().default(4),
+  MAX_RENDER_WORKERS: z.coerce.number().int().positive().default(1),
+});
+
+export interface AppConfig {
+  databaseUrl: string;
+  testDatabaseUrl: string | null;
+  /** Absolute monorepo root. */
+  rootDir: string;
+  /** Absolute storage root, used for actual filesystem I/O. */
+  storageDir: string;
+  /** Storage root as configured, used to build repo-relative paths stored in the DB. */
+  storageDirRelative: string;
+  resources: Record<ResourceClass, number>;
+}
+
+/**
+ * Loads and validates configuration from the environment. Configuration is not
+ * spread across workers (spec section 65): everything comes from here.
+ */
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+  const parsed = EnvSchema.parse(env);
+  const storageDirRelative = parsed.STORAGE_PATH.replace(/^\.\//, '').replace(/\/+$/, '');
+  const testUrl = parsed.TEST_DATABASE_URL?.trim();
+  return {
+    databaseUrl: parsed.DATABASE_URL,
+    testDatabaseUrl: testUrl && testUrl.length > 0 ? testUrl : null,
+    rootDir: repoRoot,
+    storageDir: resolve(repoRoot, parsed.STORAGE_PATH),
+    storageDirRelative,
+    resources: {
+      CPU_LIGHT: parsed.MAX_CPU_LIGHT_WORKERS,
+      CPU_HEAVY: parsed.MAX_CPU_HEAVY_WORKERS,
+      GPU: parsed.MAX_GPU_WORKERS,
+      IO: parsed.MAX_IO_WORKERS,
+      RENDER: parsed.MAX_RENDER_WORKERS,
+    },
+  };
+}

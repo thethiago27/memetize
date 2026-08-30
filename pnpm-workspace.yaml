@@ -1,0 +1,13 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "workers/*"
+
+onlyBuiltDependencies:
+  - esbuild
+
+# pnpm's pre-run verification treats ignored build scripts as fatal; esbuild's
+# binary ships via its platform optional dependency, so skip the gate.
+verifyDepsBeforeRun: false
+allowBuilds:
+  esbuild: set this to true or false

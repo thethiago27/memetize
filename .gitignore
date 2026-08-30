@@ -1,0 +1,35 @@
+node_modules/
+dist/
+.turbo/
+coverage/
+*.log
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Storage blobs (keep folder structure, ignore contents)
+storage/**
+!storage/
+!storage/.gitkeep
+!storage/**/
+!storage/**/.gitkeep
+
+# Fixtures are generated locally, not committed as binaries
+fixtures/videos/*
+!fixtures/videos/.gitkeep
+fixtures/audio/*
+!fixtures/audio/.gitkeep
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.python-version
+
+# macOS
+.DS_Store

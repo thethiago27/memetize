@@ -1,0 +1,23 @@
+{
+  "name": "@memetize/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "memetize": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@memetize/contracts": "workspace:*",
+    "@memetize/database": "workspace:*",
+    "@memetize/job-system": "workspace:*",
+    "@memetize/media-catalog": "workspace:*",
+    "@memetize/orchestrator": "workspace:*",
+    "@memetize/scene-detector": "workspace:*",
+    "@memetize/shared": "workspace:*",
+    "@memetize/video-normalizer": "workspace:*",
+    "commander": "^15.0.0"
+  }
+}
