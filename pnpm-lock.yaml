@@ -50,6 +50,9 @@ importers:
       '@memetize/lyrics':
         specifier: workspace:*
         version: link:../../workers/lyrics
+      '@memetize/matching':
+        specifier: workspace:*
+        version: link:../../workers/matching
       '@memetize/media-catalog':
         specifier: workspace:*
         version: link:../../packages/media-catalog
@@ -86,6 +89,12 @@ importers:
       commander:
         specifier: ^15.0.0
         version: 15.0.0
+
+  packages/clip-ranker:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
   packages/contracts:
     dependencies:
@@ -302,6 +311,36 @@ importers:
       '@memetize/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+
+  workers/matching:
+    dependencies:
+      '@memetize/clip-ranker':
+        specifier: workspace:*
+        version: link:../../packages/clip-ranker
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@memetize/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@memetize/job-system':
+        specifier: workspace:*
+        version: link:../../packages/job-system
+      '@memetize/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
+      '@memetize/projects':
+        specifier: workspace:*
+        version: link:../../packages/projects
+      '@memetize/retriever':
+        specifier: workspace:*
+        version: link:../../packages/retriever
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
 
   workers/moment-extractor:
     dependencies:

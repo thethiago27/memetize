@@ -28,6 +28,7 @@ export const JobType = z.enum([
   'AUDIO_ANALYZE',
   'LYRICS',
   'NARRATIVE',
+  'MATCH',
 ]);
 export type JobType = z.infer<typeof JobType>;
 

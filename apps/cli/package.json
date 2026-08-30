@@ -17,6 +17,7 @@
     "@memetize/frame-extractor": "workspace:*",
     "@memetize/job-system": "workspace:*",
     "@memetize/lyrics": "workspace:*",
+    "@memetize/matching": "workspace:*",
     "@memetize/media-catalog": "workspace:*",
     "@memetize/moment-extractor": "workspace:*",
     "@memetize/narrative-analyzer": "workspace:*",

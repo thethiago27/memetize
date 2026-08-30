@@ -7,6 +7,7 @@ import {
   ingestProject,
   listNarrativeSegments,
   listProjects,
+  listSegmentMatches,
   REPROCESS_STAGES,
   type ReprocessStage,
   reprocessProject,
@@ -24,7 +25,9 @@ export function registerProjectCommands(program: Command): void {
 
   project
     .command('create')
-    .description('Ingest a song and run the music pipeline (audio analysis + lyrics + narrative)')
+    .description(
+      'Ingest a song and run the music pipeline (audio analysis + lyrics + narrative + matching)',
+    )
     .argument('<file>', 'path to an audio file')
     .option('--lyrics <file>', 'path to a .lrc or .txt lyrics file')
     .option('--no-wait', 'enqueue only; do not drain the pipeline')
@@ -76,10 +79,11 @@ export function registerProjectCommands(program: Command): void {
           const audio = await getAudioAnalysis(ctx.db, row.id);
           const lyrics = await getLyrics(ctx.db, row.id);
           const narrative = await listNarrativeSegments(ctx.db, row.id);
+          const matches = await listSegmentMatches(ctx.db, row.id);
           const duration = audio ? `${(audio.durationMs / 1000).toFixed(1)}s` : '-';
           const sectionCount = audio?.sections.length ?? 0;
           process.stdout.write(
-            `${row.id}  ${row.status.padEnd(15)}  ${duration.padStart(6)}  ${String(sectionCount).padStart(2)} sections  ${String(lyrics?.lines.length ?? 0).padStart(3)} lyrics  ${String(narrative.length).padStart(3)} narrative  ${row.filename}\n`,
+            `${row.id}  ${row.status.padEnd(15)}  ${duration.padStart(6)}  ${String(sectionCount).padStart(2)} sections  ${String(lyrics?.lines.length ?? 0).padStart(3)} lyrics  ${String(narrative.length).padStart(3)} narrative  ${String(matches.length).padStart(3)} matched  ${row.filename}\n`,
           );
         }
       } finally {
@@ -150,6 +154,8 @@ async function printProjectDetails(ctx: CliContext, id: string): Promise<void> {
   const audio = await getAudioAnalysis(ctx.db, id);
   const lyrics = await getLyrics(ctx.db, id);
   const narrative = await listNarrativeSegments(ctx.db, id);
+  const matches = await listSegmentMatches(ctx.db, id);
+  const matchBySegment = new Map(matches.map((match) => [match.segmentId, match]));
 
   const lines = [
     `Project ${row.id}`,
@@ -186,6 +192,17 @@ async function printProjectDetails(ctx: CliContext, id: string): Promise<void> {
     lines.push(
       `    ${segment.id}  ${segment.startMs}..${segment.endMs} ms  ${segment.narrativeFunction}  ${segment.meaning}  visualIdeas=[${segment.visualIdeas.join(', ')}]`,
     );
+    const match = matchBySegment.get(segment.id);
+    if (match && match.shortlist.length > 0) {
+      lines.push('      shortlist:');
+      match.shortlist.forEach((entry, index) => {
+        lines.push(
+          `        ${index + 1}. ${entry.momentId}  ${entry.assetId}  final=${entry.finalScore.toFixed(2)}  penalties=[${entry.penalties.join(', ')}]`,
+        );
+      });
+    } else if (match) {
+      lines.push('      shortlist: (empty — catalog has no candidates)');
+    }
   }
 
   process.stdout.write(`${lines.join('\n')}\n`);

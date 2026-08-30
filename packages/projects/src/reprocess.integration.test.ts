@@ -94,4 +94,68 @@ describe.skipIf(!handle)('reprocessProject (integration)', () => {
     expect(lyricsJobs[0]?.id).not.toBe(lyricsJob.id);
     expect(lyricsJobs[0]?.status).toBe('PENDING');
   });
+
+  it('reprocessing from "narrative" also drops a completed downstream MATCH job', async () => {
+    const projectId = 'prj_reprocess_narrative_match';
+    await seedProjectWithAudio(db, projectId);
+
+    const { job: narrativeJob } = await enqueueJob(db, {
+      type: 'NARRATIVE',
+      entityId: projectId,
+      input: { projectId },
+    });
+    await claimNextJob(db, { entityId: projectId, types: ['NARRATIVE'] });
+    await completeJob(db, narrativeJob.id, { segmentCount: 3 });
+
+    const { job: matchJob } = await enqueueJob(db, {
+      type: 'MATCH',
+      entityId: projectId,
+      input: { projectId },
+    });
+    await claimNextJob(db, { entityId: projectId, types: ['MATCH'] });
+    await completeJob(db, matchJob.id, { shortlistCount: 9 });
+
+    await reprocessProject(db, projectId, 'narrative');
+
+    const jobs = await listJobsForEntity(db, projectId);
+    expect(jobs.some((job) => job.type === 'MATCH')).toBe(false);
+    const narrativeJobs = jobs.filter((job) => job.type === 'NARRATIVE');
+    expect(narrativeJobs).toHaveLength(1);
+    expect(narrativeJobs[0]?.id).not.toBe(narrativeJob.id);
+    expect(narrativeJobs[0]?.status).toBe('PENDING');
+  });
+
+  it('reprocessing from "match" drops only the MATCH job and re-enqueues it, without touching narrative', async () => {
+    const projectId = 'prj_reprocess_match';
+    await seedProjectWithAudio(db, projectId);
+
+    const { job: narrativeJob } = await enqueueJob(db, {
+      type: 'NARRATIVE',
+      entityId: projectId,
+      input: { projectId },
+    });
+    await claimNextJob(db, { entityId: projectId, types: ['NARRATIVE'] });
+    await completeJob(db, narrativeJob.id, { segmentCount: 3 });
+
+    const { job: matchJob } = await enqueueJob(db, {
+      type: 'MATCH',
+      entityId: projectId,
+      input: { projectId },
+    });
+    await claimNextJob(db, { entityId: projectId, types: ['MATCH'] });
+    await completeJob(db, matchJob.id, { shortlistCount: 9 });
+
+    await reprocessProject(db, projectId, 'match');
+
+    const jobs = await listJobsForEntity(db, projectId);
+    const narrativeJobs = jobs.filter((job) => job.type === 'NARRATIVE');
+    expect(narrativeJobs).toHaveLength(1);
+    expect(narrativeJobs[0]?.id).toBe(narrativeJob.id);
+    expect(narrativeJobs[0]?.status).toBe('COMPLETED');
+
+    const matchJobs = jobs.filter((job) => job.type === 'MATCH');
+    expect(matchJobs).toHaveLength(1);
+    expect(matchJobs[0]?.id).not.toBe(matchJob.id);
+    expect(matchJobs[0]?.status).toBe('PENDING');
+  });
 });

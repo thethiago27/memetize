@@ -3,19 +3,21 @@ import type { Database } from '@memetize/database';
 import { deleteJobsForEntity, enqueueJob } from '@memetize/job-system';
 import { getProjectAudio } from './projects';
 
-export const REPROCESS_STAGES = ['audio', 'lyrics', 'narrative'] as const;
+export const REPROCESS_STAGES = ['audio', 'lyrics', 'narrative', 'match'] as const;
 export type ReprocessStage = (typeof REPROCESS_STAGES)[number];
 
 /**
  * Jobs to drop for each stage: the stage's own job plus everything
- * downstream. `audio` and `lyrics` also drop `NARRATIVE` (mirrors
- * `reprocessAsset` in `@memetize/media-catalog`): otherwise `project inspect`
- * would show narrative segments derived from stale audio/lyrics.
+ * downstream. `audio` and `lyrics` also drop `NARRATIVE` and `MATCH`
+ * (mirrors `reprocessAsset` in `@memetize/media-catalog`): otherwise
+ * `project inspect` would show narrative segments or shortlists derived
+ * from stale audio/lyrics.
  */
 const STAGE_JOBS: Record<ReprocessStage, JobType[]> = {
-  audio: ['AUDIO_ANALYZE', 'NARRATIVE'],
-  lyrics: ['LYRICS', 'NARRATIVE'],
-  narrative: ['NARRATIVE'],
+  audio: ['AUDIO_ANALYZE', 'NARRATIVE', 'MATCH'],
+  lyrics: ['LYRICS', 'NARRATIVE', 'MATCH'],
+  narrative: ['NARRATIVE', 'MATCH'],
+  match: ['MATCH'],
 };
 
 /**
@@ -31,6 +33,11 @@ export async function reprocessProject(
   from: ReprocessStage,
 ): Promise<void> {
   await deleteJobsForEntity(db, projectId, STAGE_JOBS[from]);
+
+  if (from === 'match') {
+    await enqueueJob(db, { type: 'MATCH', entityId: projectId, input: { projectId } });
+    return;
+  }
 
   if (from === 'narrative') {
     await enqueueJob(db, { type: 'NARRATIVE', entityId: projectId, input: { projectId } });

@@ -16,6 +16,7 @@ export const JOB_RESOURCE_CLASS: Record<JobType, ResourceClass> = {
   AUDIO_ANALYZE: 'CPU_HEAVY',
   LYRICS: 'GPU',
   NARRATIVE: 'CPU_LIGHT',
+  MATCH: 'CPU_LIGHT',
 };
 
 /**
@@ -35,4 +36,5 @@ export const WORKER_VERSION: Record<JobType, string> = {
   AUDIO_ANALYZE: '1.0.0',
   LYRICS: '1.0.0',
   NARRATIVE: '1.0.0',
+  MATCH: '1.0.0',
 };

@@ -2,6 +2,7 @@ export * from './audio';
 export * from './barrier';
 export * from './ingest';
 export * from './lyrics';
+export * from './match';
 export * from './narrative';
 export * from './paths';
 export * from './probe';

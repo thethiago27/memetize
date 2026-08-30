@@ -10,7 +10,10 @@ import type {
   LyricLine,
   LyricSource,
   ProjectStatus,
+  RankedCandidate,
   ResourceClass,
+  RetrievedCandidate,
+  ShortlistCandidate,
   TranscriptWord,
   VisionSceneAnalysis,
 } from '@memetize/contracts';
@@ -334,6 +337,40 @@ export const narrativeSegments = pgTable(
   (table) => [index('narrative_segments_project_idx').on(table.projectId)],
 );
 
+/**
+ * Matching funnel output per narrative segment (spec sections 28-30, 39):
+ * the three JSONB columns are successive cuts of the same candidate pool
+ * (retrieved -> ranked -> shortlist), kept together so `project inspect`
+ * and debugging can see the whole funnel without re-deriving it.
+ */
+export const segmentMatches = pgTable(
+  'segment_matches',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    segmentId: text('segment_id')
+      .notNull()
+      .references(() => narrativeSegments.id, { onDelete: 'cascade' }),
+    retrieved: jsonb('retrieved').$type<RetrievedCandidate[]>().notNull().default([]),
+    ranked: jsonb('ranked').$type<RankedCandidate[]>().notNull().default([]),
+    shortlist: jsonb('shortlist').$type<ShortlistCandidate[]>().notNull().default([]),
+    ranker: text('ranker').notNull(),
+    rankerVersion: text('ranker_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('segment_matches_unique').on(
+      table.projectId,
+      table.segmentId,
+      table.ranker,
+      table.rankerVersion,
+    ),
+    index('segment_matches_project_idx').on(table.projectId),
+  ],
+);
+
 export type ProjectRow = typeof projects.$inferSelect;
 export type NewProjectRow = typeof projects.$inferInsert;
 export type ProjectAudioRow = typeof projectAudio.$inferSelect;
@@ -344,3 +381,5 @@ export type LyricsRow = typeof lyrics.$inferSelect;
 export type NewLyricsRow = typeof lyrics.$inferInsert;
 export type NarrativeSegmentRow = typeof narrativeSegments.$inferSelect;
 export type NewNarrativeSegmentRow = typeof narrativeSegments.$inferInsert;
+export type SegmentMatchRow = typeof segmentMatches.$inferSelect;
+export type NewSegmentMatchRow = typeof segmentMatches.$inferInsert;

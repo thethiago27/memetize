@@ -9,6 +9,7 @@ import {
   getLyrics,
   narrativeDebugFile,
   replaceNarrativeSegments,
+  setProjectStatus,
 } from '@memetize/projects';
 import { ensureDir } from '@memetize/shared';
 
@@ -17,8 +18,10 @@ import { ensureDir } from '@memetize/shared';
  * and lyrics (both required — the AUDIO_ANALYZE + LYRICS barrier only
  * enqueues this once both are COMPLETED), asks the configured `LLMProvider`
  * to interpret lyrics + musical structure, validates every segment falls
- * within the track's duration, persists, and keeps a debug snapshot (spec
- * section 64). Does not search moments or build a timeline.
+ * within the track's duration, persists, keeps a debug snapshot (spec
+ * section 64), then advances the project to PLANNING and enqueues MATCH
+ * (spec sections 28-30). Does not search moments or build a timeline
+ * itself — that's the matching worker's job.
  */
 export function createNarrativeHandler(): JobHandler {
   return async (ctx) => {
@@ -95,6 +98,12 @@ export function createNarrativeHandler(): JobHandler {
         2,
       ),
     );
+
+    // The matching funnel (spec sections 28-30) only makes sense once the
+    // project has a semantic timeline; PLANNING is the project's next
+    // lifecycle stage after ANALYZING_AUDIO (spec section 41).
+    await setProjectStatus(ctx.db, projectId, 'PLANNING');
+    await ctx.enqueue({ type: 'MATCH', entityId: projectId, input: { projectId } });
 
     ctx.logger.info('narrative_completed', {
       projectId,

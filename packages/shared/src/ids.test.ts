@@ -5,6 +5,7 @@ import {
   embeddingId,
   jobId,
   lyricsId,
+  matchId,
   momentId,
   narrativeId,
   prefixedId,
@@ -25,6 +26,7 @@ describe('ids', () => {
     expect(narrativeId()).toMatch(/^nar_[0-9a-z]{21}$/);
     expect(audioAnalysisId()).toMatch(/^aud_[0-9a-z]{21}$/);
     expect(lyricsId()).toMatch(/^lyr_[0-9a-z]{21}$/);
+    expect(matchId()).toMatch(/^mat_[0-9a-z]{21}$/);
   });
 
   it('is collision-resistant across many ids', () => {

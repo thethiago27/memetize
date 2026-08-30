@@ -54,6 +54,14 @@ export function narrativeDebugFile(config: AppConfig, projectId: string): Storag
   };
 }
 
+/** Debug cache file for the matching funnel: queries, retrieved/ranked/shortlist (spec section 64). */
+export function matchDebugFile(config: AppConfig, projectId: string): StoragePath {
+  return {
+    absolute: join(config.storageDir, 'cache', projectId, 'match.json'),
+    relative: `${config.storageDirRelative}/cache/${projectId}/match.json`,
+  };
+}
+
 /** Resolves a repo-relative stored path back to an absolute path. */
 export function resolveStorage(config: AppConfig, relative: string): string {
   return join(config.rootDir, relative);

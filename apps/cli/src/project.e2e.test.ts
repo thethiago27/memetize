@@ -13,6 +13,7 @@ import {
   getProject,
   ingestProject,
   listNarrativeSegments,
+  listSegmentMatches,
 } from '@memetize/projects';
 import type { AppConfig } from '@memetize/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -93,16 +94,17 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('project pipeline (e
     const outcomes = await orchestrator.drain({ entityId: project.id });
     const types = outcomes.map((outcome) => outcome.job.type);
     // AUDIO_ANALYZE and LYRICS fan out in parallel (relative order unspecified);
-    // NARRATIVE only runs once both are done.
-    expect(types).toHaveLength(3);
+    // NARRATIVE only runs once both are done, then chains straight into MATCH.
+    expect(types).toHaveLength(4);
     expect(new Set(types.slice(0, 2))).toEqual(new Set(['AUDIO_ANALYZE', 'LYRICS']));
     expect(types[2]).toBe('NARRATIVE');
+    expect(types[3]).toBe('MATCH');
     expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
 
     const refreshed = await getProject(db, project.id);
-    // This increment only reaches ANALYZING_AUDIO (spec section 41): matching/
-    // director/render are later phases.
-    expect(refreshed?.status).toBe('ANALYZING_AUDIO');
+    // This increment reaches PLANNING (spec section 41): director/render are
+    // later phases, so it never advances to TIMELINE_READY here.
+    expect(refreshed?.status).toBe('PLANNING');
 
     const audio = await getAudioAnalysis(db, project.id);
     expect(audio).toBeTruthy();
@@ -125,6 +127,15 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('project pipeline (e
       expect(Number.isInteger(segment.startMs)).toBe(true);
       expect(Number.isInteger(segment.endMs)).toBe(true);
       expect(segment.endMs).toBeLessThanOrEqual(audio?.durationMs ?? 0);
+    }
+
+    // No catalog seeded in this test: MATCH still completes successfully,
+    // with one (empty) shortlist row per narrative segment (spec section 30's
+    // "catálogo vazio não é falha").
+    const matches = await listSegmentMatches(db, project.id);
+    expect(matches).toHaveLength(narrative.length);
+    for (const match of matches) {
+      expect(match.shortlist).toEqual([]);
     }
 
     // Re-ingesting the same bytes creates a *different* project (spec section 41 note).
