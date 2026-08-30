@@ -8,6 +8,10 @@ export const JOB_RESOURCE_CLASS: Record<JobType, ResourceClass> = {
   PING: 'CPU_LIGHT',
   VIDEO_NORMALIZE: 'CPU_HEAVY',
   SCENE_DETECT: 'CPU_LIGHT',
+  FRAME_EXTRACT: 'IO',
+  TRANSCRIPT: 'GPU',
+  VISION_ANALYZE: 'GPU',
+  MOMENT_EXTRACT: 'CPU_LIGHT',
 };
 
 /**
@@ -19,4 +23,8 @@ export const WORKER_VERSION: Record<JobType, string> = {
   PING: '1.0.0',
   VIDEO_NORMALIZE: '1.0.0',
   SCENE_DETECT: '1.0.0',
+  FRAME_EXTRACT: '1.0.0',
+  TRANSCRIPT: '1.0.0',
+  VISION_ANALYZE: '1.0.0',
+  MOMENT_EXTRACT: '1.0.0',
 };

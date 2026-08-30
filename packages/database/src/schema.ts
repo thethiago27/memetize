@@ -1,4 +1,12 @@
-import type { AssetStatus, JobStatus, JobType, ResourceClass } from '@memetize/contracts';
+import type {
+  AssetStatus,
+  ExtractedFrame,
+  JobStatus,
+  JobType,
+  ResourceClass,
+  TranscriptWord,
+  VisionSceneAnalysis,
+} from '@memetize/contracts';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -7,6 +15,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -98,9 +107,64 @@ export const scenes = pgTable(
     durationMs: integer('duration_ms').notNull(),
     detector: text('detector').notNull(),
     detectorVersion: text('detector_version').notNull(),
+    // Frame Extractor output (spec section 18): sampled frame paths, no separate table.
+    frames: jsonb('frames').$type<ExtractedFrame[]>().notNull().default([]),
+    // Vision Analyzer output (spec section 19). Volatile/structured metadata as JSONB.
+    vision: jsonb('vision').$type<VisionSceneAnalysis | null>(),
+    visionModel: text('vision_model'),
+    visionVersion: text('vision_version'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('scenes_asset_idx').on(table.assetId)],
+);
+
+/** Transcript Worker output (spec section 17). Times are integer ms. */
+export const transcriptSegments = pgTable(
+  'transcript_segments',
+  {
+    id: text('id').primaryKey(),
+    assetId: text('asset_id')
+      .notNull()
+      .references(() => mediaAssets.id, { onDelete: 'cascade' }),
+    startMs: integer('start_ms').notNull(),
+    endMs: integer('end_ms').notNull(),
+    text: text('text').notNull(),
+    words: jsonb('words').$type<TranscriptWord[]>().notNull().default([]),
+    model: text('model').notNull(),
+    modelVersion: text('model_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('transcript_segments_asset_idx').on(table.assetId)],
+);
+
+/** Editorial units extracted from a scene (spec section 21). Times are integer ms. */
+export const moments = pgTable(
+  'moments',
+  {
+    id: text('id').primaryKey(),
+    sceneId: text('scene_id')
+      .notNull()
+      .references(() => scenes.id, { onDelete: 'cascade' }),
+    assetId: text('asset_id')
+      .notNull()
+      .references(() => mediaAssets.id, { onDelete: 'cascade' }),
+    startMs: integer('start_ms').notNull(),
+    endMs: integer('end_ms').notNull(),
+    durationMs: integer('duration_ms').notNull(),
+    description: text('description').notNull(),
+    primaryEmotion: text('primary_emotion'),
+    emotionIntensity: real('emotion_intensity'),
+    visualEnergy: real('visual_energy'),
+    qualityScore: real('quality_score'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+    extractor: text('extractor').notNull(),
+    extractorVersion: text('extractor_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('moments_asset_idx').on(table.assetId),
+    index('moments_scene_idx').on(table.sceneId),
+  ],
 );
 
 export type JobRow = typeof jobs.$inferSelect;
@@ -109,3 +173,7 @@ export type MediaAssetRow = typeof mediaAssets.$inferSelect;
 export type NewMediaAssetRow = typeof mediaAssets.$inferInsert;
 export type SceneRow = typeof scenes.$inferSelect;
 export type NewSceneRow = typeof scenes.$inferInsert;
+export type TranscriptSegmentRow = typeof transcriptSegments.$inferSelect;
+export type NewTranscriptSegmentRow = typeof transcriptSegments.$inferInsert;
+export type MomentRow = typeof moments.$inferSelect;
+export type NewMomentRow = typeof moments.$inferInsert;

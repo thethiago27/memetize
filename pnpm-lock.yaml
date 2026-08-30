@@ -35,12 +35,18 @@ importers:
       '@memetize/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@memetize/frame-extractor':
+        specifier: workspace:*
+        version: link:../../workers/frame-extractor
       '@memetize/job-system':
         specifier: workspace:*
         version: link:../../packages/job-system
       '@memetize/media-catalog':
         specifier: workspace:*
         version: link:../../packages/media-catalog
+      '@memetize/moment-extractor':
+        specifier: workspace:*
+        version: link:../../workers/moment-extractor
       '@memetize/orchestrator':
         specifier: workspace:*
         version: link:../../packages/orchestrator
@@ -50,9 +56,15 @@ importers:
       '@memetize/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@memetize/transcript':
+        specifier: workspace:*
+        version: link:../../workers/transcript
       '@memetize/video-normalizer':
         specifier: workspace:*
         version: link:../../workers/video-normalizer
+      '@memetize/vision-analyzer':
+        specifier: workspace:*
+        version: link:../../workers/vision-analyzer
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -115,6 +127,18 @@ importers:
         specifier: ^0.45.2
         version: 0.45.2(postgres@3.4.9)
 
+  packages/model-providers:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@memetize/prompts':
+        specifier: workspace:*
+        version: link:../prompts
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../shared
+
   packages/orchestrator:
     dependencies:
       '@memetize/contracts':
@@ -129,6 +153,8 @@ importers:
       '@memetize/shared':
         specifier: workspace:*
         version: link:../shared
+
+  packages/prompts: {}
 
   packages/shared:
     dependencies:
@@ -145,6 +171,45 @@ importers:
         specifier: ^4.5.4
         version: 4.5.4
 
+  workers/frame-extractor:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@memetize/job-system':
+        specifier: workspace:*
+        version: link:../../packages/job-system
+      '@memetize/media-catalog':
+        specifier: workspace:*
+        version: link:../../packages/media-catalog
+      '@memetize/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+
+  workers/moment-extractor:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@memetize/job-system':
+        specifier: workspace:*
+        version: link:../../packages/job-system
+      '@memetize/media-catalog':
+        specifier: workspace:*
+        version: link:../../packages/media-catalog
+      '@memetize/model-providers':
+        specifier: workspace:*
+        version: link:../../packages/model-providers
+      '@memetize/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+
   workers/scene-detector:
     dependencies:
       '@memetize/contracts':
@@ -153,6 +218,24 @@ importers:
       '@memetize/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@memetize/job-system':
+        specifier: workspace:*
+        version: link:../../packages/job-system
+      '@memetize/media-catalog':
+        specifier: workspace:*
+        version: link:../../packages/media-catalog
+      '@memetize/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+
+  workers/transcript:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@memetize/job-system':
         specifier: workspace:*
         version: link:../../packages/job-system
@@ -180,6 +263,27 @@ importers:
       '@memetize/media-catalog':
         specifier: workspace:*
         version: link:../../packages/media-catalog
+      '@memetize/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+
+  workers/vision-analyzer:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@memetize/job-system':
+        specifier: workspace:*
+        version: link:../../packages/job-system
+      '@memetize/media-catalog':
+        specifier: workspace:*
+        version: link:../../packages/media-catalog
+      '@memetize/model-providers':
+        specifier: workspace:*
+        version: link:../../packages/model-providers
       '@memetize/orchestrator':
         specifier: workspace:*
         version: link:../../packages/orchestrator

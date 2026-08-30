@@ -13,10 +13,18 @@ export const ResourceClass = z.enum(['CPU_LIGHT', 'CPU_HEAVY', 'GPU', 'IO', 'REN
 export type ResourceClass = z.infer<typeof ResourceClass>;
 
 /**
- * Job types known in phase 0+1. New workers add their own type here as the
- * pipeline grows (transcript, vision, embedding, ...).
+ * Job types known so far. New workers add their own type here as the
+ * pipeline grows (embedding, ...).
  */
-export const JobType = z.enum(['PING', 'VIDEO_NORMALIZE', 'SCENE_DETECT']);
+export const JobType = z.enum([
+  'PING',
+  'VIDEO_NORMALIZE',
+  'SCENE_DETECT',
+  'FRAME_EXTRACT',
+  'TRANSCRIPT',
+  'VISION_ANALYZE',
+  'MOMENT_EXTRACT',
+]);
 export type JobType = z.infer<typeof JobType>;
 
 /** Granular asset lifecycle (spec section 40). */

@@ -1,6 +1,6 @@
 import type { AppConfig } from '@memetize/shared';
 import { describe, expect, it } from 'vitest';
-import { assetDir, assetFile, resolveStorage } from './paths';
+import { assetDir, assetFile, frameFile, resolveStorage, visionDebugFile } from './paths';
 
 const config: AppConfig = {
   databaseUrl: 'x',
@@ -9,6 +9,11 @@ const config: AppConfig = {
   storageDir: '/repo/storage',
   storageDirRelative: 'storage',
   resources: { CPU_LIGHT: 4, CPU_HEAVY: 1, GPU: 1, IO: 4, RENDER: 1 },
+  providers: {
+    transcription: { kind: 'fixture', model: null },
+    vision: { kind: 'fixture', model: null },
+    llm: { kind: 'fixture', model: null },
+  },
 };
 
 describe('asset paths', () => {
@@ -28,5 +33,16 @@ describe('asset paths', () => {
     expect(resolveStorage(config, 'storage/assets/ast_1/original.mp4')).toBe(
       '/repo/storage/assets/ast_1/original.mp4',
     );
+  });
+
+  it('builds zero-padded frame files under the scene dir', () => {
+    const frame = frameFile(config, 'ast_1', 'scn_1', 1500);
+    expect(frame.absolute).toBe('/repo/storage/frames/ast_1/scn_1/frame_001500.jpg');
+    expect(frame.relative).toBe('storage/frames/ast_1/scn_1/frame_001500.jpg');
+  });
+
+  it('builds a vision debug cache path per scene', () => {
+    const debug = visionDebugFile(config, 'ast_1', 'scn_1');
+    expect(debug.absolute).toBe('/repo/storage/cache/ast_1/vision/scn_1.json');
   });
 });

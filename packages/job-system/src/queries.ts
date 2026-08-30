@@ -1,3 +1,4 @@
+import type { JobType } from '@memetize/contracts';
 import { type Database, type JobRow, jobs } from '@memetize/database';
 import { and, asc, count, eq, inArray } from 'drizzle-orm';
 
@@ -19,4 +20,19 @@ export async function countActiveForEntity(db: Database, entityId: string): Prom
     .from(jobs)
     .where(and(eq(jobs.entityId, entityId), inArray(jobs.status, ['PENDING', 'RUNNING'])));
   return Number(rows[0]?.value ?? 0);
+}
+
+/**
+ * Deletes an entity's job rows for the given types, so a later `enqueueJob`
+ * with the same idempotency key creates a fresh job instead of returning the
+ * old (already COMPLETED) one. Used by `asset reprocess --from` (spec section
+ * 42).
+ */
+export async function deleteJobsForEntity(
+  db: Database,
+  entityId: string,
+  types: JobType[],
+): Promise<void> {
+  if (types.length === 0) return;
+  await db.delete(jobs).where(and(eq(jobs.entityId, entityId), inArray(jobs.type, types)));
 }

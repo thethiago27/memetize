@@ -37,6 +37,11 @@ describe.skipIf(!handle || !ffmpegAvailable)('ingestAsset (integration)', () => 
       storageDir: join(tmp, 'storage'),
       storageDirRelative: 'storage',
       resources: { CPU_LIGHT: 4, CPU_HEAVY: 1, GPU: 1, IO: 4, RENDER: 1 },
+      providers: {
+        transcription: { kind: 'fixture', model: null },
+        vision: { kind: 'fixture', model: null },
+        llm: { kind: 'fixture', model: null },
+      },
     };
     samplePath = join(tmp, 'sample.mp4');
     await execFileAsync('ffmpeg', [

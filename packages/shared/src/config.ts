@@ -29,7 +29,20 @@ const EnvSchema = z.object({
   MAX_GPU_WORKERS: z.coerce.number().int().positive().default(1),
   MAX_IO_WORKERS: z.coerce.number().int().positive().default(4),
   MAX_RENDER_WORKERS: z.coerce.number().int().positive().default(1),
+  TRANSCRIPTION_PROVIDER: z.string().optional(),
+  TRANSCRIPTION_MODEL: z.string().optional(),
+  VISION_PROVIDER: z.string().optional(),
+  VISION_MODEL: z.string().optional(),
+  LLM_PROVIDER: z.string().optional(),
+  LLM_MODEL: z.string().optional(),
 });
+
+/** Model providers never default to a paid API: local `fixture` output keeps
+ * `pnpm test` deterministic and free of GPU/API dependencies (spec section 66). */
+export interface ProviderConfig {
+  kind: string;
+  model: string | null;
+}
 
 export interface AppConfig {
   databaseUrl: string;
@@ -41,6 +54,11 @@ export interface AppConfig {
   /** Storage root as configured, used to build repo-relative paths stored in the DB. */
   storageDirRelative: string;
   resources: Record<ResourceClass, number>;
+  providers: {
+    transcription: ProviderConfig;
+    vision: ProviderConfig;
+    llm: ProviderConfig;
+  };
 }
 
 /**
@@ -63,6 +81,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       GPU: parsed.MAX_GPU_WORKERS,
       IO: parsed.MAX_IO_WORKERS,
       RENDER: parsed.MAX_RENDER_WORKERS,
+    },
+    providers: {
+      transcription: {
+        kind: parsed.TRANSCRIPTION_PROVIDER?.trim() || 'fixture',
+        model: parsed.TRANSCRIPTION_MODEL?.trim() || null,
+      },
+      vision: {
+        kind: parsed.VISION_PROVIDER?.trim() || 'fixture',
+        model: parsed.VISION_MODEL?.trim() || null,
+      },
+      llm: {
+        kind: parsed.LLM_PROVIDER?.trim() || 'fixture',
+        model: parsed.LLM_MODEL?.trim() || null,
+      },
     },
   };
 }

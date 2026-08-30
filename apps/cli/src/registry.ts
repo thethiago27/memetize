@@ -1,6 +1,10 @@
+import { createFrameExtractHandler } from '@memetize/frame-extractor';
+import { createMomentExtractHandler } from '@memetize/moment-extractor';
 import type { JobRegistry } from '@memetize/orchestrator';
 import { createSceneDetectHandler } from '@memetize/scene-detector';
+import { createTranscriptHandler } from '@memetize/transcript';
 import { createNormalizeHandler } from '@memetize/video-normalizer';
+import { createVisionAnalyzeHandler } from '@memetize/vision-analyzer';
 
 /**
  * Composition root for job handlers. The CLI wires domain handlers to job types;
@@ -15,5 +19,9 @@ export function buildRegistry(): JobRegistry {
     }),
     VIDEO_NORMALIZE: createNormalizeHandler(),
     SCENE_DETECT: createSceneDetectHandler(),
+    FRAME_EXTRACT: createFrameExtractHandler(),
+    TRANSCRIPT: createTranscriptHandler(),
+    VISION_ANALYZE: createVisionAnalyzeHandler(),
+    MOMENT_EXTRACT: createMomentExtractHandler(),
   };
 }

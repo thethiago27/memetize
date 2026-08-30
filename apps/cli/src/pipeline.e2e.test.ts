@@ -5,10 +5,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { createTestDatabase, type Database, truncateAll } from '@memetize/database';
-import { getAsset, ingestAsset, listScenes } from '@memetize/media-catalog';
+import {
+  getAsset,
+  ingestAsset,
+  listMoments,
+  listScenes,
+  listTranscriptSegments,
+} from '@memetize/media-catalog';
 import { Orchestrator, ResourceScheduler } from '@memetize/orchestrator';
 import { SCENE_DETECTOR_DIR } from '@memetize/scene-detector';
 import type { AppConfig } from '@memetize/shared';
+import { TRANSCRIPT_DIR } from '@memetize/transcript';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildRegistry } from './registry';
 
@@ -25,7 +32,8 @@ async function hasFfmpeg(): Promise<boolean> {
   }
 }
 const ffmpegAvailable = await hasFfmpeg();
-const pyEnvReady = existsSync(join(SCENE_DETECTOR_DIR, '.venv'));
+const pyEnvReady =
+  existsSync(join(SCENE_DETECTOR_DIR, '.venv')) && existsSync(join(TRANSCRIPT_DIR, '.venv'));
 
 async function makeCutsClip(path: string): Promise<void> {
   await execFileAsync('ffmpeg', [
@@ -74,6 +82,11 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('asset pipeline (e2e
       storageDir: join(tmp, 'storage'),
       storageDirRelative: 'storage',
       resources: { CPU_LIGHT: 4, CPU_HEAVY: 1, GPU: 1, IO: 4, RENDER: 1 },
+      providers: {
+        transcription: { kind: 'fixture', model: null },
+        vision: { kind: 'fixture', model: null },
+        llm: { kind: 'fixture', model: null },
+      },
     };
     orchestrator = new Orchestrator({
       db,
@@ -99,10 +112,15 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('asset pipeline (e2e
     expect(outcomes.map((outcome) => outcome.job.type)).toEqual([
       'VIDEO_NORMALIZE',
       'SCENE_DETECT',
+      'FRAME_EXTRACT',
+      'TRANSCRIPT',
+      'VISION_ANALYZE',
+      'MOMENT_EXTRACT',
     ]);
     expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
 
     const refreshed = await getAsset(db, asset.id);
+    // Phase 2 stops at ANALYZING; READY requires embeddings (phase 3, spec section 40).
     expect(refreshed?.status).toBe('ANALYZING');
     expect(refreshed?.proxyPath).toBeTruthy();
     expect(refreshed?.analysisPath).toBeTruthy();
@@ -117,6 +135,25 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('asset pipeline (e2e
       expect(Number.isInteger(scene.startMs)).toBe(true);
       expect(Number.isInteger(scene.endMs)).toBe(true);
       expect(scene.endMs).toBeGreaterThan(scene.startMs);
+      // Frame Extractor + Vision Analyzer output (spec sections 18-19).
+      expect(scene.frames.length).toBeGreaterThan(0);
+      for (const frame of scene.frames) {
+        expect(existsSync(join(config.rootDir, frame.path))).toBe(true);
+      }
+      expect(scene.vision).toBeTruthy();
+      expect(scene.vision?.summary).toBeTruthy();
+    }
+
+    // The fixture is silent color bars: a successful, empty transcript (spec section 17).
+    const transcript = await listTranscriptSegments(db, asset.id);
+    expect(transcript).toEqual([]);
+
+    // Moment Extractor output (spec section 21): at least one moment per scene.
+    const moments = await listMoments(db, asset.id);
+    expect(moments.length).toBeGreaterThanOrEqual(scenes.length);
+    for (const moment of moments) {
+      expect(Number.isInteger(moment.startMs)).toBe(true);
+      expect(Number.isInteger(moment.endMs)).toBe(true);
     }
 
     // Re-adding the same bytes must not create a second asset.
@@ -124,10 +161,10 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('asset pipeline (e2e
     expect(again.created).toBe(false);
     expect(again.asset.id).toBe(asset.id);
 
-    // Re-draining processes nothing (all jobs COMPLETED) and never duplicates scenes.
+    // Re-draining processes nothing (all jobs COMPLETED) and never duplicates anything.
     const more = await orchestrator.drain({ entityId: asset.id });
     expect(more).toHaveLength(0);
-    const scenesAfter = await listScenes(db, asset.id);
-    expect(scenesAfter).toHaveLength(scenes.length);
+    expect(await listScenes(db, asset.id)).toHaveLength(scenes.length);
+    expect(await listMoments(db, asset.id)).toHaveLength(moments.length);
   }, 60_000);
 });

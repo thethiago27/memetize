@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { SceneDetectInput, SceneDetectionOutput, WorkerResult } from '@memetize/contracts';
 import { JobFailure } from '@memetize/job-system';
-import { replaceScenes, resolveStorage } from '@memetize/media-catalog';
+import { getAsset, replaceScenes, resolveStorage } from '@memetize/media-catalog';
 import type { JobHandler } from '@memetize/orchestrator';
 import { runPythonWorker } from '@memetize/shared';
 
@@ -75,6 +75,23 @@ export function createSceneDetectHandler(): JobHandler {
       detector: output.detector,
       detectorVersion: output.detectorVersion,
       scenes: output.scenes,
+    });
+
+    // Fan-out (spec section 12): frames and transcript run independently;
+    // vision analysis waits for both via the barrier in media-catalog.
+    const asset = await getAsset(ctx.db, assetId);
+    if (!asset) {
+      throw new JobFailure('ASSET_NOT_FOUND', `asset not found: ${assetId}`, false);
+    }
+    await ctx.enqueue({
+      type: 'FRAME_EXTRACT',
+      entityId: assetId,
+      input: { assetId, analysisPath: parsed.data.analysisPath },
+    });
+    await ctx.enqueue({
+      type: 'TRANSCRIPT',
+      entityId: assetId,
+      input: { assetId, originalPath: asset.originalPath },
     });
 
     ctx.logger.info('scene_detection_persisted', { sceneCount: persisted.length });

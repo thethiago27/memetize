@@ -3,7 +3,7 @@ import { customAlphabet } from 'nanoid';
 const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 const nano = customAlphabet(ALPHABET, 21);
 
-export type IdPrefix = 'ast' | 'scn' | 'job' | 'mom' | 'prj';
+export type IdPrefix = 'ast' | 'scn' | 'job' | 'mom' | 'seg' | 'prj';
 
 /** Builds a URL-safe, sortable-enough id like `ast_9x3k...`. */
 export function prefixedId(prefix: IdPrefix): string {
@@ -13,3 +13,5 @@ export function prefixedId(prefix: IdPrefix): string {
 export const assetId = (): string => prefixedId('ast');
 export const sceneId = (): string => prefixedId('scn');
 export const jobId = (): string => prefixedId('job');
+export const momentId = (): string => prefixedId('mom');
+export const segmentId = (): string => prefixedId('seg');
