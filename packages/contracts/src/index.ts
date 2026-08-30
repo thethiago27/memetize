@@ -1,3 +1,4 @@
+export * from './embeddings';
 export * from './enums';
 export * from './media';
 export * from './registry';

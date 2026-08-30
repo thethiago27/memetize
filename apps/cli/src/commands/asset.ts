@@ -3,6 +3,7 @@ import {
   getAsset,
   ingestAsset,
   listAssets,
+  listEmbeddingsForAsset,
   listMoments,
   listScenes,
   listTranscriptSegments,
@@ -147,6 +148,7 @@ async function printAssetDetails(ctx: CliContext, id: string): Promise<void> {
   const scenes = await listScenes(ctx.db, id);
   const transcript = await listTranscriptSegments(ctx.db, id);
   const moments = await listMoments(ctx.db, id);
+  const embeddings = await listEmbeddingsForAsset(ctx.db, id);
 
   const lines = [
     `Asset ${row.id}`,
@@ -180,6 +182,8 @@ async function printAssetDetails(ctx: CliContext, id: string): Promise<void> {
   for (const moment of moments) {
     lines.push(`    ${moment.id}  ${moment.startMs}..${moment.endMs} ms  ${moment.description}`);
   }
+
+  lines.push(`  embeddings: ${embeddings.length} (expected ${moments.length * 3})`);
 
   process.stdout.write(`${lines.join('\n')}\n`);
 }

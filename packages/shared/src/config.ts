@@ -35,7 +35,17 @@ const EnvSchema = z.object({
   VISION_MODEL: z.string().optional(),
   LLM_PROVIDER: z.string().optional(),
   LLM_MODEL: z.string().optional(),
+  EMBEDDING_PROVIDER: z.string().optional(),
+  EMBEDDING_MODEL: z.string().optional(),
 });
+
+/**
+ * Vector width for `moment_embeddings.embedding` (spec section 23). Baked
+ * into the pgvector column at migration time, so it is a fixed constant
+ * rather than an env var: switching families (e.g. 384 -> 1536) means a new
+ * `workerVersion` plus a migration, never a mixed-dimension column.
+ */
+export const EMBEDDING_DIMENSIONS = 384;
 
 /** Model providers never default to a paid API: local `fixture` output keeps
  * `pnpm test` deterministic and free of GPU/API dependencies (spec section 66). */
@@ -54,10 +64,13 @@ export interface AppConfig {
   /** Storage root as configured, used to build repo-relative paths stored in the DB. */
   storageDirRelative: string;
   resources: Record<ResourceClass, number>;
+  /** Width of every vector in `moment_embeddings.embedding` (spec section 23). */
+  embeddingDimensions: number;
   providers: {
     transcription: ProviderConfig;
     vision: ProviderConfig;
     llm: ProviderConfig;
+    embedding: ProviderConfig;
   };
 }
 
@@ -82,6 +95,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       IO: parsed.MAX_IO_WORKERS,
       RENDER: parsed.MAX_RENDER_WORKERS,
     },
+    embeddingDimensions: EMBEDDING_DIMENSIONS,
     providers: {
       transcription: {
         kind: parsed.TRANSCRIPTION_PROVIDER?.trim() || 'fixture',
@@ -94,6 +108,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       llm: {
         kind: parsed.LLM_PROVIDER?.trim() || 'fixture',
         model: parsed.LLM_MODEL?.trim() || null,
+      },
+      embedding: {
+        kind: parsed.EMBEDDING_PROVIDER?.trim() || 'fixture',
+        model: parsed.EMBEDDING_MODEL?.trim() || null,
       },
     },
   };

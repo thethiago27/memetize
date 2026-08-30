@@ -12,11 +12,13 @@
   "dependencies": {
     "@memetize/contracts": "workspace:*",
     "@memetize/database": "workspace:*",
+    "@memetize/embedding": "workspace:*",
     "@memetize/frame-extractor": "workspace:*",
     "@memetize/job-system": "workspace:*",
     "@memetize/media-catalog": "workspace:*",
     "@memetize/moment-extractor": "workspace:*",
     "@memetize/orchestrator": "workspace:*",
+    "@memetize/retriever": "workspace:*",
     "@memetize/scene-detector": "workspace:*",
     "@memetize/shared": "workspace:*",
     "@memetize/transcript": "workspace:*",

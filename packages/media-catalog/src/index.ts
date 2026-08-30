@@ -1,5 +1,7 @@
 export * from './assets';
 export * from './barrier';
+export * from './embeddings';
+export * from './export';
 export * from './ingest';
 export * from './moments';
 export * from './paths';

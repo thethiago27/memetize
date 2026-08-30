@@ -1,6 +1,8 @@
 import { Command } from 'commander';
 import { registerAssetCommands } from './commands/asset';
 import { registerJobCommands } from './commands/job';
+import { registerMomentCommands } from './commands/moment';
+import { registerSearchCommand } from './commands/search';
 import { registerWorkerCommands } from './commands/worker';
 
 const program = new Command();
@@ -12,6 +14,8 @@ program
 
 registerAssetCommands(program);
 registerJobCommands(program);
+registerMomentCommands(program);
+registerSearchCommand(program);
 registerWorkerCommands(program);
 
 program.parseAsync(process.argv).catch((error: unknown) => {

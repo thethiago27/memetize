@@ -1,6 +1,11 @@
 import { MomentCandidate, MomentExtractInput } from '@memetize/contracts';
 import { JobFailure } from '@memetize/job-system';
-import { listScenes, listTranscriptSegments, replaceMoments } from '@memetize/media-catalog';
+import {
+  listScenes,
+  listTranscriptSegments,
+  replaceMoments,
+  setAssetStatus,
+} from '@memetize/media-catalog';
 import { createProviders } from '@memetize/model-providers';
 import type { JobHandler } from '@memetize/orchestrator';
 
@@ -79,6 +84,11 @@ export function createMomentExtractHandler(): JobHandler {
       extractorVersion,
       moments: candidates,
     });
+
+    // Moments are catalogued; only embeddings stand between here and READY
+    // (spec section 40).
+    await setAssetStatus(ctx.db, assetId, 'INDEXING');
+    await ctx.enqueue({ type: 'EMBED', entityId: assetId, input: { assetId } });
 
     ctx.logger.info('moment_extract_completed', {
       momentCount: persisted.length,

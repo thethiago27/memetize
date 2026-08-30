@@ -1,3 +1,4 @@
+import { createEmbedHandler } from '@memetize/embedding';
 import { createFrameExtractHandler } from '@memetize/frame-extractor';
 import { createMomentExtractHandler } from '@memetize/moment-extractor';
 import type { JobRegistry } from '@memetize/orchestrator';
@@ -23,5 +24,6 @@ export function buildRegistry(): JobRegistry {
     TRANSCRIPT: createTranscriptHandler(),
     VISION_ANALYZE: createVisionAnalyzeHandler(),
     MOMENT_EXTRACT: createMomentExtractHandler(),
+    EMBED: createEmbedHandler(),
   };
 }

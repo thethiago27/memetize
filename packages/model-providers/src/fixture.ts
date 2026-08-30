@@ -1,5 +1,8 @@
 import { MOMENTS_PROMPT_VERSION, VISION_PROMPT_VERSION } from '@memetize/prompts';
+import { sha256Hex } from '@memetize/shared';
 import type {
+  EmbeddingProvider,
+  EmbedResult,
   LLMProvider,
   MomentSuggestInput,
   MomentSuggestResult,
@@ -70,4 +73,40 @@ export class FixtureLLMProvider implements LLMProvider {
       promptVersion: MOMENTS_PROMPT_VERSION,
     };
   }
+}
+
+/**
+ * Deterministic embedding provider used by default and in tests (spec
+ * section 66): no GPU or API call, but the same text always maps to the same
+ * vector, so `search` results are stable across runs and worth asserting on
+ * in the e2e suite.
+ */
+export class FixtureEmbeddingProvider implements EmbeddingProvider {
+  readonly name = FIXTURE_NAME;
+
+  constructor(readonly dimensions: number) {}
+
+  async embed(texts: string[]): Promise<EmbedResult> {
+    return {
+      vectors: texts.map((text) => hashToUnitVector(text, this.dimensions)),
+      model: FIXTURE_NAME,
+      modelVersion: FIXTURE_VERSION,
+    };
+  }
+}
+
+/** Deterministically expands `text` into `dimensions` values in [-1, 1] by
+ * chaining SHA-256 digests (32 bytes each) until enough bytes are produced. */
+function hashToUnitVector(text: string, dimensions: number): number[] {
+  const vector: number[] = [];
+  let seed = text;
+  while (vector.length < dimensions) {
+    const digestHex = sha256Hex(seed);
+    for (let i = 0; i < digestHex.length && vector.length < dimensions; i += 2) {
+      const byte = Number.parseInt(digestHex.slice(i, i + 2), 16);
+      vector.push((byte / 255) * 2 - 1);
+    }
+    seed = digestHex;
+  }
+  return vector;
 }

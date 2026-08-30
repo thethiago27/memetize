@@ -15,6 +15,13 @@
       "when": 1788126147365,
       "tag": "0001_bright_vapor",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788127999191,
+      "tag": "0002_volatile_hardball",
+      "breakpoints": true
     }
   ]
 }

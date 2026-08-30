@@ -1,5 +1,6 @@
 import type {
   AssetStatus,
+  EmbeddingType,
   ExtractedFrame,
   JobStatus,
   JobType,
@@ -7,6 +8,7 @@ import type {
   TranscriptWord,
   VisionSceneAnalysis,
 } from '@memetize/contracts';
+import { EMBEDDING_DIMENSIONS } from '@memetize/shared';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -19,6 +21,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  vector,
 } from 'drizzle-orm/pg-core';
 
 /** Local PostgreSQL job queue (spec section 7). */
@@ -167,6 +170,45 @@ export const moments = pgTable(
   ],
 );
 
+/**
+ * Per-moment vectors used by the Candidate Retriever (spec sections 23, 28).
+ * `assetId` is denormalized (also reachable via `momentId`) so replace-by-run
+ * can target `(assetId, model, modelVersion)` directly, mirroring `moments`.
+ */
+export const momentEmbeddings = pgTable(
+  'moment_embeddings',
+  {
+    id: text('id').primaryKey(),
+    momentId: text('moment_id')
+      .notNull()
+      .references(() => moments.id, { onDelete: 'cascade' }),
+    assetId: text('asset_id')
+      .notNull()
+      .references(() => mediaAssets.id, { onDelete: 'cascade' }),
+    embeddingType: text('embedding_type').$type<EmbeddingType>().notNull(),
+    // Kept for debugging (spec section 64): the exact text that was embedded.
+    sourceText: text('source_text').notNull(),
+    embedding: vector('embedding', { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
+    model: text('model').notNull(),
+    modelVersion: text('model_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('moment_embeddings_unique').on(
+      table.momentId,
+      table.embeddingType,
+      table.model,
+      table.modelVersion,
+    ),
+    index('moment_embeddings_asset_idx').on(table.assetId),
+    index('moment_embeddings_cosine_idx').using('hnsw', table.embedding.op('vector_cosine_ops')),
+    check(
+      'moment_embeddings_type_check',
+      sql`${table.embeddingType} in ('VISUAL','MEME','NARRATIVE')`,
+    ),
+  ],
+);
+
 export type JobRow = typeof jobs.$inferSelect;
 export type NewJobRow = typeof jobs.$inferInsert;
 export type MediaAssetRow = typeof mediaAssets.$inferSelect;
@@ -177,3 +219,5 @@ export type TranscriptSegmentRow = typeof transcriptSegments.$inferSelect;
 export type NewTranscriptSegmentRow = typeof transcriptSegments.$inferInsert;
 export type MomentRow = typeof moments.$inferSelect;
 export type NewMomentRow = typeof moments.$inferInsert;
+export type MomentEmbeddingRow = typeof momentEmbeddings.$inferSelect;
+export type NewMomentEmbeddingRow = typeof momentEmbeddings.$inferInsert;

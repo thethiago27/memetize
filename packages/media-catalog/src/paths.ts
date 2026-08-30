@@ -56,6 +56,26 @@ export function visionDebugFile(config: AppConfig, assetId: string, sceneId: str
   };
 }
 
+/** Debug cache file for a moment's embedding source texts (spec section 64). */
+export function embeddingDebugFile(
+  config: AppConfig,
+  assetId: string,
+  momentId: string,
+): StoragePath {
+  return {
+    absolute: join(config.storageDir, 'cache', assetId, 'embeddings', `${momentId}.json`),
+    relative: `${config.storageDirRelative}/cache/${assetId}/embeddings/${momentId}.json`,
+  };
+}
+
+/** `storage/temp/{momentId}.mp4` (spec section 75): CLI-only export, no job. */
+export function momentExportFile(config: AppConfig, momentId: string): StoragePath {
+  return {
+    absolute: join(config.storageDir, 'temp', `${momentId}.mp4`),
+    relative: `${config.storageDirRelative}/temp/${momentId}.mp4`,
+  };
+}
+
 /** Resolves a repo-relative stored path back to an absolute path. */
 export function resolveStorage(config: AppConfig, relative: string): string {
   return join(config.rootDir, relative);

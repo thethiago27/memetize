@@ -30,6 +30,6 @@ export async function createTestDatabase(): Promise<DatabaseHandle | null> {
 
 export async function truncateAll(db: Database): Promise<void> {
   await db.execute(
-    sql`truncate table moments, transcript_segments, scenes, media_assets, jobs restart identity cascade`,
+    sql`truncate table moment_embeddings, moments, transcript_segments, scenes, media_assets, jobs restart identity cascade`,
   );
 }

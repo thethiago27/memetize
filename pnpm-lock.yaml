@@ -35,6 +35,9 @@ importers:
       '@memetize/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@memetize/embedding':
+        specifier: workspace:*
+        version: link:../../workers/embedding
       '@memetize/frame-extractor':
         specifier: workspace:*
         version: link:../../workers/frame-extractor
@@ -50,6 +53,9 @@ importers:
       '@memetize/orchestrator':
         specifier: workspace:*
         version: link:../../packages/orchestrator
+      '@memetize/retriever':
+        specifier: workspace:*
+        version: link:../../packages/retriever
       '@memetize/scene-detector':
         specifier: workspace:*
         version: link:../../workers/scene-detector
@@ -156,6 +162,24 @@ importers:
 
   packages/prompts: {}
 
+  packages/retriever:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@memetize/database':
+        specifier: workspace:*
+        version: link:../database
+      '@memetize/model-providers':
+        specifier: workspace:*
+        version: link:../model-providers
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
+
   packages/shared:
     dependencies:
       '@memetize/contracts':
@@ -170,6 +194,27 @@ importers:
       zod:
         specifier: ^4.5.4
         version: 4.5.4
+
+  workers/embedding:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@memetize/job-system':
+        specifier: workspace:*
+        version: link:../../packages/job-system
+      '@memetize/media-catalog':
+        specifier: workspace:*
+        version: link:../../packages/media-catalog
+      '@memetize/model-providers':
+        specifier: workspace:*
+        version: link:../../packages/model-providers
+      '@memetize/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
 
   workers/frame-extractor:
     dependencies:

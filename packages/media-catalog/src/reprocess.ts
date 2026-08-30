@@ -3,15 +3,26 @@ import type { Database } from '@memetize/database';
 import { deleteJobsForEntity, enqueueJob } from '@memetize/job-system';
 import { getAsset } from './assets';
 
-export const REPROCESS_STAGES = ['frames', 'transcript', 'vision', 'moments'] as const;
+export const REPROCESS_STAGES = [
+  'frames',
+  'transcript',
+  'vision',
+  'moments',
+  'embeddings',
+] as const;
 export type ReprocessStage = (typeof REPROCESS_STAGES)[number];
 
-/** Jobs to drop for each stage: the stage's own job plus everything downstream. */
+/**
+ * Jobs to drop for each stage: the stage's own job plus everything
+ * downstream. Every earlier stage also drops `EMBED` now (spec section 40):
+ * otherwise the asset would keep its `READY` status with stale vectors.
+ */
 const STAGE_JOBS: Record<ReprocessStage, JobType[]> = {
-  frames: ['FRAME_EXTRACT', 'VISION_ANALYZE', 'MOMENT_EXTRACT'],
-  transcript: ['TRANSCRIPT', 'VISION_ANALYZE', 'MOMENT_EXTRACT'],
-  vision: ['VISION_ANALYZE', 'MOMENT_EXTRACT'],
-  moments: ['MOMENT_EXTRACT'],
+  frames: ['FRAME_EXTRACT', 'VISION_ANALYZE', 'MOMENT_EXTRACT', 'EMBED'],
+  transcript: ['TRANSCRIPT', 'VISION_ANALYZE', 'MOMENT_EXTRACT', 'EMBED'],
+  vision: ['VISION_ANALYZE', 'MOMENT_EXTRACT', 'EMBED'],
+  moments: ['MOMENT_EXTRACT', 'EMBED'],
+  embeddings: ['EMBED'],
 };
 
 /**
@@ -36,6 +47,10 @@ export async function reprocessAsset(
   }
   if (from === 'moments') {
     await enqueueJob(db, { type: 'MOMENT_EXTRACT', entityId: assetId, input: { assetId } });
+    return;
+  }
+  if (from === 'embeddings') {
+    await enqueueJob(db, { type: 'EMBED', entityId: assetId, input: { assetId } });
     return;
   }
 

@@ -12,6 +12,7 @@ export const JOB_RESOURCE_CLASS: Record<JobType, ResourceClass> = {
   TRANSCRIPT: 'GPU',
   VISION_ANALYZE: 'GPU',
   MOMENT_EXTRACT: 'CPU_LIGHT',
+  EMBED: 'GPU',
 };
 
 /**
@@ -27,4 +28,5 @@ export const WORKER_VERSION: Record<JobType, string> = {
   TRANSCRIPT: '1.0.0',
   VISION_ANALYZE: '1.0.0',
   MOMENT_EXTRACT: '1.0.0',
+  EMBED: '1.0.0',
 };

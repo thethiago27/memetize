@@ -24,6 +24,7 @@ export const JobType = z.enum([
   'TRANSCRIPT',
   'VISION_ANALYZE',
   'MOMENT_EXTRACT',
+  'EMBED',
 ]);
 export type JobType = z.infer<typeof JobType>;
 

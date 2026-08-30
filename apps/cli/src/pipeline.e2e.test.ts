@@ -8,11 +8,13 @@ import { createTestDatabase, type Database, truncateAll } from '@memetize/databa
 import {
   getAsset,
   ingestAsset,
+  listEmbeddingsForAsset,
   listMoments,
   listScenes,
   listTranscriptSegments,
 } from '@memetize/media-catalog';
 import { Orchestrator, ResourceScheduler } from '@memetize/orchestrator';
+import { searchMoments } from '@memetize/retriever';
 import { SCENE_DETECTOR_DIR } from '@memetize/scene-detector';
 import type { AppConfig } from '@memetize/shared';
 import { TRANSCRIPT_DIR } from '@memetize/transcript';
@@ -82,10 +84,12 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('asset pipeline (e2e
       storageDir: join(tmp, 'storage'),
       storageDirRelative: 'storage',
       resources: { CPU_LIGHT: 4, CPU_HEAVY: 1, GPU: 1, IO: 4, RENDER: 1 },
+      embeddingDimensions: 384,
       providers: {
         transcription: { kind: 'fixture', model: null },
         vision: { kind: 'fixture', model: null },
         llm: { kind: 'fixture', model: null },
+        embedding: { kind: 'fixture', model: null },
       },
     };
     orchestrator = new Orchestrator({
@@ -116,12 +120,13 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('asset pipeline (e2e
       'TRANSCRIPT',
       'VISION_ANALYZE',
       'MOMENT_EXTRACT',
+      'EMBED',
     ]);
     expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
 
     const refreshed = await getAsset(db, asset.id);
-    // Phase 2 stops at ANALYZING; READY requires embeddings (phase 3, spec section 40).
-    expect(refreshed?.status).toBe('ANALYZING');
+    // Every moment got its three embeddings, so the asset reaches READY (spec section 40).
+    expect(refreshed?.status).toBe('READY');
     expect(refreshed?.proxyPath).toBeTruthy();
     expect(refreshed?.analysisPath).toBeTruthy();
     expect(existsSync(join(config.rootDir, refreshed?.proxyPath ?? ''))).toBe(true);
@@ -156,6 +161,22 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('asset pipeline (e2e
       expect(Number.isInteger(moment.endMs)).toBe(true);
     }
 
+    // Embedding Worker output (spec section 23): VISUAL/MEME/NARRATIVE per moment.
+    const embeddings = await listEmbeddingsForAsset(db, asset.id);
+    expect(embeddings).toHaveLength(moments.length * 3);
+    for (const embedding of embeddings) {
+      expect(embedding.embedding).toHaveLength(config.embeddingDimensions);
+    }
+
+    // Candidate Retriever (spec section 28): the fixture provider is
+    // deterministic, so embedding a moment's own description and searching
+    // for it must surface that exact moment.
+    const [firstMoment] = moments;
+    if (firstMoment) {
+      const hits = await searchMoments(db, config, { query: firstMoment.description, limit: 5 });
+      expect(hits.some((hit) => hit.momentId === firstMoment.id)).toBe(true);
+    }
+
     // Re-adding the same bytes must not create a second asset.
     const again = await ingestAsset({ db, config, filePath: fixture });
     expect(again.created).toBe(false);
@@ -166,5 +187,6 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('asset pipeline (e2e
     expect(more).toHaveLength(0);
     expect(await listScenes(db, asset.id)).toHaveLength(scenes.length);
     expect(await listMoments(db, asset.id)).toHaveLength(moments.length);
+    expect(await listEmbeddingsForAsset(db, asset.id)).toHaveLength(embeddings.length);
   }, 60_000);
 });

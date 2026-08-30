@@ -69,3 +69,16 @@ export interface LLMProvider {
   readonly name: string;
   suggestMoments(input: MomentSuggestInput): Promise<MomentSuggestResult>;
 }
+
+export interface EmbedResult {
+  /** One vector per input text, same order, each `dimensions` long. */
+  vectors: number[][];
+  model: string;
+  modelVersion: string;
+}
+
+export interface EmbeddingProvider {
+  readonly name: string;
+  readonly dimensions: number;
+  embed(texts: string[]): Promise<EmbedResult>;
+}

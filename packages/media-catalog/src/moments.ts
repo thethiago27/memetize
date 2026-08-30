@@ -65,3 +65,7 @@ export function listMoments(db: Database, assetId: string): Promise<MomentRow[]>
     orderBy: asc(moments.startMs),
   });
 }
+
+export function getMoment(db: Database, id: string): Promise<MomentRow | undefined> {
+  return db.query.moments.findFirst({ where: eq(moments.id, id) });
+}
