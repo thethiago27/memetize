@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * Timing Optimizer worker I/O (spec sections 32, 56): runs right after
- * `DIRECTOR`, before `RENDER`. Unlike the Director, it never picks *which*
+ * `DIRECTOR`, before `EFFECTS`. Unlike the Director, it never picks *which*
  * moment plays — it only nudges *when* each already-picked clip starts and
  * ends, snapping to the nearest musical beat/downbeat. The adjusted
  * `Timeline` document itself is `@memetize/timeline`'s contract, not this

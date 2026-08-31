@@ -14,7 +14,8 @@
       "!**/drizzle",
       "!storage",
       "!fixtures",
-      "!**/coverage"
+      "!**/coverage",
+      "!**/.next"
     ]
   },
   "formatter": {

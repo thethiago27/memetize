@@ -10,4 +10,5 @@ export * from './probe';
 export * from './projects';
 export * from './render';
 export * from './reprocess';
+export * from './swap';
 export * from './timeline';

@@ -1,0 +1,15 @@
+import { SwapClipError } from '@memetize/projects';
+import type { FastifyReply } from 'fastify';
+
+export function sendError(reply: FastifyReply, status: number, code: string, message: string) {
+  return reply.status(status).send({ error: { code, message } });
+}
+
+export function sendSwapError(reply: FastifyReply, error: unknown) {
+  if (error instanceof SwapClipError) {
+    const status = error.code === 'NOT_IN_SHORTLIST' ? 409 : 404;
+    return sendError(reply, status, error.code, error.message);
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return sendError(reply, 500, 'INTERNAL', message);
+}

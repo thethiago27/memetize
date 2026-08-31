@@ -57,6 +57,13 @@
       "when": 1788136690049,
       "tag": "0007_faulty_champions",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788137897944,
+      "tag": "0008_worried_obadiah_stane",
+      "breakpoints": true
     }
   ]
 }

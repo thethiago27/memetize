@@ -127,13 +127,14 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('matching pipeline (
     const types = outcomes.map((outcome) => outcome.job.type);
     // AUDIO_ANALYZE and LYRICS fan out in parallel (relative order unspecified);
     // NARRATIVE only runs once both are done, then chains into MATCH, then
-    // DIRECTOR, then TIMING (spec section 32: separate from the Director).
-    expect(types).toHaveLength(6);
+    // DIRECTOR, then TIMING, then EFFECTS (spec sections 32-33).
+    expect(types).toHaveLength(7);
     expect(new Set(types.slice(0, 2))).toEqual(new Set(['AUDIO_ANALYZE', 'LYRICS']));
     expect(types[2]).toBe('NARRATIVE');
     expect(types[3]).toBe('MATCH');
     expect(types[4]).toBe('DIRECTOR');
     expect(types[5]).toBe('TIMING');
+    expect(types[6]).toBe('EFFECTS');
     expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
 
     const refreshed = await getProject(db, project.id);

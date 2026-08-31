@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -10,6 +10,7 @@ import { ingestAsset } from '@memetize/media-catalog';
 import { Orchestrator, ResourceScheduler } from '@memetize/orchestrator';
 import {
   directorDebugFile,
+  effectsDebugFile,
   generateTimeline,
   getLatestTimeline,
   getProject,
@@ -126,19 +127,25 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
       expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
     }
 
-    const { project } = await ingestProject({ db, config, filePath: songFixture });
+    const lyricsPath = join(tmp, 'song.lrc');
+    await writeFile(
+      lyricsPath,
+      ['[00:00.00]hello from the fixture', '[00:03.00]this is the payoff line'].join('\n'),
+    );
+    const { project } = await ingestProject({ db, config, filePath: songFixture, lyricsPath });
 
     const outcomes = await orchestrator.drain({ entityId: project.id });
     const types = outcomes.map((outcome) => outcome.job.type);
     // AUDIO_ANALYZE and LYRICS fan out in parallel (relative order unspecified);
     // NARRATIVE only runs once both are done, then chains into MATCH, then
-    // DIRECTOR, then TIMING (spec section 32: separate from the Director).
-    expect(types).toHaveLength(6);
+    // DIRECTOR, then TIMING, then EFFECTS (spec sections 32-33).
+    expect(types).toHaveLength(7);
     expect(new Set(types.slice(0, 2))).toEqual(new Set(['AUDIO_ANALYZE', 'LYRICS']));
     expect(types[2]).toBe('NARRATIVE');
     expect(types[3]).toBe('MATCH');
     expect(types[4]).toBe('DIRECTOR');
     expect(types[5]).toBe('TIMING');
+    expect(types[6]).toBe('EFFECTS');
     expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
 
     const refreshed = await getProject(db, project.id);
@@ -149,13 +156,11 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
     const matchBySegment = new Map(matches.map((match) => [match.segmentId, match]));
     const segmentsWithShortlist = matches.filter((match) => match.shortlist.length > 0);
 
-    // Two versions: the Director's raw v1, and the Timing Optimizer's
-    // beat-aligned v2 (spec section 32) — `getLatestTimeline` reads the
-    // latter automatically, with no Renderer/CLI code aware of the Timing
-    // step at all.
+    // Three versions: Director raw v1, Timing aligned v2, Effects planned
+    // v3 (spec sections 32-33) — `getLatestTimeline` reads the last one.
     const versions = await listTimelineVersions(db, project.id);
-    expect(versions).toHaveLength(2);
-    expect(versions[0]?.version).toBe(2);
+    expect(versions).toHaveLength(3);
+    expect(versions[0]?.version).toBe(3);
 
     const timeline = await getLatestTimeline(db, project.id);
     expect(timeline).toBeTruthy();
@@ -166,8 +171,6 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
       expect(Number.isInteger(clip.timeline.endMs)).toBe(true);
       expect(Number.isInteger(clip.source.startMs)).toBe(true);
       expect(Number.isInteger(clip.source.endMs)).toBe(true);
-      expect(clip.effects).toEqual([]);
-
       const match = matchBySegment.get(clip.reason.segmentId);
       expect(match).toBeTruthy();
       expect(match?.shortlist.some((entry) => entry.momentId === clip.momentId)).toBe(true);
@@ -193,29 +196,57 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
     expect(Array.isArray(directorDebug.picks)).toBe(true);
     expect(directorDebug.picks).toHaveLength(segmentsWithShortlist.length);
 
+    const punchlineSegmentIds = new Set(
+      narrative
+        .filter((segment) => ['payoff', 'punchline', 'climax'].includes(segment.narrativeFunction))
+        .map((segment) => segment.id),
+    );
+    const punchlineClips = (timeline?.data.clips ?? []).filter((clip) =>
+      punchlineSegmentIds.has(clip.reason.segmentId),
+    );
+    expect(punchlineClips.length).toBeGreaterThan(0);
+    expect(punchlineClips[0]?.effects[0]?.type).toBe('zoom');
+
+    const effectsDebug = JSON.parse(
+      await readFile(effectsDebugFile(config, project.id).absolute, 'utf8'),
+    );
+    expect(effectsDebug.projectId).toBe(project.id);
+    expect(Array.isArray(effectsDebug.planned)).toBe(true);
+    expect(effectsDebug.planned.length).toBeGreaterThan(0);
+
     // Re-draining processes nothing (all jobs COMPLETED) and creates no new version.
     const more = await orchestrator.drain({ entityId: project.id });
     expect(more).toHaveLength(0);
-    expect(await listTimelineVersions(db, project.id)).toHaveLength(2);
+    expect(await listTimelineVersions(db, project.id)).toHaveLength(3);
 
-    // `project generate` forces a new DIRECTOR run, which chains into a
-    // fresh TIMING run in the same drain — two new versions (v3 raw, v4 aligned).
+    // `project generate` forces a new DIRECTOR run, which chains into
+    // TIMING then EFFECTS in the same drain — three new versions.
     await generateTimeline(db, project.id);
     const afterGenerate = await orchestrator.drain({ entityId: project.id });
-    expect(afterGenerate.map((outcome) => outcome.job.type)).toEqual(['DIRECTOR', 'TIMING']);
+    expect(afterGenerate.map((outcome) => outcome.job.type)).toEqual([
+      'DIRECTOR',
+      'TIMING',
+      'EFFECTS',
+    ]);
     expect(afterGenerate.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
 
     const versionsAfterGenerate = await listTimelineVersions(db, project.id);
-    expect(versionsAfterGenerate.map((v) => v.version).sort()).toEqual([1, 2, 3, 4]);
+    expect(versionsAfterGenerate.map((v) => v.version).sort()).toEqual([1, 2, 3, 4, 5, 6]);
     expect((await getProject(db, project.id))?.status).toBe('TIMELINE_READY');
     expect(narrative.length).toBeGreaterThanOrEqual(1);
 
-    // `reprocess --from director` also forces a new DIRECTOR + TIMING pair (v5, v6).
+    // `reprocess --from director` also forces a new DIRECTOR + TIMING + EFFECTS triple.
     await reprocessProject(db, project.id, 'director');
     const afterReprocess = await orchestrator.drain({ entityId: project.id });
-    expect(afterReprocess.map((outcome) => outcome.job.type)).toEqual(['DIRECTOR', 'TIMING']);
+    expect(afterReprocess.map((outcome) => outcome.job.type)).toEqual([
+      'DIRECTOR',
+      'TIMING',
+      'EFFECTS',
+    ]);
     const versionsAfterReprocess = await listTimelineVersions(db, project.id);
-    expect(versionsAfterReprocess.map((v) => v.version).sort()).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(versionsAfterReprocess.map((v) => v.version).sort()).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9,
+    ]);
     expect((await getProject(db, project.id))?.status).toBe('TIMELINE_READY');
   }, 90_000);
 
@@ -228,10 +259,10 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
     const refreshed = await getProject(db, project.id);
     expect(refreshed?.status).toBe('TIMELINE_READY');
 
-    // Even an empty timeline goes through TIMING (v1 raw -> v2 pass-through);
-    // `getLatestTimeline` returns the latter.
+    // Even an empty timeline goes through TIMING then EFFECTS
+    // (v1 raw -> v2 timed -> v3 planned); `getLatestTimeline` returns the last.
     const timeline = await getLatestTimeline(db, project.id);
-    expect(timeline?.version).toBe(2);
+    expect(timeline?.version).toBe(3);
     expect(timeline?.data.clips).toEqual([]);
   }, 60_000);
 });

@@ -8,7 +8,6 @@ import {
   getLatestTimeline,
   insertTimelineVersion,
   listNarrativeSegments,
-  setProjectStatus,
   timingDebugFile,
 } from '@memetize/projects';
 import { validateTimeline } from '@memetize/renderer';
@@ -17,11 +16,11 @@ import { mergeBeats, optimizeTiming } from '@memetize/timing';
 
 /**
  * TIMING handler (spec section 32, 56): runs right after `DIRECTOR`, before
- * `RENDER`. Separate from the Director on purpose — it never picks *which*
+ * `EFFECTS`. Separate from the Director on purpose — it never picks *which*
  * moment plays, only nudges *when* each already-picked clip starts and
  * ends, snapping to the nearest musical beat/downbeat. The `Timeline`
- * document's shape never changes; only `clip.timeline` ranges shift, so
- * `@memetize/renderer` needs no changes to consume the result.
+ * document's shape never changes; only `clip.timeline` ranges shift. The
+ * Effects Planner, not this worker, advances the project to `TIMELINE_READY`.
  */
 export function createTimingHandler(): JobHandler {
   return async (ctx) => {
@@ -87,7 +86,7 @@ export function createTimingHandler(): JobHandler {
       ),
     );
 
-    await setProjectStatus(ctx.db, projectId, 'TIMELINE_READY');
+    await ctx.enqueue({ type: 'EFFECTS', entityId: projectId, input: { projectId } });
 
     const clipsAdjusted = result.adjustments.filter(
       (adjustment) => adjustment.snappedTo !== 'none',

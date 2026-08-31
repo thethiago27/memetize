@@ -107,4 +107,37 @@ describe.skipIf(!handle)('insertTimelineVersion / getLatestTimeline (integration
     await seedProject(db, projectId);
     expect(await getLatestTimeline(db, projectId)).toBeUndefined();
   });
+
+  it('accepts optional effectsPlanner fields and stores omitted ones as null', async () => {
+    const projectId = 'prj_timeline_effects';
+    await seedProject(db, projectId);
+
+    const omitted = await insertTimelineVersion(db, {
+      projectId,
+      data: timelineFor(projectId),
+      director: 'fixture',
+      directorVersion: '1.0.0',
+      promptVersion: 'v1',
+    });
+    expect(omitted.effectsPlanner).toBeNull();
+    expect(omitted.effectsPlannerVersion).toBeNull();
+    expect(omitted.timingOptimizer).toBeNull();
+    expect(omitted.timingOptimizerVersion).toBeNull();
+
+    const planned = await insertTimelineVersion(db, {
+      projectId,
+      data: timelineFor(projectId),
+      director: 'fixture',
+      directorVersion: '1.0.0',
+      promptVersion: 'v1',
+      timingOptimizer: 'heuristic',
+      timingOptimizerVersion: '1.0.0',
+      effectsPlanner: 'heuristic',
+      effectsPlannerVersion: '1.0.0',
+    });
+    expect(planned.effectsPlanner).toBe('heuristic');
+    expect(planned.effectsPlannerVersion).toBe('1.0.0');
+    expect(planned.timingOptimizer).toBe('heuristic');
+    expect(planned.timingOptimizerVersion).toBe('1.0.0');
+  });
 });

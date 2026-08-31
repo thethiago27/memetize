@@ -117,6 +117,34 @@ describe('validateTimeline', () => {
     );
   });
 
+  it('does not warn about a well-formed zoom', () => {
+    const tl = timeline({
+      durationMs: 2000,
+      clips: [
+        clip({
+          id: 'clp_1',
+          timeline: { startMs: 0, endMs: 2000 },
+          effects: [{ type: 'zoom', startMs: 1350, endMs: 2000, from: 1, to: 1.12 }],
+        }),
+      ],
+    });
+    const result = validateTimeline(tl);
+    expect(result.ok).toBe(true);
+    expect(result.warnings.some((warning) => warning.code === 'UNKNOWN_EFFECT')).toBe(false);
+  });
+
+  it('warns about an unsupported effect type such as fade', () => {
+    const tl = timeline({
+      durationMs: 1000,
+      clips: [clip({ id: 'clp_1', effects: [{ type: 'fade', startMs: 0, endMs: 200 }] })],
+    });
+    const result = validateTimeline(tl);
+    expect(result.ok).toBe(true);
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ code: 'UNKNOWN_EFFECT', clipId: 'clp_1' }),
+    );
+  });
+
   it('warns when the source is shorter than the timeline slot', () => {
     const tl = timeline({
       durationMs: 2000,

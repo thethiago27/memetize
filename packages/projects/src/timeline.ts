@@ -17,6 +17,10 @@ export interface InsertTimelineVersionParams {
    * the Director's own raw version. */
   timingOptimizer?: string | null;
   timingOptimizerVersion?: string | null;
+  /** Set only by the Effects Planner (spec sections 33, 57, phase 9); `null`
+   * on Director/Timing versions that have not been planned yet. */
+  effectsPlanner?: string | null;
+  effectsPlannerVersion?: string | null;
 }
 
 /**
@@ -50,6 +54,8 @@ export async function insertTimelineVersion(
         promptVersion: params.promptVersion,
         timingOptimizer: params.timingOptimizer ?? null,
         timingOptimizerVersion: params.timingOptimizerVersion ?? null,
+        effectsPlanner: params.effectsPlanner ?? null,
+        effectsPlannerVersion: params.effectsPlannerVersion ?? null,
       })
       .returning();
     const persisted = inserted[0];

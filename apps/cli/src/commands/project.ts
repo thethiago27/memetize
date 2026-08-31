@@ -17,6 +17,7 @@ import {
   renderProject,
   reprocessProject,
 } from '@memetize/projects';
+import type { TimelineEffect } from '@memetize/timeline';
 import type { Command } from 'commander';
 import { buildContext, type CliContext } from '../context';
 
@@ -278,8 +279,9 @@ async function printProjectDetails(ctx: CliContext, id: string): Promise<void> {
       `  timeline: v${timeline.version}  ${timeline.data.clips.length} clips  ${canvas.width}x${canvas.height}@${canvas.fps}`,
     );
     timeline.data.clips.forEach((clip, index) => {
+      const effectsLabel = formatClipEffects(clip.effects);
       lines.push(
-        `    ${index + 1}. ${clip.id}  ${clip.timeline.startMs}..${clip.timeline.endMs}  ${clip.momentId}  ${clip.source.assetId}  source ${clip.source.startMs}..${clip.source.endMs}  final=${clip.reason.finalScore.toFixed(2)}`,
+        `    ${index + 1}. ${clip.id}  ${clip.timeline.startMs}..${clip.timeline.endMs}  ${clip.momentId}  ${clip.source.assetId}  source ${clip.source.startMs}..${clip.source.endMs}  final=${clip.reason.finalScore.toFixed(2)}${effectsLabel}`,
       );
     });
   } else {
@@ -298,6 +300,20 @@ async function printProjectDetails(ctx: CliContext, id: string): Promise<void> {
   }
 
   process.stdout.write(`${lines.join('\n')}\n`);
+}
+
+function formatClipEffects(effects: readonly TimelineEffect[]): string {
+  if (effects.length === 0) return '';
+  return effects
+    .map((effect) => {
+      if (effect.type === 'zoom') {
+        const from = typeof effect.from === 'number' ? effect.from : '?';
+        const to = typeof effect.to === 'number' ? effect.to : '?';
+        return `  zoom ${effect.startMs}..${effect.endMs} ${from}→${to}`;
+      }
+      return `  ${effect.type} ${effect.startMs}..${effect.endMs}`;
+    })
+    .join('');
 }
 
 function formatRenderWarning(warning: RenderWarning): string {

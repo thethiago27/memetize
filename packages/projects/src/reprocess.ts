@@ -10,6 +10,7 @@ export const REPROCESS_STAGES = [
   'match',
   'director',
   'timing',
+  'effects',
   'render',
 ] as const;
 export type ReprocessStage = (typeof REPROCESS_STAGES)[number];
@@ -17,7 +18,7 @@ export type ReprocessStage = (typeof REPROCESS_STAGES)[number];
 /**
  * Jobs to drop for each stage: the stage's own job plus everything
  * downstream. `audio` and `lyrics` also drop `NARRATIVE`, `MATCH`,
- * `DIRECTOR`, `TIMING` and `RENDER` (mirrors `reprocessAsset` in
+ * `DIRECTOR`, `TIMING`, `EFFECTS` and `RENDER` (mirrors `reprocessAsset` in
  * `@memetize/media-catalog`): otherwise `project inspect` would show
  * narrative segments, shortlists, a timeline, or an MP4 derived from stale
  * upstream data. `director` never drops `segment_matches` /
@@ -25,14 +26,17 @@ export type ReprocessStage = (typeof REPROCESS_STAGES)[number];
  * only the job(s), so the chain re-enqueues against the *same* upstream data.
  * `timing` never drops the Director's raw version either — re-running it
  * just re-aligns the same picks against the same beats/downbeats.
+ * `effects` never drops the timed version — it only rewrites `clip.effects`
+ * on a new append-only row.
  */
 const STAGE_JOBS: Record<ReprocessStage, JobType[]> = {
-  audio: ['AUDIO_ANALYZE', 'NARRATIVE', 'MATCH', 'DIRECTOR', 'TIMING', 'RENDER'],
-  lyrics: ['LYRICS', 'NARRATIVE', 'MATCH', 'DIRECTOR', 'TIMING', 'RENDER'],
-  narrative: ['NARRATIVE', 'MATCH', 'DIRECTOR', 'TIMING', 'RENDER'],
-  match: ['MATCH', 'DIRECTOR', 'TIMING', 'RENDER'],
-  director: ['DIRECTOR', 'TIMING', 'RENDER'],
-  timing: ['TIMING', 'RENDER'],
+  audio: ['AUDIO_ANALYZE', 'NARRATIVE', 'MATCH', 'DIRECTOR', 'TIMING', 'EFFECTS', 'RENDER'],
+  lyrics: ['LYRICS', 'NARRATIVE', 'MATCH', 'DIRECTOR', 'TIMING', 'EFFECTS', 'RENDER'],
+  narrative: ['NARRATIVE', 'MATCH', 'DIRECTOR', 'TIMING', 'EFFECTS', 'RENDER'],
+  match: ['MATCH', 'DIRECTOR', 'TIMING', 'EFFECTS', 'RENDER'],
+  director: ['DIRECTOR', 'TIMING', 'EFFECTS', 'RENDER'],
+  timing: ['TIMING', 'EFFECTS', 'RENDER'],
+  effects: ['EFFECTS', 'RENDER'],
   render: ['RENDER'],
 };
 
@@ -65,6 +69,11 @@ export async function reprocessProject(
 
   if (from === 'timing') {
     await enqueueJob(db, { type: 'TIMING', entityId: projectId, input: { projectId } });
+    return;
+  }
+
+  if (from === 'effects') {
+    await enqueueJob(db, { type: 'EFFECTS', entityId: projectId, input: { projectId } });
     return;
   }
 

@@ -78,6 +78,14 @@ export function timingDebugFile(config: AppConfig, projectId: string): StoragePa
   };
 }
 
+/** Debug cache file for the Effects Planner's planned zooms (spec section 64). */
+export function effectsDebugFile(config: AppConfig, projectId: string): StoragePath {
+  return {
+    absolute: join(config.storageDir, 'cache', projectId, 'effects.json'),
+    relative: `${config.storageDirRelative}/cache/${projectId}/effects.json`,
+  };
+}
+
 /** The official `Timeline` document (spec sections 34, 54), kept alongside the debug files. */
 export function timelineFile(config: AppConfig, projectId: string): StoragePath {
   return {

@@ -395,6 +395,10 @@ export const timelineVersions = pgTable(
     // the Timing Optimizer (spec section 32, phase 8) inserts right after it.
     timingOptimizer: text('timing_optimizer'),
     timingOptimizerVersion: text('timing_optimizer_version'),
+    // Null until the Effects Planner (spec sections 33, 57, phase 9) writes
+    // the version that actually carries `clip.effects`.
+    effectsPlanner: text('effects_planner'),
+    effectsPlannerVersion: text('effects_planner_version'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

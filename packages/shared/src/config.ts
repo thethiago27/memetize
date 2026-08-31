@@ -35,6 +35,8 @@ const EnvSchema = z.object({
   VISION_MODEL: z.string().optional(),
   LLM_PROVIDER: z.string().optional(),
   LLM_MODEL: z.string().optional(),
+  // Optional; required at runtime when LLM_PROVIDER=gateway. The AI SDK also reads this from the env.
+  AI_GATEWAY_API_KEY: z.string().optional(),
   EMBEDDING_PROVIDER: z.string().optional(),
   EMBEDDING_MODEL: z.string().optional(),
   AUDIO_PROVIDER: z.string().optional(),
@@ -68,6 +70,12 @@ export interface AppConfig {
   resources: Record<ResourceClass, number>;
   /** Width of every vector in `moment_embeddings.embedding` (spec section 23). */
   embeddingDimensions: number;
+  /**
+   * AI Gateway API key. Kept on config so it is not read ad hoc in workers
+   * (spec section 65); the AI SDK also reads `AI_GATEWAY_API_KEY` from the env.
+   * Required when `providers.llm.kind === 'gateway'`.
+   */
+  aiGatewayApiKey?: string | null;
   providers: {
     transcription: ProviderConfig;
     vision: ProviderConfig;
@@ -101,6 +109,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       RENDER: parsed.MAX_RENDER_WORKERS,
     },
     embeddingDimensions: EMBEDDING_DIMENSIONS,
+    aiGatewayApiKey: parsed.AI_GATEWAY_API_KEY?.trim() || null,
     providers: {
       transcription: {
         kind: parsed.TRANSCRIPTION_PROVIDER?.trim() || 'fixture',

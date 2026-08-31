@@ -5,7 +5,7 @@ import { moments as momentsTable } from '@memetize/database';
 import type { AssembleMoment, AssembleSegmentMatch } from '@memetize/director';
 import { assembleTimeline } from '@memetize/director';
 import { JobFailure } from '@memetize/job-system';
-import type { DirectorSegmentInput, DirectorShortlistEntry } from '@memetize/model-providers';
+import type { DirectorSegmentInput } from '@memetize/model-providers';
 import { createProviders } from '@memetize/model-providers';
 import type { JobHandler } from '@memetize/orchestrator';
 import {
@@ -19,6 +19,7 @@ import {
 } from '@memetize/projects';
 import { ensureDir } from '@memetize/shared';
 import { inArray } from 'drizzle-orm';
+import { hydrateShortlist } from './hydrate';
 import { DirectorInvalidPickError, validatePicks } from './validate';
 
 /**
@@ -27,8 +28,8 @@ import { DirectorInvalidPickError, validatePicks } from './validate';
  * from `MATCH`, never the raw catalog — asks the configured `LLMProvider`
  * to pick at most one moment per segment, validates every pick against that
  * segment's own shortlist, assembles the official `Timeline`, and persists
- * it as the next append-only version before advancing the project to
- * `TIMELINE_READY`.
+ * it as the next append-only version before chaining into TIMING (and then
+ * EFFECTS, which is what advances the project to `TIMELINE_READY`).
  */
 export function createDirectorHandler(): JobHandler {
   return async (ctx) => {
@@ -82,17 +83,7 @@ export function createDirectorHandler(): JobHandler {
     // the raw catalog (asset paths, extractor internals, ...).
     const directorSegments: DirectorSegmentInput[] = segments.map((segment) => {
       const match = matchBySegment.get(segment.id);
-      const shortlist: DirectorShortlistEntry[] = (match?.shortlist ?? []).map((entry) => {
-        const moment = momentById.get(entry.momentId);
-        return {
-          momentId: entry.momentId,
-          assetId: entry.assetId,
-          finalScore: entry.finalScore,
-          description: moment?.description ?? '',
-          durationMs: moment?.durationMs ?? 0,
-          primaryEmotion: moment?.primaryEmotion ?? null,
-        };
-      });
+      const shortlist = hydrateShortlist(match?.shortlist ?? [], momentById);
       return {
         id: segment.id,
         startMs: segment.startMs,
@@ -150,19 +141,28 @@ export function createDirectorHandler(): JobHandler {
       ]),
     );
 
-    const timeline = assembleTimeline({
-      projectId,
-      durationMs: audio.durationMs,
-      audioPath: projectAudio.originalPath,
-      picks: suggestion.picks,
-      segments: segments.map((segment) => ({
-        id: segment.id,
-        startMs: segment.startMs,
-        endMs: segment.endMs,
-      })),
-      moments: momentContext,
-      matches: matchContext,
-    });
+    let timeline: ReturnType<typeof assembleTimeline>;
+    try {
+      timeline = assembleTimeline({
+        projectId,
+        durationMs: audio.durationMs,
+        audioPath: projectAudio.originalPath,
+        picks: suggestion.picks,
+        segments: segments.map((segment) => ({
+          id: segment.id,
+          startMs: segment.startMs,
+          endMs: segment.endMs,
+        })),
+        moments: momentContext,
+        matches: matchContext,
+      });
+    } catch (error) {
+      throw new JobFailure(
+        'DIRECTOR_ERROR',
+        error instanceof Error ? error.message : String(error),
+        false,
+      );
+    }
 
     const persisted = await insertTimelineVersion(ctx.db, {
       projectId,
@@ -174,8 +174,8 @@ export function createDirectorHandler(): JobHandler {
 
     // The Timing Optimizer (spec sections 32, 56) is separate from the
     // Director on purpose — it only aligns cuts to beats/downbeats, never
-    // picks moments — so it, not the Director, advances the project to
-    // `TIMELINE_READY` once it has produced the aligned version.
+    // picks moments. Timing then chains into EFFECTS, which is what
+    // actually advances the project to `TIMELINE_READY`.
     await ctx.enqueue({ type: 'TIMING', entityId: projectId, input: { projectId } });
 
     const debugFile = directorDebugFile(ctx.config, projectId);

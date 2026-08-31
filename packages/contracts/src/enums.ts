@@ -31,6 +31,7 @@ export const JobType = z.enum([
   'MATCH',
   'DIRECTOR',
   'TIMING',
+  'EFFECTS',
   'RENDER',
 ]);
 export type JobType = z.infer<typeof JobType>;

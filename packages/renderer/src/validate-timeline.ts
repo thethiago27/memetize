@@ -2,6 +2,7 @@ import type { RenderWarning } from '@memetize/contracts';
 import type { Timeline, TimelineClip } from '@memetize/timeline';
 import { MIN_CLIP_MS } from './constants';
 import type { TimelineIssue, TimelineValidation } from './types';
+import { isRenderableZoom } from './zoom';
 
 /**
  * Validates a `Timeline` before any FFmpeg spawn (spec sections 37-38):
@@ -62,11 +63,11 @@ export function validateTimeline(timeline: Timeline): TimelineValidation {
       warnings.push({ code: 'SOURCE_SHORTER_THAN_SLOT', clipId: clip.id, durationMs: sourceMs });
     }
 
-    if (clip.effects.length > 0) {
+    if (clip.effects.some((effect) => !isRenderableZoom(effect, clip))) {
       warnings.push({
         code: 'UNKNOWN_EFFECT',
         clipId: clip.id,
-        message: `clip "${clip.id}" has ${clip.effects.length} effect(s); effects ship in a later phase and are ignored`,
+        message: `clip "${clip.id}" has an unsupported or malformed effect; it is ignored`,
       });
     }
   }

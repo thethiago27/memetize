@@ -1,11 +1,15 @@
 import type { Timeline, TimelineCanvas, TimelineTransform } from '@memetize/timeline';
 import type { FfmpegGraph, FfmpegInput, ResolvedAssets } from './types';
+import { buildZoomFilter, parseZoomEffect } from './zoom';
 
 /**
  * Builds the single `-filter_complex` graph for a `Timeline` (spec section
  * 37): hard cuts, black segments over every gap, and a per-clip
- * scale/crop/pad chain. No file is touched here — this is pure string
- * assembly so it's cheap to unit test without spawning FFmpeg.
+ * scale/crop/pad chain. Every concat segment is pinned to SAR 1:1 —
+ * `scale`+`crop` of a 16:9 proxy otherwise drifts (e.g. 10240:10239)
+ * and FFmpeg refuses to concat it with `color=` gaps. No file is
+ * touched here — this is pure string assembly so it's cheap to unit
+ * test without spawning FFmpeg.
  */
 export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): FfmpegGraph {
   const { width, height, fps } = timeline.canvas;
@@ -21,7 +25,9 @@ export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): Ff
   const pushGap = (gapMs: number): void => {
     if (gapMs <= 0) return;
     const label = `gap${gapCount++}`;
-    filterParts.push(`color=c=black:s=${width}x${height}:r=${fps}:d=${toSeconds(gapMs)}[${label}]`);
+    filterParts.push(
+      `color=c=black:s=${width}x${height}:r=${fps}:d=${toSeconds(gapMs)}:sar=1[${label}]`,
+    );
     segmentLabels.push(`[${label}]`);
   };
 
@@ -45,6 +51,16 @@ export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): Ff
     if (sourceMs < slotMs) {
       chain += `,tpad=stop_mode=clone:stop_duration=${toSeconds(slotMs - sourceMs)}`;
     }
+    const zooms = clip.effects
+      .map((effect) => parseZoomEffect(effect, clip))
+      .filter((zoom): zoom is NonNullable<typeof zoom> => zoom !== null)
+      .sort((a, b) => a.startMs - b.startMs);
+    for (const zoom of zooms) {
+      chain += `,${buildZoomFilter(zoom, clip, timeline.canvas)}`;
+    }
+    // concat rejects mixed SAR; scale+crop of a 16:9 proxy yields 10240:10239
+    // while color= gaps stay 1:1.
+    chain += ',setsar=1';
     const label = `v${index}`;
     filterParts.push(`${chain}[${label}]`);
     segmentLabels.push(`[${label}]`);

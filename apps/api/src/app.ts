@@ -1,0 +1,27 @@
+import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
+import type { AppRuntime } from '@memetize/runtime';
+import Fastify, { type FastifyInstance } from 'fastify';
+import { registerAssetRoutes } from './routes/assets';
+import { registerJobRoutes } from './routes/jobs';
+import { registerMediaRoutes } from './routes/media';
+import { registerProjectRoutes } from './routes/projects';
+import { registerSearchRoutes } from './routes/search';
+
+export async function buildApi(runtime: AppRuntime): Promise<FastifyInstance> {
+  const app = Fastify({ logger: false });
+  await app.register(cors, {
+    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  });
+  await app.register(multipart, { limits: { fileSize: 2 * 1024 * 1024 * 1024 } });
+
+  app.get('/v1/health', async () => ({ ok: true }));
+
+  registerAssetRoutes(app, runtime);
+  registerProjectRoutes(app, runtime);
+  registerJobRoutes(app, runtime);
+  registerSearchRoutes(app, runtime);
+  registerMediaRoutes(app, runtime);
+
+  return app;
+}
