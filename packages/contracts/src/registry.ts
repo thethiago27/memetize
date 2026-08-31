@@ -18,6 +18,8 @@ export const JOB_RESOURCE_CLASS: Record<JobType, ResourceClass> = {
   NARRATIVE: 'CPU_LIGHT',
   MATCH: 'CPU_LIGHT',
   DIRECTOR: 'CPU_LIGHT',
+  TIMING: 'CPU_LIGHT',
+  RENDER: 'RENDER',
 };
 
 /**
@@ -39,4 +41,6 @@ export const WORKER_VERSION: Record<JobType, string> = {
   NARRATIVE: '1.0.0',
   MATCH: '1.0.0',
   DIRECTOR: '1.0.0',
+  TIMING: '1.0.0',
+  RENDER: '1.0.0',
 };

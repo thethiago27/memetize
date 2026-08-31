@@ -11,6 +11,7 @@ import {
   narrativeId,
   prefixedId,
   projectId,
+  renderId,
   sceneId,
   segmentId,
   timelineVersionId,
@@ -31,6 +32,7 @@ describe('ids', () => {
     expect(matchId()).toMatch(/^mat_[0-9a-z]{21}$/);
     expect(timelineVersionId()).toMatch(/^tlv_[0-9a-z]{21}$/);
     expect(clipId()).toMatch(/^clp_[0-9a-z]{21}$/);
+    expect(renderId()).toMatch(/^rnd_[0-9a-z]{21}$/);
   });
 
   it('is collision-resistant across many ids', () => {

@@ -1,7 +1,9 @@
 import { resolve } from 'node:path';
+import type { RenderWarning } from '@memetize/contracts';
 import {
   generateTimeline,
   getAudioAnalysis,
+  getLatestRender,
   getLatestTimeline,
   getLyrics,
   getProject,
@@ -12,6 +14,7 @@ import {
   listSegmentMatches,
   REPROCESS_STAGES,
   type ReprocessStage,
+  renderProject,
   reprocessProject,
 } from '@memetize/projects';
 import type { Command } from 'commander';
@@ -83,11 +86,13 @@ export function registerProjectCommands(program: Command): void {
           const narrative = await listNarrativeSegments(ctx.db, row.id);
           const matches = await listSegmentMatches(ctx.db, row.id);
           const timeline = await getLatestTimeline(ctx.db, row.id);
+          const render = await getLatestRender(ctx.db, row.id);
           const duration = audio ? `${(audio.durationMs / 1000).toFixed(1)}s` : '-';
           const sectionCount = audio?.sections.length ?? 0;
           const timelineLabel = timeline ? `timeline v${timeline.version}` : 'no timeline';
+          const renderLabel = render ? `render v${render.version}` : 'no render';
           process.stdout.write(
-            `${row.id}  ${row.status.padEnd(15)}  ${duration.padStart(6)}  ${String(sectionCount).padStart(2)} sections  ${String(lyrics?.lines.length ?? 0).padStart(3)} lyrics  ${String(narrative.length).padStart(3)} narrative  ${String(matches.length).padStart(3)} matched  ${timelineLabel.padEnd(12)}  ${row.filename}\n`,
+            `${row.id}  ${row.status.padEnd(15)}  ${duration.padStart(6)}  ${String(sectionCount).padStart(2)} sections  ${String(lyrics?.lines.length ?? 0).padStart(3)} lyrics  ${String(narrative.length).padStart(3)} narrative  ${String(matches.length).padStart(3)} matched  ${timelineLabel.padEnd(12)}  ${renderLabel.padEnd(10)}  ${row.filename}\n`,
           );
         }
       } finally {
@@ -105,6 +110,34 @@ export function registerProjectCommands(program: Command): void {
       try {
         await generateTimeline(ctx.db, projectId);
         process.stdout.write(`Enqueued a new DIRECTOR run for ${projectId}...\n`);
+
+        if (options.wait) {
+          const outcomes = await ctx.orchestrator.drain({ entityId: projectId });
+          const failed = outcomes.find((outcome) => outcome.status === 'FAILED');
+          if (failed) {
+            process.stdout.write(
+              `Pipeline failed at ${failed.job.type}: ${failed.error?.code ?? ''} ${failed.error?.message ?? ''}\n`,
+            );
+          }
+          await printProjectDetails(ctx, projectId);
+        } else {
+          process.stdout.write("Run 'memetize worker run' to process.\n");
+        }
+      } finally {
+        await ctx.close();
+      }
+    });
+
+  project
+    .command('render')
+    .description('Render the latest timeline into an MP4 (spec section 55: the first MVP video)')
+    .argument('<projectId>', 'project id (prj_...)')
+    .option('--no-wait', 'enqueue only; do not drain the pipeline')
+    .action(async (projectId: string, options: { wait: boolean }) => {
+      const ctx = await buildContext();
+      try {
+        await renderProject(ctx.db, projectId);
+        process.stdout.write(`Enqueued a new RENDER run for ${projectId}...\n`);
 
         if (options.wait) {
           const outcomes = await ctx.orchestrator.drain({ entityId: projectId });
@@ -189,6 +222,7 @@ async function printProjectDetails(ctx: CliContext, id: string): Promise<void> {
   const matches = await listSegmentMatches(ctx.db, id);
   const matchBySegment = new Map(matches.map((match) => [match.segmentId, match]));
   const timeline = await getLatestTimeline(ctx.db, id);
+  const render = await getLatestRender(ctx.db, id);
 
   const lines = [
     `Project ${row.id}`,
@@ -252,5 +286,27 @@ async function printProjectDetails(ctx: CliContext, id: string): Promise<void> {
     lines.push('  timeline: (not generated yet)');
   }
 
+  if (render) {
+    lines.push(
+      `  render:   v${render.version}  ${render.path}  ${render.width}x${render.height}@${render.fps}  ${render.videoCodec}/${render.audioCodec}  ${render.validation.warnings.length} warnings`,
+    );
+    for (const warning of render.validation.warnings) {
+      lines.push(`    ${formatRenderWarning(warning)}`);
+    }
+  } else {
+    lines.push('  render:   (not rendered yet)');
+  }
+
   process.stdout.write(`${lines.join('\n')}\n`);
+}
+
+function formatRenderWarning(warning: RenderWarning): string {
+  const parts = [warning.code.padEnd(24)];
+  if (warning.clipId) parts.push(warning.clipId);
+  if (warning.startMs !== undefined && warning.endMs !== undefined) {
+    parts.push(`${warning.startMs}..${warning.endMs}`);
+  }
+  if (warning.durationMs !== undefined) parts.push(`${warning.durationMs}ms`);
+  if (warning.message) parts.push(warning.message);
+  return parts.join('  ');
 }

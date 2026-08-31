@@ -1,0 +1,203 @@
+import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { promisify } from 'node:util';
+import { RenderInput, type RenderWarning } from '@memetize/contracts';
+import { JobFailure } from '@memetize/job-system';
+import { getAsset, probeVideo } from '@memetize/media-catalog';
+import type { JobHandler } from '@memetize/orchestrator';
+import {
+  getLatestRender,
+  getLatestTimeline,
+  getProjectAudio,
+  insertRender,
+  renderDebugFile,
+  renderDir,
+  renderFile,
+  resolveStorage,
+  setProjectStatus,
+} from '@memetize/projects';
+import {
+  buildFfmpegGraph,
+  type OutputProbe,
+  RENDERER_NAME,
+  RENDERER_VERSION,
+  type ResolvedAssets,
+  toFfmpegArgs,
+  validateOutput,
+  validateTimeline,
+} from '@memetize/renderer';
+import { ensureDir } from '@memetize/shared';
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * RENDER handler (spec sections 36-39): the first MVP that turns a
+ * `Timeline` into an actual MP4. No AI, no `model-providers` import — only
+ * FFmpeg/ffprobe. `DIRECTOR` never enqueues this job; only `project render`
+ * (via `renderProject`/`reprocessProject`) does.
+ */
+export function createRenderHandler(): JobHandler {
+  return async (ctx) => {
+    const parsed = RenderInput.safeParse(ctx.job.payload);
+    if (!parsed.success) {
+      throw new JobFailure('INVALID_INPUT', parsed.error.message, false);
+    }
+    const { projectId } = parsed.data;
+
+    await setProjectStatus(ctx.db, projectId, 'RENDERING');
+
+    const timelineVersion = await getLatestTimeline(ctx.db, projectId);
+    if (!timelineVersion) {
+      throw new JobFailure('RENDER_NO_TIMELINE', `project ${projectId} has no timeline yet`, false);
+    }
+    const timeline = timelineVersion.data;
+
+    const projectAudio = await getProjectAudio(ctx.db, projectId);
+    if (!projectAudio) {
+      throw new JobFailure('RENDER_MISSING_ASSET', `project ${projectId} has no audio file`, false);
+    }
+    const audioPath = resolveStorage(ctx.config, projectAudio.originalPath);
+    if (!existsSync(audioPath)) {
+      throw new JobFailure(
+        'RENDER_MISSING_ASSET',
+        `audio file missing on disk: ${audioPath}`,
+        false,
+      );
+    }
+
+    const resolvedClips: ResolvedAssets['clips'][number][] = [];
+    for (const clip of timeline.clips) {
+      const asset = await getAsset(ctx.db, clip.source.assetId);
+      const sourceRelative = asset?.proxyPath ?? asset?.analysisPath ?? asset?.originalPath;
+      if (!asset || !sourceRelative) {
+        throw new JobFailure(
+          'RENDER_MISSING_ASSET',
+          `clip "${clip.id}" references asset "${clip.source.assetId}", which has no proxy/analysis/original clip`,
+          false,
+        );
+      }
+      const videoPath = resolveStorage(ctx.config, sourceRelative);
+      if (!existsSync(videoPath)) {
+        throw new JobFailure(
+          'RENDER_MISSING_ASSET',
+          `asset file missing on disk: ${videoPath}`,
+          false,
+        );
+      }
+      resolvedClips.push({ clipId: clip.id, videoPath });
+    }
+
+    const timelineValidation = validateTimeline(timeline);
+    if (!timelineValidation.ok) {
+      throw new JobFailure(
+        'RENDER_INVALID_TIMELINE',
+        timelineValidation.errors.map((error) => error.message).join('; '),
+        false,
+      );
+    }
+
+    const graph = buildFfmpegGraph(timeline, { audioPath, clips: resolvedClips });
+
+    const nextVersion = ((await getLatestRender(ctx.db, projectId))?.version ?? 0) + 1;
+    const output = renderFile(ctx.config, projectId, nextVersion);
+    await ensureDir(renderDir(ctx.config, projectId).absolute);
+    const args = toFfmpegArgs(graph, output.absolute);
+
+    try {
+      await execFileAsync('ffmpeg', args, {
+        maxBuffer: 32 * 1024 * 1024,
+        timeout: Math.max(120_000, timeline.durationMs * 4),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new JobFailure('RENDER_FFMPEG_ERROR', `ffmpeg failed: ${message}`, false);
+    }
+
+    const probe = await probeOutput(output.absolute);
+    const outputValidation = validateOutput(probe, timeline);
+    if (!outputValidation.valid) {
+      throw new JobFailure(
+        'RENDER_OUTPUT_INVALID',
+        `rendered file failed validation: ${JSON.stringify(probe)}`,
+        false,
+      );
+    }
+
+    const warnings: RenderWarning[] = [
+      ...timelineValidation.warnings,
+      ...outputValidation.warnings,
+    ];
+    const validation = { valid: true, warnings };
+
+    const persisted = await insertRender(ctx.db, {
+      projectId,
+      timelineVersion: timelineVersion.version,
+      path: output.relative,
+      durationMs: probe.durationMs,
+      width: probe.width,
+      height: probe.height,
+      fps: Math.round(probe.fpsMilli / 1000),
+      videoCodec: probe.videoCodec ?? 'unknown',
+      audioCodec: probe.audioCodec ?? 'unknown',
+      renderer: RENDERER_NAME,
+      rendererVersion: RENDERER_VERSION,
+      validation,
+    });
+
+    const debugFile = renderDebugFile(ctx.config, projectId);
+    await ensureDir(dirname(debugFile.absolute));
+    await writeFile(
+      debugFile.absolute,
+      JSON.stringify(
+        { projectId, timelineVersion: timelineVersion.version, args, graph, validation },
+        null,
+        2,
+      ),
+    );
+
+    await setProjectStatus(ctx.db, projectId, 'COMPLETED');
+
+    ctx.logger.info('render_completed', {
+      projectId,
+      version: persisted.version,
+      path: persisted.path,
+      warningCount: warnings.length,
+    });
+
+    return {
+      projectId,
+      version: persisted.version,
+      path: persisted.path,
+      durationMs: persisted.durationMs,
+      warningCount: warnings.length,
+    };
+  };
+}
+
+const BROKEN_PROBE: Omit<OutputProbe, 'exists'> = {
+  durationMs: 0,
+  width: 0,
+  height: 0,
+  fpsMilli: 0,
+  videoCodec: null,
+  audioCodec: null,
+};
+
+/**
+ * A missing file or a file `ffprobe` can't make sense of (e.g. no video
+ * stream) both turn into `validateOutput`'s `RENDER_OUTPUT_INVALID` path
+ * instead of letting `probeVideo` throw past this handler.
+ */
+async function probeOutput(path: string): Promise<OutputProbe> {
+  if (!existsSync(path)) {
+    return { exists: false, ...BROKEN_PROBE };
+  }
+  try {
+    const probe = await probeVideo(path);
+    return { exists: true, ...probe };
+  } catch {
+    return { exists: true, ...BROKEN_PROBE };
+  }
+}

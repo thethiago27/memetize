@@ -13,6 +13,10 @@ export interface InsertTimelineVersionParams {
   director: string;
   directorVersion: string;
   promptVersion: string;
+  /** Set only by the Timing Optimizer (spec section 32, phase 8); `null` on
+   * the Director's own raw version. */
+  timingOptimizer?: string | null;
+  timingOptimizerVersion?: string | null;
 }
 
 /**
@@ -44,6 +48,8 @@ export async function insertTimelineVersion(
         director: params.director,
         directorVersion: params.directorVersion,
         promptVersion: params.promptVersion,
+        timingOptimizer: params.timingOptimizer ?? null,
+        timingOptimizerVersion: params.timingOptimizerVersion ?? null,
       })
       .returning();
     const persisted = inserted[0];

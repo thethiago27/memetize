@@ -8,5 +8,6 @@ export * from './narrative';
 export * from './paths';
 export * from './probe';
 export * from './projects';
+export * from './render';
 export * from './reprocess';
 export * from './timeline';

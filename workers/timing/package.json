@@ -1,0 +1,23 @@
+{
+  "name": "@memetize/timing-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@memetize/contracts": "workspace:*",
+    "@memetize/job-system": "workspace:*",
+    "@memetize/orchestrator": "workspace:*",
+    "@memetize/projects": "workspace:*",
+    "@memetize/renderer": "workspace:*",
+    "@memetize/shared": "workspace:*",
+    "@memetize/timing": "workspace:*"
+  }
+}

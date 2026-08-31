@@ -71,6 +71,9 @@ importers:
       '@memetize/projects':
         specifier: workspace:*
         version: link:../../packages/projects
+      '@memetize/renderer-worker':
+        specifier: workspace:*
+        version: link:../../workers/renderer
       '@memetize/retriever':
         specifier: workspace:*
         version: link:../../packages/retriever
@@ -83,6 +86,9 @@ importers:
       '@memetize/timeline':
         specifier: workspace:*
         version: link:../../packages/timeline
+      '@memetize/timing-worker':
+        specifier: workspace:*
+        version: link:../../workers/timing
       '@memetize/transcript':
         specifier: workspace:*
         version: link:../../workers/transcript
@@ -225,6 +231,15 @@ importers:
 
   packages/prompts: {}
 
+  packages/renderer:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@memetize/timeline':
+        specifier: workspace:*
+        version: link:../timeline
+
   packages/retriever:
     dependencies:
       '@memetize/contracts':
@@ -263,6 +278,15 @@ importers:
       zod:
         specifier: ^4.5.4
         version: 4.5.4
+
+  packages/timing:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@memetize/timeline':
+        specifier: workspace:*
+        version: link:../timeline
 
   workers/audio-analyzer:
     dependencies:
@@ -447,6 +471,33 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
 
+  workers/renderer:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@memetize/job-system':
+        specifier: workspace:*
+        version: link:../../packages/job-system
+      '@memetize/media-catalog':
+        specifier: workspace:*
+        version: link:../../packages/media-catalog
+      '@memetize/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
+      '@memetize/projects':
+        specifier: workspace:*
+        version: link:../../packages/projects
+      '@memetize/renderer':
+        specifier: workspace:*
+        version: link:../../packages/renderer
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@memetize/timeline':
+        specifier: workspace:*
+        version: link:../../packages/timeline
+
   workers/scene-detector:
     dependencies:
       '@memetize/contracts':
@@ -467,6 +518,30 @@ importers:
       '@memetize/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+
+  workers/timing:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@memetize/job-system':
+        specifier: workspace:*
+        version: link:../../packages/job-system
+      '@memetize/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
+      '@memetize/projects':
+        specifier: workspace:*
+        version: link:../../packages/projects
+      '@memetize/renderer':
+        specifier: workspace:*
+        version: link:../../packages/renderer
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@memetize/timing':
+        specifier: workspace:*
+        version: link:../../packages/timing
 
   workers/transcript:
     dependencies:

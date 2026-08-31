@@ -15,7 +15,6 @@ import {
   insertTimelineVersion,
   listNarrativeSegments,
   listSegmentMatches,
-  setProjectStatus,
   timelineFile,
 } from '@memetize/projects';
 import { ensureDir } from '@memetize/shared';
@@ -173,7 +172,11 @@ export function createDirectorHandler(): JobHandler {
       promptVersion: suggestion.promptVersion,
     });
 
-    await setProjectStatus(ctx.db, projectId, 'TIMELINE_READY');
+    // The Timing Optimizer (spec sections 32, 56) is separate from the
+    // Director on purpose — it only aligns cuts to beats/downbeats, never
+    // picks moments — so it, not the Director, advances the project to
+    // `TIMELINE_READY` once it has produced the aligned version.
+    await ctx.enqueue({ type: 'TIMING', entityId: projectId, input: { projectId } });
 
     const debugFile = directorDebugFile(ctx.config, projectId);
     await ensureDir(dirname(debugFile.absolute));

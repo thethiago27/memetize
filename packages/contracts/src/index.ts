@@ -5,4 +5,6 @@ export * from './enums';
 export * from './match';
 export * from './media';
 export * from './registry';
+export * from './render';
+export * from './timing';
 export * from './worker';

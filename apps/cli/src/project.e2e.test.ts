@@ -95,12 +95,14 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('project pipeline (e
     const outcomes = await orchestrator.drain({ entityId: project.id });
     const types = outcomes.map((outcome) => outcome.job.type);
     // AUDIO_ANALYZE and LYRICS fan out in parallel (relative order unspecified);
-    // NARRATIVE only runs once both are done, then chains into MATCH, then DIRECTOR.
-    expect(types).toHaveLength(5);
+    // NARRATIVE only runs once both are done, then chains into MATCH, then
+    // DIRECTOR, then TIMING (spec section 32: separate from the Director).
+    expect(types).toHaveLength(6);
     expect(new Set(types.slice(0, 2))).toEqual(new Set(['AUDIO_ANALYZE', 'LYRICS']));
     expect(types[2]).toBe('NARRATIVE');
     expect(types[3]).toBe('MATCH');
     expect(types[4]).toBe('DIRECTOR');
+    expect(types[5]).toBe('TIMING');
     expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
 
     const refreshed = await getProject(db, project.id);
@@ -141,9 +143,10 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('project pipeline (e
     }
 
     // DIRECTOR still completes with an empty timeline (spec section 54's
-    // "catálogo / shortlist vazia não é falha").
+    // "catálogo / shortlist vazia não é falha"); TIMING then runs as a
+    // pass-through (v1 raw -> v2), since there is nothing to align.
     const timeline = await getLatestTimeline(db, project.id);
-    expect(timeline?.version).toBe(1);
+    expect(timeline?.version).toBe(2);
     expect(timeline?.data.clips).toEqual([]);
 
     // Re-ingesting the same bytes creates a *different* project (spec section 41 note).

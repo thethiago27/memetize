@@ -70,11 +70,45 @@ export function directorDebugFile(config: AppConfig, projectId: string): Storage
   };
 }
 
+/** Debug cache file for the Timing Optimizer's per-clip adjustments (spec section 64). */
+export function timingDebugFile(config: AppConfig, projectId: string): StoragePath {
+  return {
+    absolute: join(config.storageDir, 'cache', projectId, 'timing.json'),
+    relative: `${config.storageDirRelative}/cache/${projectId}/timing.json`,
+  };
+}
+
 /** The official `Timeline` document (spec sections 34, 54), kept alongside the debug files. */
 export function timelineFile(config: AppConfig, projectId: string): StoragePath {
   return {
     absolute: join(config.storageDir, 'cache', projectId, 'timeline.json'),
     relative: `${config.storageDirRelative}/cache/${projectId}/timeline.json`,
+  };
+}
+
+/** `storage/renders/{projectId}` (spec section 11). */
+export function renderDir(config: AppConfig, projectId: string): StoragePath {
+  return {
+    absolute: join(config.storageDir, 'renders', projectId),
+    relative: `${config.storageDirRelative}/renders/${projectId}`,
+  };
+}
+
+/** A render's MP4, e.g. `render_001.mp4` (spec section 39: `renders` is append-only). */
+export function renderFile(config: AppConfig, projectId: string, version: number): StoragePath {
+  const dir = renderDir(config, projectId);
+  const name = `render_${String(version).padStart(3, '0')}.mp4`;
+  return {
+    absolute: join(dir.absolute, name),
+    relative: `${dir.relative}/${name}`,
+  };
+}
+
+/** Debug cache file for the Renderer's FFmpeg args + graph + validation (spec section 64). */
+export function renderDebugFile(config: AppConfig, projectId: string): StoragePath {
+  return {
+    absolute: join(config.storageDir, 'cache', projectId, 'render.json'),
+    relative: `${config.storageDirRelative}/cache/${projectId}/render.json`,
   };
 }
 

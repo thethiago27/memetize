@@ -32,12 +32,12 @@ export async function transcribeProjectAudio(args: {
         jobId: args.jobId,
         entityId: args.projectId,
         workerVersion: '1.0.0',
-          input: {
-            assetId: args.projectId,
-            audioPath: args.audioPath,
-            provider: args.provider,
-            model: args.model,
-          },
+        input: {
+          assetId: args.projectId,
+          audioPath: args.audioPath,
+          provider: args.provider,
+          model: args.model,
+        },
       },
       timeoutMs: TRANSCRIBE_TIMEOUT_MS,
     }));

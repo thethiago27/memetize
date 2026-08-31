@@ -16,7 +16,8 @@ export type IdPrefix =
   | 'lyr'
   | 'mat'
   | 'tlv'
-  | 'clp';
+  | 'clp'
+  | 'rnd';
 
 /** Builds a URL-safe, sortable-enough id like `ast_9x3k...`. */
 export function prefixedId(prefix: IdPrefix): string {
@@ -36,3 +37,4 @@ export const lyricsId = (): string => prefixedId('lyr');
 export const matchId = (): string => prefixedId('mat');
 export const timelineVersionId = (): string => prefixedId('tlv');
 export const clipId = (): string => prefixedId('clp');
+export const renderId = (): string => prefixedId('rnd');

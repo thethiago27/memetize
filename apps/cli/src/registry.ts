@@ -7,7 +7,9 @@ import { createMatchHandler } from '@memetize/matching';
 import { createMomentExtractHandler } from '@memetize/moment-extractor';
 import { createNarrativeHandler } from '@memetize/narrative-analyzer';
 import type { JobRegistry } from '@memetize/orchestrator';
+import { createRenderHandler } from '@memetize/renderer-worker';
 import { createSceneDetectHandler } from '@memetize/scene-detector';
+import { createTimingHandler } from '@memetize/timing-worker';
 import { createTranscriptHandler } from '@memetize/transcript';
 import { createNormalizeHandler } from '@memetize/video-normalizer';
 import { createVisionAnalyzeHandler } from '@memetize/vision-analyzer';
@@ -35,5 +37,7 @@ export function buildRegistry(): JobRegistry {
     NARRATIVE: createNarrativeHandler(),
     MATCH: createMatchHandler(),
     DIRECTOR: createDirectorHandler(),
+    TIMING: createTimingHandler(),
+    RENDER: createRenderHandler(),
   };
 }

@@ -9,6 +9,7 @@ import { createTestDatabase, type Database, truncateAll } from '@memetize/databa
 import { ingestAsset } from '@memetize/media-catalog';
 import { Orchestrator, ResourceScheduler } from '@memetize/orchestrator';
 import {
+  getLatestTimeline,
   getProject,
   ingestProject,
   listNarrativeSegments,
@@ -125,12 +126,14 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('matching pipeline (
     const outcomes = await orchestrator.drain({ entityId: project.id });
     const types = outcomes.map((outcome) => outcome.job.type);
     // AUDIO_ANALYZE and LYRICS fan out in parallel (relative order unspecified);
-    // NARRATIVE only runs once both are done, then chains into MATCH, then DIRECTOR.
-    expect(types).toHaveLength(5);
+    // NARRATIVE only runs once both are done, then chains into MATCH, then
+    // DIRECTOR, then TIMING (spec section 32: separate from the Director).
+    expect(types).toHaveLength(6);
     expect(new Set(types.slice(0, 2))).toEqual(new Set(['AUDIO_ANALYZE', 'LYRICS']));
     expect(types[2]).toBe('NARRATIVE');
     expect(types[3]).toBe('MATCH');
     expect(types[4]).toBe('DIRECTOR');
+    expect(types[5]).toBe('TIMING');
     expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
 
     const refreshed = await getProject(db, project.id);
@@ -201,5 +204,6 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('matching pipeline (
     for (const match of matches) {
       expect(match.shortlist).toEqual([]);
     }
+    expect((await getLatestTimeline(db, project.id))?.data.clips).toEqual([]);
   }, 60_000);
 });

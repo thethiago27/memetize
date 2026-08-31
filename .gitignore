@@ -6,6 +6,7 @@ coverage/
 *.tsbuildinfo
 
 # Environment
+.pnpm-store/
 .env
 .env.local
 .env.*.local

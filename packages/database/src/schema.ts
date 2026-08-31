@@ -11,6 +11,7 @@ import type {
   LyricSource,
   ProjectStatus,
   RankedCandidate,
+  RenderValidation,
   ResourceClass,
   RetrievedCandidate,
   ShortlistCandidate,
@@ -390,11 +391,47 @@ export const timelineVersions = pgTable(
     director: text('director').notNull(),
     directorVersion: text('director_version').notNull(),
     promptVersion: text('prompt_version').notNull(),
+    // Null for the Director's own raw version; populated only on the version
+    // the Timing Optimizer (spec section 32, phase 8) inserts right after it.
+    timingOptimizer: text('timing_optimizer'),
+    timingOptimizerVersion: text('timing_optimizer_version'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex('timeline_versions_unique').on(table.projectId, table.version),
     index('timeline_versions_project_idx').on(table.projectId),
+  ],
+);
+
+/**
+ * Renderer output (spec sections 36-39): append-only like `timeline_versions`
+ * — `insertRender` always inserts the next `version`, so an old MP4 stays
+ * reachable on disk and in the database after a re-render.
+ */
+export const renders = pgTable(
+  'renders',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull(),
+    timelineVersion: integer('timeline_version').notNull(),
+    path: text('path').notNull(),
+    durationMs: integer('duration_ms').notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    fps: integer('fps').notNull(),
+    videoCodec: text('video_codec').notNull(),
+    audioCodec: text('audio_codec').notNull(),
+    renderer: text('renderer').notNull(),
+    rendererVersion: text('renderer_version').notNull(),
+    validation: jsonb('validation').$type<RenderValidation>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('renders_unique').on(table.projectId, table.version),
+    index('renders_project_idx').on(table.projectId),
   ],
 );
 
@@ -412,3 +449,5 @@ export type SegmentMatchRow = typeof segmentMatches.$inferSelect;
 export type NewSegmentMatchRow = typeof segmentMatches.$inferInsert;
 export type TimelineVersionRow = typeof timelineVersions.$inferSelect;
 export type NewTimelineVersionRow = typeof timelineVersions.$inferInsert;
+export type RenderRow = typeof renders.$inferSelect;
+export type NewRenderRow = typeof renders.$inferInsert;

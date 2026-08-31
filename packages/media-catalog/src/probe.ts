@@ -9,10 +9,15 @@ export interface VideoProbe {
   width: number;
   height: number;
   fpsMilli: number;
+  /** Codec name of the first video stream, e.g. `h264`; `null` when there is none. */
+  videoCodec: string | null;
+  /** Codec name of the first audio stream, e.g. `aac`; `null` when there is none. */
+  audioCodec: string | null;
 }
 
 interface FfprobeStream {
   codec_type?: string;
+  codec_name?: string;
   width?: number;
   height?: number;
   avg_frame_rate?: string;
@@ -44,6 +49,7 @@ export async function probeVideo(path: string): Promise<VideoProbe> {
   if (!video || video.width === undefined || video.height === undefined) {
     throw new Error(`no video stream found in ${path}`);
   }
+  const audio = (data.streams ?? []).find((stream) => stream.codec_type === 'audio');
 
   const durationSeconds = Number(data.format?.duration ?? video.duration ?? 0);
   return {
@@ -51,6 +57,8 @@ export async function probeVideo(path: string): Promise<VideoProbe> {
     width: Number(video.width),
     height: Number(video.height),
     fpsMilli: parseFpsMilli(video.avg_frame_rate ?? video.r_frame_rate),
+    videoCodec: video.codec_name ?? null,
+    audioCodec: audio?.codec_name ?? null,
   };
 }
 
