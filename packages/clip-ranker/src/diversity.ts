@@ -18,7 +18,7 @@ export interface SegmentRankedInput {
 }
 
 export interface DiversityContext {
-  usedAssetIds: Set<string>;
+  lastAssetId: string | null;
   lastMemeFunctions: string[];
   lastSubjects: string[];
   lastNarrativeFunction: string;
@@ -27,7 +27,7 @@ export interface DiversityContext {
 /** Fresh, empty context for the first segment of a project. */
 export function createDiversityContext(): DiversityContext {
   return {
-    usedAssetIds: new Set(),
+    lastAssetId: null,
     lastMemeFunctions: [],
     lastSubjects: [],
     lastNarrativeFunction: '',
@@ -75,15 +75,9 @@ function buildShortlistEntry(
 }
 
 /**
- * Diversity Engine for a single segment (spec section 30): walks its ranked
- * candidates in the order they're already sorted (by `finalScore`), skips
- * any asset already shortlisted elsewhere in the project (hard rule —
- * "não repetir mesmo asset no mesmo vídeo"), and applies soft multipliers
- * for repeated character/category/consecutive-reaction against the
- * previous segment's top pick. Mutates `context` in place so the caller can
- * run this segment-by-segment, interleaved with ranking (novelty needs the
- * *previous* segments' finalized shortlists, spec section 29's usage
- * table), rather than only as a single bulk pass at the end.
+ * Diversity Engine for a single segment: prefers candidates whose asset
+ * differs from the previous segment's top pick, then applies soft
+ * category/subject/reaction penalties. Mutates `context` in place.
  */
 export function diversifySegment(
   segment: SegmentRankedInput,
@@ -96,18 +90,13 @@ export function diversifySegment(
 
   for (const candidate of segment.ranked) {
     if (shortlist.length >= limit) break;
-    if (context.usedAssetIds.has(candidate.assetId)) {
+    if (context.lastAssetId !== null && candidate.assetId === context.lastAssetId) {
       skippedForSameAsset.push(candidate);
       continue;
     }
     shortlist.push(buildShortlistEntry(candidate, segment, moments, context));
-    context.usedAssetIds.add(candidate.assetId);
   }
 
-  // Only relax same_asset_penalty when it would otherwise leave this
-  // segment with *no* shortlist at all (e.g. a one-asset catalog) — a
-  // shortlist that's merely short of `limit` because too few distinct
-  // assets exist is a normal, honest result, not a failure mode.
   if (shortlist.length === 0) {
     for (const candidate of skippedForSameAsset) {
       if (shortlist.length >= limit) break;
@@ -119,6 +108,7 @@ export function diversifySegment(
 
   const top = shortlist[0];
   const topMoment = top ? moments.get(top.momentId) : undefined;
+  context.lastAssetId = top?.assetId ?? context.lastAssetId;
   context.lastMemeFunctions = topMoment?.memeFunctions.map((value) => value.toLowerCase()) ?? [];
   context.lastSubjects = topMoment?.subjects ?? [];
   context.lastNarrativeFunction = segment.narrativeFunction;
@@ -128,9 +118,7 @@ export function diversifySegment(
 
 /**
  * Convenience wrapper over `diversifySegment` for callers that already have
- * every segment ranked up front and don't need novelty to reflect this
- * run's own shortlists (e.g. tests, or a bulk re-diversify). `segments`
- * must already be in timeline order (ascending `startMs`).
+ * every segment ranked up front. `segments` must already be in timeline order.
  */
 export function diversify(
   segments: SegmentRankedInput[],

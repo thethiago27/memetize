@@ -128,10 +128,17 @@ export function createMatchHandler(): JobHandler {
       matches.push({ segmentId: segment.id, retrieved, ranked, shortlist });
       debugSegments.push({
         segmentId: segment.id,
+        segmentDurationMs: segment.endMs - segment.startMs,
         queries: segment.visualIdeas,
         retrieved,
-        ranked,
-        shortlist,
+        ranked: ranked.map((entry) => ({
+          ...entry,
+          momentDurationMs: rankingMoments.get(entry.momentId)?.durationMs ?? null,
+        })),
+        shortlist: shortlist.map((entry) => ({
+          ...entry,
+          momentDurationMs: rankingMoments.get(entry.momentId)?.durationMs ?? null,
+        })),
       });
     }
 

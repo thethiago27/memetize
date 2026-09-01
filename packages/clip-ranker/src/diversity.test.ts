@@ -20,29 +20,20 @@ function candidate(momentId: string, assetId: string, finalScore: number): Ranke
 
 const noMoments = new Map<string, MomentForDiversity>();
 
+function segment(segmentId: string, ranked: RankedCandidate[]): SegmentRankedInput {
+  return { segmentId, narrativeFunction: 'setup', ranked };
+}
+
 describe('diversify', () => {
-  it('gives the second segment a different asset when the top candidate would repeat one', () => {
-    const segments: SegmentRankedInput[] = [
-      {
-        segmentId: 'nar_1',
-        narrativeFunction: 'setup',
-        ranked: [candidate('mom_1', 'ast_shared', 0.9), candidate('mom_2', 'ast_other', 0.8)],
-      },
-      {
-        segmentId: 'nar_2',
-        narrativeFunction: 'payoff',
-        ranked: [candidate('mom_3', 'ast_shared', 0.95), candidate('mom_4', 'ast_third', 0.7)],
-      },
+  it('avoids adjacent asset reuse but allows the same asset later', () => {
+    const segments = [
+      segment('nar_1', [candidate('mom_a1', 'ast_a', 0.9), candidate('mom_b1', 'ast_b', 0.8)]),
+      segment('nar_2', [candidate('mom_a2', 'ast_a', 0.95), candidate('mom_b2', 'ast_b', 0.7)]),
+      segment('nar_3', [candidate('mom_a3', 'ast_a', 0.99), candidate('mom_c3', 'ast_c', 0.6)]),
     ];
-
-    const shortlists = diversify(segments, noMoments);
-
-    const first = shortlists.get('nar_1');
-    const second = shortlists.get('nar_2');
-    expect(first?.[0]?.assetId).toBe('ast_shared');
-    // mom_3 would have won on score alone, but ast_shared is already used.
-    expect(second?.[0]?.assetId).toBe('ast_third');
-    expect(second?.some((entry) => entry.assetId === 'ast_shared')).toBe(false);
+    const result = diversify(segments, noMoments, 6);
+    expect(result.get('nar_2')?.[0]?.assetId).toBe('ast_b');
+    expect(result.get('nar_3')?.[0]?.assetId).toBe('ast_a');
   });
 
   it('relaxes the same-asset rule when the catalog only has one asset, and never empties the shortlist', () => {

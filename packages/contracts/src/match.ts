@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 export const RETRIEVE_LIMIT = 50;
 export const RANK_LIMIT = 10;
-export const SHORTLIST_LIMIT = 3;
+export const SHORTLIST_LIMIT = 6;
 
 // MATCH
 export const MatchInput = z.object({

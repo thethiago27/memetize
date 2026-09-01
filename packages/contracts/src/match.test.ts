@@ -9,10 +9,10 @@ import {
 } from './match';
 
 describe('matching pipeline contracts', () => {
-  it('exposes the funnel limits from the spec (50 / 10 / 3)', () => {
+  it('exposes the funnel limits from the spec (50 / 10 / 6)', () => {
     expect(RETRIEVE_LIMIT).toBe(50);
     expect(RANK_LIMIT).toBe(10);
-    expect(SHORTLIST_LIMIT).toBe(3);
+    expect(SHORTLIST_LIMIT).toBe(6);
   });
 
   it('parses a retrieved candidate with a score in [0, 1]', () => {

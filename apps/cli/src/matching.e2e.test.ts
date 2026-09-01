@@ -146,24 +146,22 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('matching pipeline (
 
     const matchBySegment = new Map(matches.map((match) => [match.segmentId, match]));
     const seenAssetIds = new Set<string>();
+    let lastTopAssetId: string | undefined;
     for (const segment of narrative) {
       const match = matchBySegment.get(segment.id);
       expect(match).toBeTruthy();
-      expect(match?.shortlist.length).toBeLessThanOrEqual(3);
+      expect(match?.shortlist.length).toBeLessThanOrEqual(6);
+      const top = match?.shortlist[0];
+      if (top && lastTopAssetId === top.assetId) {
+        expect(top.penalties).toContain('same_asset_relaxed');
+      }
+      lastTopAssetId = top?.assetId;
       for (const entry of match?.shortlist ?? []) {
         expect(entry.momentId).toBeTruthy();
         expect(entry.assetId).toBeTruthy();
-        // The Diversity Engine's hard rule (spec section 30) forbids
-        // repeating an asset across segments *unless* the catalog is too
-        // small to avoid it — the catalog here has only 3 assets, so once
-        // narrative segments outnumber them, reuse must be flagged.
-        if (seenAssetIds.has(entry.assetId)) {
-          expect(entry.penalties).toContain('same_asset_relaxed');
-        }
         seenAssetIds.add(entry.assetId);
       }
     }
-    // With only 3 assets, the catalog is exhausted by the third distinct pick.
     expect(seenAssetIds.size).toBeLessThanOrEqual(3);
 
     // The Narrative Analyzer's visualIdeas are the retriever's queries (spec
