@@ -89,6 +89,39 @@ export default function ProjectStudioPage({ params }: { params: Promise<{ id: st
         </section>
       ) : null}
 
+      {detail.jobs
+        .filter((job) => job.status === 'FAILED' && (job.errorCode || job.errorMessage))
+        .map((job) => (
+          <section key={`${job.id}-error`} className="panel">
+            <p className="kicker">Job failed</p>
+            <p className="err">
+              {job.type}
+              {job.errorCode ? ` · ${job.errorCode}` : ''}
+              {job.errorMessage ? ` — ${job.errorMessage}` : ''}
+            </p>
+            {job.errorCode === 'INSUFFICIENT_CATALOG' ? (
+              <p className="note">
+                Add more or longer source videos so every selected span can be covered without
+                black, freeze, or looping.
+              </p>
+            ) : null}
+          </section>
+        ))}
+
+      {detail.editWindow ? (
+        <section className="panel">
+          <p className="kicker">Selected source window</p>
+          <p className="mono">
+            {formatTimecode(detail.editWindow.sourceStartMs)}–
+            {formatTimecode(detail.editWindow.sourceEndMs)} ·{' '}
+            {formatTimecode(detail.editWindow.durationMs)}
+          </p>
+          <p className="mute">
+            {detail.editWindow.selector} v{detail.editWindow.selectorVersion}
+          </p>
+        </section>
+      ) : null}
+
       {slateAhead ? (
         <p className="note">Slate is ahead of the print. Render to see the latest swap.</p>
       ) : null}

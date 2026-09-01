@@ -95,6 +95,9 @@ export interface ProjectListRow extends ProjectRow {
   durationMs: number | null;
   timelineVersion: number | null;
   renderVersion: number | null;
+  outputDurationMs: number | null;
+  sourceStartMs: number | null;
+  sourceEndMs: number | null;
 }
 
 export interface TimelineClip {
@@ -113,8 +116,40 @@ export interface ShortlistEntry {
   penalties: string[];
 }
 
+export interface HighlightScoreBreakdown {
+  section: number;
+  energy: number;
+  lyrics: number;
+  narrativeArc: number;
+  boundaries: number;
+}
+
+export interface EditWindowRow {
+  id: string;
+  projectId: string;
+  version: number;
+  sourceStartMs: number;
+  sourceEndMs: number;
+  durationMs: number;
+  targetDurationMs: number;
+  score: number;
+  scoreBreakdown: HighlightScoreBreakdown;
+  selector: string;
+  selectorVersion: string;
+  createdAt: string;
+}
+
+export interface ProjectJob {
+  id: string;
+  type: string;
+  status: string;
+  errorCode: string | null;
+  errorMessage: string | null;
+}
+
 export interface ProjectDetail {
   project: ProjectRow;
+  editWindow: EditWindowRow | null;
   audio: {
     durationMs: number;
     bpm: number;
@@ -134,7 +169,7 @@ export interface ProjectDetail {
   timeline: { version: number; data: { durationMs: number; clips: TimelineClip[] } } | null;
   render: RenderRow | null;
   renders: RenderRow[];
-  jobs: { id: string; type: string; status: string }[];
+  jobs: ProjectJob[];
 }
 
 export interface RenderRow {

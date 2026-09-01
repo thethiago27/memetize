@@ -78,6 +78,12 @@ export default function ProjectsPage() {
               <span className="mono mute">
                 {project.status}
                 {project.durationMs != null ? `  ${formatTimecode(project.durationMs)}` : ''}
+                {project.sourceStartMs != null && project.sourceEndMs != null
+                  ? `  ${formatTimecode(project.sourceStartMs)}–${formatTimecode(project.sourceEndMs)}`
+                  : ''}
+                {project.outputDurationMs != null
+                  ? `  out ${formatTimecode(project.outputDurationMs)}`
+                  : ''}
                 {project.timelineVersion != null ? `  tl v${project.timelineVersion}` : ''}
               </span>
             </Link>

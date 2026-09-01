@@ -3,6 +3,7 @@ import type { RenderWarning } from '@memetize/contracts';
 import {
   generateTimeline,
   getAudioAnalysis,
+  getLatestEditWindow,
   getLatestRender,
   getLatestTimeline,
   getLyrics,
@@ -218,6 +219,7 @@ async function printProjectDetails(ctx: CliContext, id: string): Promise<void> {
   }
   const audioFile = await getProjectAudio(ctx.db, id);
   const audio = await getAudioAnalysis(ctx.db, id);
+  const editWindow = await getLatestEditWindow(ctx.db, id);
   const lyrics = await getLyrics(ctx.db, id);
   const narrative = await listNarrativeSegments(ctx.db, id);
   const matches = await listSegmentMatches(ctx.db, id);
@@ -242,6 +244,14 @@ async function printProjectDetails(ctx: CliContext, id: string): Promise<void> {
     }
   } else {
     lines.push('  audio:    (not analyzed yet)');
+  }
+
+  if (editWindow) {
+    lines.push(
+      `  window:   ${editWindow.sourceStartMs}..${editWindow.sourceEndMs} ms  output=${editWindow.durationMs} ms  ${editWindow.selector} v${editWindow.selectorVersion}  score=${editWindow.score.toFixed(3)}`,
+    );
+  } else {
+    lines.push('  window:   (not selected yet)');
   }
 
   if (lyrics) {

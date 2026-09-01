@@ -3,6 +3,7 @@ import { listJobsForEntity } from '@memetize/job-system';
 import {
   generateTimeline,
   getAudioAnalysis,
+  getLatestEditWindow,
   getLatestRender,
   getLatestTimeline,
   getLyrics,
@@ -28,16 +29,20 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
     const rows = await listProjects(runtime.db);
     const projects = await Promise.all(
       rows.map(async (row) => {
-        const [audio, timeline, render] = await Promise.all([
+        const [audio, timeline, render, editWindow] = await Promise.all([
           getAudioAnalysis(runtime.db, row.id),
           getLatestTimeline(runtime.db, row.id),
           getLatestRender(runtime.db, row.id),
+          getLatestEditWindow(runtime.db, row.id),
         ]);
         return {
           ...row,
           durationMs: audio?.durationMs ?? null,
           timelineVersion: timeline?.version ?? null,
           renderVersion: render?.version ?? null,
+          outputDurationMs: editWindow?.durationMs ?? null,
+          sourceStartMs: editWindow?.sourceStartMs ?? null,
+          sourceEndMs: editWindow?.sourceEndMs ?? null,
         };
       }),
     );
@@ -48,17 +53,30 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
     const { id } = request.params as { id: string };
     const project = await getProject(runtime.db, id);
     if (!project) return sendError(reply, 404, 'NOT_FOUND', `project not found: ${id}`);
-    const [audio, lyrics, narrative, matches, timeline, render, renders, jobs] = await Promise.all([
-      getAudioAnalysis(runtime.db, id),
-      getLyrics(runtime.db, id),
-      listNarrativeSegments(runtime.db, id),
-      listSegmentMatches(runtime.db, id),
-      getLatestTimeline(runtime.db, id),
-      getLatestRender(runtime.db, id),
-      listRenders(runtime.db, id),
-      listJobsForEntity(runtime.db, id),
-    ]);
-    return { project, audio, lyrics, narrative, matches, timeline, render, renders, jobs };
+    const [audio, lyrics, narrative, matches, timeline, render, renders, jobs, editWindow] =
+      await Promise.all([
+        getAudioAnalysis(runtime.db, id),
+        getLyrics(runtime.db, id),
+        listNarrativeSegments(runtime.db, id),
+        listSegmentMatches(runtime.db, id),
+        getLatestTimeline(runtime.db, id),
+        getLatestRender(runtime.db, id),
+        listRenders(runtime.db, id),
+        listJobsForEntity(runtime.db, id),
+        getLatestEditWindow(runtime.db, id),
+      ]);
+    return {
+      project,
+      audio,
+      lyrics,
+      narrative,
+      matches,
+      timeline,
+      render,
+      renders,
+      jobs,
+      editWindow: editWindow ?? null,
+    };
   });
 
   app.get('/v1/projects/:id/timelines', async (request, reply) => {

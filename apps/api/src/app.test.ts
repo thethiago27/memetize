@@ -1,5 +1,5 @@
 import { createTestDatabase, type Database, projects, truncateAll } from '@memetize/database';
-import { insertTimelineVersion } from '@memetize/projects';
+import { insertEditWindow, insertTimelineVersion } from '@memetize/projects';
 import { createAppRuntime } from '@memetize/runtime';
 import { loadConfig } from '@memetize/shared';
 import { Timeline } from '@memetize/timeline';
@@ -25,6 +25,43 @@ describe.skipIf(!handle)('studio API (inject)', () => {
     const app = await appPromise;
     await app.close();
     await handle?.close();
+  });
+
+  it('returns the selected edit window on project detail', async () => {
+    const app = await appPromise;
+    const projectId = 'prj_api_window';
+    await db
+      .insert(projects)
+      .values({ id: projectId, filename: 'song.mp3', status: 'PLANNING' });
+    await insertEditWindow(db, {
+      projectId,
+      selection: {
+        sourceStartMs: 30_000,
+        sourceEndMs: 90_000,
+        durationMs: 60_000,
+        targetDurationMs: 60_000,
+        score: 0.8,
+        scoreBreakdown: {
+          section: 1,
+          energy: 0.8,
+          lyrics: 0.7,
+          narrativeArc: 0.7,
+          boundaries: 0.8,
+        },
+        selector: 'structural-highlight',
+        selectorVersion: '1.0.0',
+      },
+    });
+
+    const response = await app.inject({ method: 'GET', url: `/v1/projects/${projectId}` });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().editWindow).toMatchObject({
+      sourceStartMs: 30_000,
+      sourceEndMs: 90_000,
+      durationMs: 60_000,
+      selector: 'structural-highlight',
+      selectorVersion: '1.0.0',
+    });
   });
 
   it('lists an empty project catalog', async () => {
