@@ -10,6 +10,7 @@ import { ingestAsset, probeVideo } from '@memetize/media-catalog';
 import { Orchestrator, ResourceScheduler } from '@memetize/orchestrator';
 import {
   getLatestRender,
+  getLatestTimeline,
   getProject,
   ingestProject,
   listRenders,
@@ -19,6 +20,7 @@ import {
 } from '@memetize/projects';
 import { SCENE_DETECTOR_DIR } from '@memetize/scene-detector';
 import type { AppConfig } from '@memetize/shared';
+import type { Timeline } from '@memetize/timeline';
 import { TRANSCRIPT_DIR } from '@memetize/transcript';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildRegistry } from './registry';
@@ -55,7 +57,7 @@ async function makeSilentClip(path: string, durationSeconds: number): Promise<vo
   ]);
 }
 
-async function makeColorClip(path: string, color: string): Promise<void> {
+async function makeMovingClip(path: string, durationSeconds: number): Promise<void> {
   await execFileAsync('ffmpeg', [
     '-y',
     '-hide_banner',
@@ -64,11 +66,76 @@ async function makeColorClip(path: string, color: string): Promise<void> {
     '-f',
     'lavfi',
     '-i',
-    `color=c=${color}:s=640x360:d=2:r=30`,
+    `testsrc2=s=640x360:r=30:d=${durationSeconds}`,
     '-pix_fmt',
     'yuv420p',
     path,
   ]);
+}
+
+function assertContinuous(timeline: Timeline): void {
+  expect(timeline.clips.length).toBeGreaterThan(0);
+  expect(timeline.clips[0]?.timeline.startMs).toBe(0);
+  for (let index = 1; index < timeline.clips.length; index += 1) {
+    expect(timeline.clips[index - 1]?.timeline.endMs).toBe(timeline.clips[index]?.timeline.startMs);
+  }
+  expect(timeline.clips.at(-1)?.timeline.endMs).toBe(timeline.durationMs);
+  for (const clip of timeline.clips) {
+    expect(clip.source.endMs - clip.source.startMs).toBe(
+      clip.timeline.endMs - clip.timeline.startMs,
+    );
+  }
+}
+
+async function probeStartTimes(path: string): Promise<{
+  durationSeconds: number;
+  videoStart: number;
+  audioStart: number;
+}> {
+  const { stdout } = await execFileAsync('ffprobe', [
+    '-v',
+    'error',
+    '-print_format',
+    'json',
+    '-show_entries',
+    'format=duration:stream=start_time,codec_type',
+    path,
+  ]);
+  const data = JSON.parse(stdout) as {
+    format?: { duration?: string };
+    streams?: { codec_type?: string; start_time?: string }[];
+  };
+  const video = data.streams?.find((stream) => stream.codec_type === 'video');
+  const audio = data.streams?.find((stream) => stream.codec_type === 'audio');
+  return {
+    durationSeconds: Number(data.format?.duration ?? 0),
+    videoStart: Number(video?.start_time ?? Number.NaN),
+    audioStart: Number(audio?.start_time ?? Number.NaN),
+  };
+}
+
+async function detectBlack(path: string): Promise<string> {
+  try {
+    const { stderr } = await execFileAsync(
+      'ffmpeg',
+      [
+        '-hide_banner',
+        '-i',
+        path,
+        '-vf',
+        'blackdetect=d=0.05:pix_th=0.10',
+        '-an',
+        '-f',
+        'null',
+        '-',
+      ],
+      { maxBuffer: 16 * 1024 * 1024 },
+    );
+    return stderr;
+  } catch (error) {
+    const failed = error as { stderr?: string };
+    return failed.stderr ?? '';
+  }
 }
 
 describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('renderer pipeline (e2e)', () => {
@@ -112,10 +179,9 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('renderer pipeline (
   });
 
   it('renders a catalog-backed timeline into a valid 1080x1920@30 MP4 and supports a second version', async () => {
-    const colors = ['red', 'green', 'blue'];
-    for (const [index, color] of colors.entries()) {
-      const clipPath = join(tmp, `clip-${index}-${color}.mp4`);
-      await makeColorClip(clipPath, color);
+    for (const index of [0, 1, 2]) {
+      const clipPath = join(tmp, `clip-${index}.mp4`);
+      await makeMovingClip(clipPath, 8);
       const { asset } = await ingestAsset({ db, config, filePath: clipPath });
       const outcomes = await orchestrator.drain({ entityId: asset.id });
       expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
@@ -150,9 +216,25 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('renderer pipeline (
     expect(probe.audioCodec).toBeTruthy();
     expect(Math.abs(probe.durationMs - 6000)).toBeLessThanOrEqual(200);
 
+    const timeline = await getLatestTimeline(db, project.id);
+    if (timeline) assertContinuous(timeline.data);
+
+    const starts = await probeStartTimes(renderPath);
+    expect(Math.abs(starts.durationSeconds * 1000 - 6000)).toBeLessThanOrEqual(200);
+    expect(Math.abs(starts.videoStart)).toBeLessThan(1 / 30);
+    expect(Math.abs(starts.audioStart)).toBeLessThan(1 / 30);
+    expect(await detectBlack(renderPath)).not.toMatch(/black_start/);
+
     const debug = JSON.parse(await readFile(renderDebugFile(config, project.id).absolute, 'utf8'));
     expect(Array.isArray(debug.args)).toBe(true);
     expect(debug.validation.valid).toBe(true);
+    expect(debug.graph.filterComplex).not.toContain('color=c=black');
+    expect(debug.graph.filterComplex).not.toContain('tpad=stop_mode=clone');
+    expect(debug.performance).toMatchObject({
+      clipCount: timeline?.data.clips.length,
+      uniqueSourceCount: expect.any(Number),
+    });
+    expect(debug.performance.ffmpegMs).toBeGreaterThan(0);
 
     // Re-draining processes nothing (RENDER already COMPLETED) and never creates v2.
     const more = await orchestrator.drain({ entityId: project.id });

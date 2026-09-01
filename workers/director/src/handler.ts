@@ -152,10 +152,7 @@ export function createDirectorHandler(): JobHandler {
         { ranked: match.ranked, shortlist: match.shortlist },
       ]),
     );
-    const beats = uniqueSorted([
-      ...audio.beats.map((beat) => beat.timeMs),
-      ...audio.downbeats,
-    ]);
+    const beats = uniqueSorted([...audio.beats.map((beat) => beat.timeMs), ...audio.downbeats]);
 
     let assembled: ReturnType<typeof assembleDirectedTimeline>;
     try {

@@ -35,12 +35,18 @@ describe.skipIf(!handle)('insertEditWindow / getLatestEditWindow (integration)',
   it('versions windows per project and returns the latest selection', async () => {
     await seedProject(db, 'prj_window_a');
     await seedProject(db, 'prj_window_b');
-    const first = await insertEditWindow(db, { projectId: 'prj_window_a', selection: selection(0) });
+    const first = await insertEditWindow(db, {
+      projectId: 'prj_window_a',
+      selection: selection(0),
+    });
     const second = await insertEditWindow(db, {
       projectId: 'prj_window_a',
       selection: selection(30_000),
     });
-    const other = await insertEditWindow(db, { projectId: 'prj_window_b', selection: selection(0) });
+    const other = await insertEditWindow(db, {
+      projectId: 'prj_window_b',
+      selection: selection(0),
+    });
     expect([first.version, second.version, other.version]).toEqual([1, 2, 1]);
     expect((await getLatestEditWindow(db, 'prj_window_a'))?.sourceStartMs).toBe(30_000);
     expect((await listEditWindows(db, 'prj_window_a')).map((row) => row.version)).toEqual([2, 1]);

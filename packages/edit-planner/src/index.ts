@@ -7,8 +7,8 @@ export {
   MIN_VISUAL_SLOT_MS,
 } from './constants';
 export {
-  planNarrativeCoverage,
   type CoverageSuggestion,
   type NarrativeCoverageInput,
+  planNarrativeCoverage,
 } from './coverage';
-export { selectEditWindow, type HighlightSelectionInput } from './highlight';
+export { type HighlightSelectionInput, selectEditWindow } from './highlight';

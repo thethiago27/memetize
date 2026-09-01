@@ -223,7 +223,9 @@ describe('assembleTimeline', () => {
           [
             'nar_1',
             match({
-              shortlist: [{ momentId: 'mom_short', assetId: 'ast_1', finalScore: 0.5, penalties: [] }],
+              shortlist: [
+                { momentId: 'mom_short', assetId: 'ast_1', finalScore: 0.5, penalties: [] },
+              ],
             }),
           ],
         ]),

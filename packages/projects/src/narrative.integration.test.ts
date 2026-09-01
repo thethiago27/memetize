@@ -16,7 +16,9 @@ describe.skipIf(!handle)('replaceNarrativeSegments sourceKind (integration)', ()
   });
 
   it('persists lyric and instrumental source kinds', async () => {
-    await db.insert(projects).values({ id: 'prj_narrative_kind', filename: 'song.mp3', status: 'PLANNING' });
+    await db
+      .insert(projects)
+      .values({ id: 'prj_narrative_kind', filename: 'song.mp3', status: 'PLANNING' });
     const segments: NarrativeSegment[] = [
       {
         sourceKind: 'LYRIC',

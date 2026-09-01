@@ -83,10 +83,7 @@ export function createNarrativeHandler(): JobHandler {
       );
     }
 
-    const beats = uniqueSorted([
-      ...audio.beats.map((beat) => beat.timeMs),
-      ...audio.downbeats,
-    ]);
+    const beats = uniqueSorted([...audio.beats.map((beat) => beat.timeMs), ...audio.downbeats]);
     const normalized = planNarrativeCoverage({
       window: { sourceStartMs: window.sourceStartMs, sourceEndMs: window.sourceEndMs },
       suggestions: suggestion.segments,
@@ -192,7 +189,11 @@ function validateCoverage(
   for (let index = 0; index < segments.length; index += 1) {
     const segment = segments[index];
     if (!segment || segment.endMs <= segment.startMs) {
-      throw new JobFailure('NARRATIVE_COVERAGE_INVALID', 'normalized span has a non-positive duration', false);
+      throw new JobFailure(
+        'NARRATIVE_COVERAGE_INVALID',
+        'normalized span has a non-positive duration',
+        false,
+      );
     }
     if (segment.startMs < sourceStartMs || segment.endMs > sourceEndMs) {
       throw new JobFailure(
@@ -203,7 +204,11 @@ function validateCoverage(
     }
     const next = segments[index + 1];
     if (next && segment.endMs !== next.startMs) {
-      throw new JobFailure('NARRATIVE_COVERAGE_INVALID', 'normalized spans are not contiguous', false);
+      throw new JobFailure(
+        'NARRATIVE_COVERAGE_INVALID',
+        'normalized spans are not contiguous',
+        false,
+      );
     }
   }
 }

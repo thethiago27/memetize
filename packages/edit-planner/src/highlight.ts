@@ -38,7 +38,9 @@ export function selectEditWindow(input: HighlightSelectionInput): EditWindowSele
 
   const candidates = collectCandidateStarts(input);
   const scored = candidates
-    .map((startMs) => scoreWindow(startMs, startMs + MAX_OUTPUT_DURATION_MS, MAX_OUTPUT_DURATION_MS, input))
+    .map((startMs) =>
+      scoreWindow(startMs, startMs + MAX_OUTPUT_DURATION_MS, MAX_OUTPUT_DURATION_MS, input),
+    )
     .sort((a, b) => b.score - a.score || a.sourceStartMs - b.sourceStartMs);
 
   const winner = scored[0];
@@ -118,11 +120,7 @@ function scoreWindow(
   };
 }
 
-function scoreSection(
-  startMs: number,
-  endMs: number,
-  sections: readonly AudioSection[],
-): number {
+function scoreSection(startMs: number, endMs: number, sections: readonly AudioSection[]): number {
   const durationMs = endMs - startMs;
   if (durationMs <= 0) return 0;
   let overlapMs = 0;
@@ -133,11 +131,7 @@ function scoreSection(
   return clamp01(overlapMs / durationMs);
 }
 
-function scoreEnergy(
-  startMs: number,
-  endMs: number,
-  energyCurve: readonly EnergyPoint[],
-): number {
+function scoreEnergy(startMs: number, endMs: number, energyCurve: readonly EnergyPoint[]): number {
   const points = energyCurve.filter((point) => point.timeMs >= startMs && point.timeMs <= endMs);
   if (points.length === 0) {
     const nearest = energyAt(Math.floor((startMs + endMs) / 2), energyCurve);
@@ -161,11 +155,7 @@ function scoreLyrics(
   return clamp01(coveredMs / durationMs);
 }
 
-function scoreNarrativeArc(
-  startMs: number,
-  endMs: number,
-  input: HighlightSelectionInput,
-): number {
+function scoreNarrativeArc(startMs: number, endMs: number, input: HighlightSelectionInput): number {
   const durationMs = endMs - startMs;
   const firstThirdEnd = startMs + Math.floor(durationMs / 3);
   const finalThirdStart = endMs - Math.floor(durationMs / 3);
@@ -176,11 +166,7 @@ function scoreNarrativeArc(
   return clamp01(Math.max(rise, climaxInFinalThird));
 }
 
-function scoreBoundaries(
-  startMs: number,
-  endMs: number,
-  input: HighlightSelectionInput,
-): number {
+function scoreBoundaries(startMs: number, endMs: number, input: HighlightSelectionInput): number {
   const structural = collectStructuralTimes(input.sections, input.downbeats);
   const startHit = structural.has(startMs) ? 0.5 : 0;
   const endHit = structural.has(endMs) ? 0.5 : 0;

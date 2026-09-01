@@ -30,9 +30,7 @@ describe.skipIf(!handle)('studio API (inject)', () => {
   it('returns the selected edit window on project detail', async () => {
     const app = await appPromise;
     const projectId = 'prj_api_window';
-    await db
-      .insert(projects)
-      .values({ id: projectId, filename: 'song.mp3', status: 'PLANNING' });
+    await db.insert(projects).values({ id: projectId, filename: 'song.mp3', status: 'PLANNING' });
     await insertEditWindow(db, {
       projectId,
       selection: {

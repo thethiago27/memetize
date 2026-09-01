@@ -195,7 +195,7 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('matching pipeline (
     await orchestrator.drain({ entityId: project.id });
 
     const refreshed = await getProject(db, project.id);
-    expect(refreshed?.status).toBe('TIMELINE_READY');
+    expect(refreshed?.status).toBe('FAILED');
 
     const narrative = await listNarrativeSegments(db, project.id);
     const matches = await listSegmentMatches(db, project.id);
@@ -203,6 +203,6 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('matching pipeline (
     for (const match of matches) {
       expect(match.shortlist).toEqual([]);
     }
-    expect((await getLatestTimeline(db, project.id))?.data.clips).toEqual([]);
+    expect(await getLatestTimeline(db, project.id)).toBeUndefined();
   }, 60_000);
 });

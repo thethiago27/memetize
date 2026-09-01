@@ -117,7 +117,8 @@ export default function ProjectStudioPage({ params }: { params: Promise<{ id: st
             {formatTimecode(detail.editWindow.durationMs)}
           </p>
           <p className="mute">
-            {detail.editWindow.selector} v{detail.editWindow.selectorVersion}
+            {detail.editWindow.selector} v{detail.editWindow.selectorVersion} · score{' '}
+            {detail.editWindow.score.toFixed(2)}
           </p>
         </section>
       ) : null}

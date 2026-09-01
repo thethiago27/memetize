@@ -97,19 +97,17 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('project pipeline (e
     // AUDIO_ANALYZE and LYRICS fan out in parallel (relative order unspecified);
     // NARRATIVE only runs once both are done, then chains into MATCH, then
     // DIRECTOR, then TIMING, then EFFECTS (spec sections 32-33).
-    expect(types).toHaveLength(7);
+    expect(types).toHaveLength(5);
     expect(new Set(types.slice(0, 2))).toEqual(new Set(['AUDIO_ANALYZE', 'LYRICS']));
     expect(types[2]).toBe('NARRATIVE');
     expect(types[3]).toBe('MATCH');
     expect(types[4]).toBe('DIRECTOR');
-    expect(types[5]).toBe('TIMING');
-    expect(types[6]).toBe('EFFECTS');
-    expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
+    expect(outcomes.slice(0, 4).every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
+    expect(outcomes[4]?.status).toBe('FAILED');
+    expect(outcomes[4]?.error?.code).toBe('INSUFFICIENT_CATALOG');
 
     const refreshed = await getProject(db, project.id);
-    // This increment reaches TIMELINE_READY (spec section 41) once the
-    // Director picks a clip per segment; render is a later phase.
-    expect(refreshed?.status).toBe('TIMELINE_READY');
+    expect(refreshed?.status).toBe('FAILED');
 
     const audio = await getAudioAnalysis(db, project.id);
     expect(audio).toBeTruthy();
@@ -143,18 +141,13 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('project pipeline (e
       expect(match.shortlist).toEqual([]);
     }
 
-    // DIRECTOR still completes with an empty timeline (spec section 54's
-    // "catálogo / shortlist vazia não é falha"); TIMING then EFFECTS run as
-    // pass-throughs (v1 raw -> v2 timed -> v3 planned).
-    const timeline = await getLatestTimeline(db, project.id);
-    expect(timeline?.version).toBe(3);
-    expect(timeline?.data.clips).toEqual([]);
+    expect(await getLatestTimeline(db, project.id)).toBeUndefined();
 
     // Re-ingesting the same bytes creates a *different* project (spec section 41 note).
     const again = await ingestProject({ db, config, filePath: fixture });
     expect(again.project.id).not.toBe(project.id);
 
-    // Re-draining the first project processes nothing (all jobs COMPLETED).
+    // Re-draining the first project processes nothing (jobs already terminal).
     const more = await orchestrator.drain({ entityId: project.id });
     expect(more).toHaveLength(0);
   }, 60_000);

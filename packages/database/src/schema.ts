@@ -417,9 +417,8 @@ export const timelineVersions = pgTable(
 );
 
 /**
- * Renderer output (spec sections 36-39): append-only like `timeline_versions`
- * — `insertRender` always inserts the next `version`, so an old MP4 stays
- * reachable on disk and in the database after a re-render.
+ * Selected source window for a music project: full track when it is at most
+ * 60 seconds, otherwise one scored 60,000 ms highlight. Append-only versions.
  */
 export const editWindows = pgTable(
   'edit_windows',

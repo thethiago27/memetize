@@ -52,12 +52,20 @@ function context(overrides: Partial<TimingContext> = {}): TimingContext {
 function sourceBoundFixture(): Timeline {
   return buildTimeline(
     [
-      buildClip('clp_a', { startMs: 0, endMs: 1_000 }, {
-        source: { assetId: 'ast_a', startMs: 0, endMs: 1_000 },
-      }),
-      buildClip('clp_b', { startMs: 1_000, endMs: 2_000 }, {
-        source: { assetId: 'ast_b', startMs: 0, endMs: 1_000 },
-      }),
+      buildClip(
+        'clp_a',
+        { startMs: 0, endMs: 1_000 },
+        {
+          source: { assetId: 'ast_a', startMs: 0, endMs: 1_000 },
+        },
+      ),
+      buildClip(
+        'clp_b',
+        { startMs: 1_000, endMs: 2_000 },
+        {
+          source: { assetId: 'ast_b', startMs: 0, endMs: 1_000 },
+        },
+      ),
     ],
     2_000,
   );

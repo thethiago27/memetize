@@ -49,7 +49,10 @@ export function optimizeTiming(timeline: Timeline, context: TimingContext): Timi
 
     let snappedTo: SnapTarget = 'none';
     let adjustedBoundaryMs = originalBoundaryMs;
-    if (target && canMoveBoundary(previous, next, previousRange, nextRange, target.timeMs, context)) {
+    if (
+      target &&
+      canMoveBoundary(previous, next, previousRange, nextRange, target.timeMs, context)
+    ) {
       adjustedBoundaryMs = target.timeMs;
       snappedTo = target.isDownbeat ? 'downbeat' : 'beat';
       applyBoundary(previous, next, previousRange, nextRange, adjustedBoundaryMs, sourceById);
@@ -87,7 +90,8 @@ function canMoveBoundary(
 
   const previousSource = previous.source;
   const nextSource = next.source;
-  if (!sourceFits(previous.momentId, previousSource.startMs, previousDuration, context)) return false;
+  if (!sourceFits(previous.momentId, previousSource.startMs, previousDuration, context))
+    return false;
   if (!sourceFits(next.momentId, nextSource.startMs, nextDuration, context)) return false;
   return true;
 }

@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AssembleSegmentMatch } from './assemble';
-import {
-  InsufficientCatalogError,
-  type ResolveCoverageInput,
-  resolveCoverage,
-} from './coverage';
+import { InsufficientCatalogError, type ResolveCoverageInput, resolveCoverage } from './coverage';
 
 function matchMap(segmentId: string, momentIds: string[]): Map<string, AssembleSegmentMatch> {
   const ranked = momentIds.map((momentId, index) => ({

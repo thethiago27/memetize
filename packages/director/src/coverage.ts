@@ -86,7 +86,12 @@ function resolveSegment(
     windowStartMs: number;
   },
 ): { clips: ResolvedCoverageClip[]; decisions: CoverageDecision[] } {
-  const candidates = orderedCandidates(segment.id, context.pickMomentId, context.match, context.moments);
+  const candidates = orderedCandidates(
+    segment.id,
+    context.pickMomentId,
+    context.match,
+    context.moments,
+  );
   const usedMomentIds = new Set<string>();
   const clips: ResolvedCoverageClip[] = [];
   const decisions: CoverageDecision[] = [];
@@ -128,7 +133,7 @@ function resolveSegment(
 }
 
 function orderedCandidates(
-  segmentId: string,
+  _segmentId: string,
   pickMomentId: string | undefined,
   match: AssembleSegmentMatch | undefined,
   moments: ReadonlyMap<string, AssembleMoment>,
@@ -172,14 +177,21 @@ function placeNextClip(params: {
     return moment !== undefined && momentDuration(moment) >= params.minSlotMs;
   });
 
-  const pick = chooseCandidate(fullCover, params.lastAssetId, params.moments)
-    ?? chooseCandidate(longEnough, params.lastAssetId, params.moments);
+  const pick =
+    chooseCandidate(fullCover, params.lastAssetId, params.moments) ??
+    chooseCandidate(longEnough, params.lastAssetId, params.moments);
   if (!pick) return null;
 
   const moment = params.moments.get(pick.momentId);
   if (!moment) return null;
   const available = momentDuration(moment);
-  const takeMs = pickTakeMs(params.cursor, params.remainder, available, params.beats, params.minSlotMs);
+  const takeMs = pickTakeMs(
+    params.cursor,
+    params.remainder,
+    available,
+    params.beats,
+    params.minSlotMs,
+  );
   if (takeMs < params.minSlotMs && takeMs !== params.remainder) return null;
 
   const timelineStart = params.cursor - params.windowStartMs;

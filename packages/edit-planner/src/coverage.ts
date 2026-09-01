@@ -121,7 +121,9 @@ function pickSplitBeat(
   endMs: number,
   idealMs: number,
 ): number | null {
-  const interior = beats.filter((beat) => beat > startMs && beat < endMs && beat - startMs >= MIN_VISUAL_SLOT_MS);
+  const interior = beats.filter(
+    (beat) => beat > startMs && beat < endMs && beat - startMs >= MIN_VISUAL_SLOT_MS,
+  );
   if (interior.length === 0) return idealMs < endMs ? idealMs : null;
 
   let best = interior[0];
@@ -142,7 +144,9 @@ function containingSection(
   endMs: number,
   sections: readonly AudioSection[],
 ): AudioSection | undefined {
-  const containing = sections.find((section) => section.startMs <= startMs && section.endMs >= endMs);
+  const containing = sections.find(
+    (section) => section.startMs <= startMs && section.endMs >= endMs,
+  );
   if (containing) return containing;
   return sections.find((section) => section.startMs <= startMs && startMs < section.endMs);
 }

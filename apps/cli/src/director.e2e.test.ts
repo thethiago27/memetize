@@ -12,8 +12,10 @@ import {
   directorDebugFile,
   effectsDebugFile,
   generateTimeline,
+  getLatestEditWindow,
   getLatestTimeline,
   getProject,
+  getProjectAudio,
   ingestProject,
   listNarrativeSegments,
   listSegmentMatches,
@@ -60,7 +62,7 @@ async function makeSilentClip(path: string, durationSeconds: number): Promise<vo
   ]);
 }
 
-async function makeColorClip(path: string, color: string): Promise<void> {
+async function makeMovingClip(path: string, durationSeconds: number): Promise<void> {
   await execFileAsync('ffmpeg', [
     '-y',
     '-hide_banner',
@@ -69,18 +71,33 @@ async function makeColorClip(path: string, color: string): Promise<void> {
     '-f',
     'lavfi',
     '-i',
-    `color=c=${color}:s=640x360:d=2:r=30`,
+    `testsrc2=s=640x360:r=30:d=${durationSeconds}`,
     '-pix_fmt',
     'yuv420p',
     path,
   ]);
 }
 
+function assertContinuous(timeline: Timeline): void {
+  expect(timeline.clips.length).toBeGreaterThan(0);
+  expect(timeline.clips[0]?.timeline.startMs).toBe(0);
+  for (let index = 1; index < timeline.clips.length; index += 1) {
+    expect(timeline.clips[index - 1]?.timeline.endMs).toBe(timeline.clips[index]?.timeline.startMs);
+  }
+  expect(timeline.clips.at(-1)?.timeline.endMs).toBe(timeline.durationMs);
+  for (const clip of timeline.clips) {
+    expect(clip.source.endMs - clip.source.startMs).toBe(
+      clip.timeline.endMs - clip.timeline.startMs,
+    );
+  }
+}
+
 describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (e2e)', () => {
   let tmp: string;
   let config: AppConfig;
   let orchestrator: Orchestrator;
-  let songFixture: string;
+  let shortSong: string;
+  let longSong: string;
 
   beforeAll(async () => {
     tmp = await mkdtemp(join(tmpdir(), 'memetize-director-e2e-'));
@@ -106,39 +123,37 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
       registry: buildRegistry(),
       scheduler: new ResourceScheduler(config.resources),
     });
-    songFixture = join(tmp, 'song.mp3');
-    await makeSilentClip(songFixture, 6);
+    shortSong = join(tmp, 'short.mp3');
+    longSong = join(tmp, 'long.mp3');
+    await makeSilentClip(shortSong, 6);
+    await makeSilentClip(longSong, 75);
     await truncateAll(db);
-  }, 60_000);
+    for (const index of [0, 1, 2]) {
+      const clipPath = join(tmp, `clip-${index}.mp4`);
+      await makeMovingClip(clipPath, 8);
+      const { asset } = await ingestAsset({ db, config, filePath: clipPath });
+      const outcomes = await orchestrator.drain({ entityId: asset.id });
+      expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
+    }
+  }, 120_000);
 
   afterAll(async () => {
     await handle?.close();
     if (tmp) await rm(tmp, { recursive: true, force: true });
   });
 
-  it('picks one clip per segment with a non-empty shortlist and assembles a valid, non-overlapping timeline', async () => {
-    // Seed a small catalog: 3 distinct clips through to READY (spec sections 14-23).
-    const colors = ['red', 'green', 'blue'];
-    for (const [index, color] of colors.entries()) {
-      const clipPath = join(tmp, `clip-${index}-${color}.mp4`);
-      await makeColorClip(clipPath, color);
-      const { asset } = await ingestAsset({ db, config, filePath: clipPath });
-      const outcomes = await orchestrator.drain({ entityId: asset.id });
-      expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
-    }
-
+  it('covers a short track at its natural duration with a continuous timeline', async () => {
     const lyricsPath = join(tmp, 'song.lrc');
     await writeFile(
       lyricsPath,
       ['[00:00.00]hello from the fixture', '[00:03.00]this is the payoff line'].join('\n'),
     );
-    const { project } = await ingestProject({ db, config, filePath: songFixture, lyricsPath });
+    const { project } = await ingestProject({ db, config, filePath: shortSong, lyricsPath });
+    const audio = await getProjectAudio(db, project.id);
+    const shortTrackDurationMs = audio?.durationMs ?? 0;
 
     const outcomes = await orchestrator.drain({ entityId: project.id });
     const types = outcomes.map((outcome) => outcome.job.type);
-    // AUDIO_ANALYZE and LYRICS fan out in parallel (relative order unspecified);
-    // NARRATIVE only runs once both are done, then chains into MATCH, then
-    // DIRECTOR, then TIMING, then EFFECTS (spec sections 32-33).
     expect(types).toHaveLength(7);
     expect(new Set(types.slice(0, 2))).toEqual(new Set(['AUDIO_ANALYZE', 'LYRICS']));
     expect(types[2]).toBe('NARRATIVE');
@@ -156,15 +171,15 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
     const matchBySegment = new Map(matches.map((match) => [match.segmentId, match]));
     const segmentsWithShortlist = matches.filter((match) => match.shortlist.length > 0);
 
-    // Three versions: Director raw v1, Timing aligned v2, Effects planned
-    // v3 (spec sections 32-33) — `getLatestTimeline` reads the last one.
     const versions = await listTimelineVersions(db, project.id);
     expect(versions).toHaveLength(3);
     expect(versions[0]?.version).toBe(3);
 
     const timeline = await getLatestTimeline(db, project.id);
     expect(timeline).toBeTruthy();
-    expect(timeline?.data.clips).toHaveLength(segmentsWithShortlist.length);
+    expect(timeline?.data.durationMs).toBe(shortTrackDurationMs);
+    expect(timeline?.data.audio.sourceStartMs).toBe(0);
+    if (timeline) assertContinuous(timeline.data);
 
     for (const clip of timeline?.data.clips ?? []) {
       expect(Number.isInteger(clip.timeline.startMs)).toBe(true);
@@ -173,18 +188,12 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
       expect(Number.isInteger(clip.source.endMs)).toBe(true);
       const match = matchBySegment.get(clip.reason.segmentId);
       expect(match).toBeTruthy();
-      expect(match?.shortlist.some((entry) => entry.momentId === clip.momentId)).toBe(true);
+      const inFunnel =
+        match?.shortlist.some((entry) => entry.momentId === clip.momentId) ||
+        match?.ranked.some((entry) => entry.momentId === clip.momentId);
+      expect(inFunnel).toBe(true);
     }
 
-    // Clips are ordered and never overlap (endMs of clip i <= startMs of clip i+1).
-    const clips = timeline?.data.clips ?? [];
-    for (let i = 0; i < clips.length - 1; i += 1) {
-      const current = clips[i];
-      const next = clips[i + 1];
-      expect(current?.timeline.endMs).toBeLessThanOrEqual(next?.timeline.startMs ?? 0);
-    }
-
-    // The official document on disk parses with the Timeline Zod schema (spec section 64).
     const tlFile = timelineFile(config, project.id);
     const onDisk = JSON.parse(await readFile(tlFile.absolute, 'utf8'));
     expect(Timeline.safeParse(onDisk).success).toBe(true);
@@ -214,13 +223,10 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
     expect(Array.isArray(effectsDebug.planned)).toBe(true);
     expect(effectsDebug.planned.length).toBeGreaterThan(0);
 
-    // Re-draining processes nothing (all jobs COMPLETED) and creates no new version.
     const more = await orchestrator.drain({ entityId: project.id });
     expect(more).toHaveLength(0);
     expect(await listTimelineVersions(db, project.id)).toHaveLength(3);
 
-    // `project generate` forces a new DIRECTOR run, which chains into
-    // TIMING then EFFECTS in the same drain — three new versions.
     await generateTimeline(db, project.id);
     const afterGenerate = await orchestrator.drain({ entityId: project.id });
     expect(afterGenerate.map((outcome) => outcome.job.type)).toEqual([
@@ -235,7 +241,6 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
     expect((await getProject(db, project.id))?.status).toBe('TIMELINE_READY');
     expect(narrative.length).toBeGreaterThanOrEqual(1);
 
-    // `reprocess --from director` also forces a new DIRECTOR + TIMING + EFFECTS triple.
     await reprocessProject(db, project.id, 'director');
     const afterReprocess = await orchestrator.drain({ entityId: project.id });
     expect(afterReprocess.map((outcome) => outcome.job.type)).toEqual([
@@ -248,21 +253,31 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
       1, 2, 3, 4, 5, 6, 7, 8, 9,
     ]);
     expect((await getProject(db, project.id))?.status).toBe('TIMELINE_READY');
-  }, 90_000);
+  }, 180_000);
 
-  it('completes with an empty timeline when the project has no catalog at all', async () => {
+  it('selects a sixty-second window for a long track and covers it continuously', async () => {
+    const { project } = await ingestProject({ db, config, filePath: longSong });
+    const outcomes = await orchestrator.drain({ entityId: project.id });
+    expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
+
+    const window = await getLatestEditWindow(db, project.id);
+    const timeline = await getLatestTimeline(db, project.id);
+    expect(window?.durationMs).toBe(60_000);
+    expect(timeline?.data.durationMs).toBe(60_000);
+    expect(timeline?.data.audio.sourceStartMs).toBeGreaterThanOrEqual(0);
+    if (timeline) assertContinuous(timeline.data);
+  }, 180_000);
+
+  it('fails with INSUFFICIENT_CATALOG when the project has no catalog at all', async () => {
     await truncateAll(db);
 
-    const { project } = await ingestProject({ db, config, filePath: songFixture });
-    await orchestrator.drain({ entityId: project.id });
+    const { project } = await ingestProject({ db, config, filePath: shortSong });
+    const outcomes = await orchestrator.drain({ entityId: project.id });
+    const director = outcomes.find((outcome) => outcome.job.type === 'DIRECTOR');
 
-    const refreshed = await getProject(db, project.id);
-    expect(refreshed?.status).toBe('TIMELINE_READY');
-
-    // Even an empty timeline goes through TIMING then EFFECTS
-    // (v1 raw -> v2 timed -> v3 planned); `getLatestTimeline` returns the last.
-    const timeline = await getLatestTimeline(db, project.id);
-    expect(timeline?.version).toBe(3);
-    expect(timeline?.data.clips).toEqual([]);
+    expect((await getProject(db, project.id))?.status).toBe('FAILED');
+    expect(director?.status).toBe('FAILED');
+    expect(director?.error?.code).toBe('INSUFFICIENT_CATALOG');
+    expect(await getLatestTimeline(db, project.id)).toBeUndefined();
   }, 60_000);
 });

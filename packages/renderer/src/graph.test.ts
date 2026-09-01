@@ -20,9 +20,11 @@ function clip(overrides: Partial<TimelineClip> & { id: string }): TimelineClip {
   };
 }
 
-function timeline(
-  overrides: { durationMs: number; clips: TimelineClip[]; sourceStartMs?: number },
-): Timeline {
+function timeline(overrides: {
+  durationMs: number;
+  clips: TimelineClip[];
+  sourceStartMs?: number;
+}): Timeline {
   return Timeline.parse({
     projectId: 'prj_1',
     durationMs: overrides.durationMs,
@@ -35,10 +37,7 @@ function timeline(
   });
 }
 
-function assetsFor(
-  clips: readonly TimelineClip[],
-  audioDurationMs = 120_000,
-): ResolvedAssets {
+function assetsFor(clips: readonly TimelineClip[], audioDurationMs = 120_000): ResolvedAssets {
   return {
     audioPath: '/abs/storage/audio/prj_1/original.mp3',
     audioDurationMs,
@@ -85,9 +84,9 @@ describe('buildFfmpegGraph', () => {
     expect(() => buildFfmpegGraph(empty, assetsFor([]))).toThrow(/empty timeline/);
 
     const gapped = [clip({ id: 'clp_1', timeline: { startMs: 1000, endMs: 2000 } })];
-    expect(() => buildFfmpegGraph(timeline({ durationMs: 2000, clips: gapped }), assetsFor(gapped))).toThrow(
-      /timeline gap/,
-    );
+    expect(() =>
+      buildFfmpegGraph(timeline({ durationMs: 2000, clips: gapped }), assetsFor(gapped)),
+    ).toThrow(/timeline gap/);
 
     const short = [
       clip({
@@ -96,9 +95,9 @@ describe('buildFfmpegGraph', () => {
         source: { assetId: 'ast_1', startMs: 0, endMs: 500 },
       }),
     ];
-    expect(() => buildFfmpegGraph(timeline({ durationMs: 2000, clips: short }), assetsFor(short))).toThrow(
-      /source shorter than slot/,
-    );
+    expect(() =>
+      buildFfmpegGraph(timeline({ durationMs: 2000, clips: short }), assetsFor(short)),
+    ).toThrow(/source shorter than slot/);
   });
 
   it('applies the crop filter for cropMode "cover"', () => {

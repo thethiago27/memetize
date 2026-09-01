@@ -4,7 +4,12 @@ import { join } from 'node:path';
 import { createTestDatabase, type Database, projects, truncateAll } from '@memetize/database';
 import { selectEditWindow } from '@memetize/edit-planner';
 import type { JobContext } from '@memetize/orchestrator';
-import { getLatestEditWindow, listNarrativeSegments, replaceAudioAnalysis, replaceLyrics } from '@memetize/projects';
+import {
+  getLatestEditWindow,
+  listNarrativeSegments,
+  replaceAudioAnalysis,
+  replaceLyrics,
+} from '@memetize/projects';
 import { createLogger, loadConfig } from '@memetize/shared';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { createNarrativeHandler } from './handler';
@@ -26,7 +31,9 @@ describe.skipIf(!handle)('narrative handler window coverage (integration)', () =
 
   it('persists the selected window and covers it with contiguous narrative spans', async () => {
     const projectId = 'prj_narrative_window';
-    await db.insert(projects).values({ id: projectId, filename: 'song.mp3', status: 'ANALYZING_AUDIO' });
+    await db
+      .insert(projects)
+      .values({ id: projectId, filename: 'song.mp3', status: 'ANALYZING_AUDIO' });
 
     const analysis = {
       durationMs: 120_000,
