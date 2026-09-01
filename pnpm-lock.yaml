@@ -660,6 +660,9 @@ importers:
       '@memetize/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@memetize/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       '@memetize/job-system':
         specifier: workspace:*
         version: link:../../packages/job-system
@@ -678,6 +681,9 @@ importers:
       '@memetize/timing':
         specifier: workspace:*
         version: link:../../packages/timing
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
 
   workers/transcript:
     dependencies:

@@ -1,6 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { TimingInput, WORKER_VERSION } from '@memetize/contracts';
+import { moments as momentsTable } from '@memetize/database';
 import { JobFailure } from '@memetize/job-system';
 import type { JobHandler } from '@memetize/orchestrator';
 import {
@@ -13,14 +14,11 @@ import {
 import { validateTimeline } from '@memetize/renderer';
 import { ensureDir } from '@memetize/shared';
 import { mergeBeats, optimizeTiming } from '@memetize/timing';
+import { inArray } from 'drizzle-orm';
 
 /**
- * TIMING handler (spec section 32, 56): runs right after `DIRECTOR`, before
- * `EFFECTS`. Separate from the Director on purpose — it never picks *which*
- * moment plays, only nudges *when* each already-picked clip starts and
- * ends, snapping to the nearest musical beat/downbeat. The `Timeline`
- * document's shape never changes; only `clip.timeline` ranges shift. The
- * Effects Planner, not this worker, advances the project to `TIMELINE_READY`.
+ * TIMING handler: rebases beats to the selected source window and snaps
+ * shared clip boundaries without creating gaps.
  */
 export function createTimingHandler(): JobHandler {
   return async (ctx) => {
@@ -49,8 +47,28 @@ export function createTimingHandler(): JobHandler {
       segments.map((segment) => [segment.id, segment.narrativeFunction.toLowerCase()]),
     );
 
-    const beats = mergeBeats(audio.beats, audio.downbeats);
-    const result = optimizeTiming(sourceVersion.data, { beats, segmentFunctionById });
+    const sourceStartMs = sourceVersion.data.audio.sourceStartMs;
+    const sourceEndMs = sourceStartMs + sourceVersion.data.durationMs;
+    const beats = mergeBeats(audio.beats, audio.downbeats)
+      .filter((beat) => beat.timeMs >= sourceStartMs && beat.timeMs <= sourceEndMs)
+      .map((beat) => ({ ...beat, timeMs: beat.timeMs - sourceStartMs }));
+
+    const momentIds = [...new Set(sourceVersion.data.clips.map((clip) => clip.momentId))];
+    const momentRows =
+      momentIds.length > 0
+        ? await ctx.db.query.moments.findMany({
+            where: inArray(momentsTable.id, momentIds),
+          })
+        : [];
+    const sourceBoundsByMomentId = new Map(
+      momentRows.map((moment) => [moment.id, { startMs: moment.startMs, endMs: moment.endMs }]),
+    );
+
+    const result = optimizeTiming(sourceVersion.data, {
+      beats,
+      segmentFunctionById,
+      sourceBoundsByMomentId,
+    });
 
     const validation = validateTimeline(result.timeline);
     if (!validation.ok) {

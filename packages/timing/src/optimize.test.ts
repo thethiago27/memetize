@@ -2,7 +2,7 @@ import type { Timeline, TimelineClip, TimelineRange } from '@memetize/timeline';
 import { Timeline as TimelineSchema } from '@memetize/timeline';
 import { describe, expect, it } from 'vitest';
 import { optimizeTiming } from './optimize';
-import type { TimingBeat, TimingContext } from './types';
+import type { TimingContext } from './types';
 
 function buildClip(
   id: string,
@@ -37,133 +37,99 @@ function buildTimeline(clips: TimelineClip[], durationMs = 10_000): Timeline {
   };
 }
 
-function context(
-  beats: TimingBeat[],
-  segmentFunctionById: ReadonlyMap<string, string> = new Map(),
-): TimingContext {
-  return { beats, segmentFunctionById };
+function context(overrides: Partial<TimingContext> = {}): TimingContext {
+  return {
+    beats: [],
+    segmentFunctionById: new Map(),
+    sourceBoundsByMomentId: new Map([
+      ['mom_clp_a', { startMs: 0, endMs: 4_000 }],
+      ['mom_clp_b', { startMs: 0, endMs: 4_000 }],
+    ]),
+    ...overrides,
+  };
+}
+
+function sourceBoundFixture(): Timeline {
+  return buildTimeline(
+    [
+      buildClip('clp_a', { startMs: 0, endMs: 1_000 }, {
+        source: { assetId: 'ast_a', startMs: 0, endMs: 1_000 },
+      }),
+      buildClip('clp_b', { startMs: 1_000, endMs: 2_000 }, {
+        source: { assetId: 'ast_b', startMs: 0, endMs: 1_000 },
+      }),
+    ],
+    2_000,
+  );
 }
 
 describe('optimizeTiming', () => {
-  it('snaps a clip start to the nearest beat within the snap window', () => {
-    const clip = buildClip('clp_1', { startMs: 1040, endMs: 2040 });
-    const timeline = buildTimeline([clip]);
-    const beats: TimingBeat[] = [{ timeMs: 1000, strength: 0.5, isDownbeat: false }];
-
-    const result = optimizeTiming(timeline, context(beats));
-
-    expect(result.timeline.clips[0]?.timeline).toEqual({ startMs: 1000, endMs: 2000 });
-    expect(result.adjustments).toEqual([
-      {
-        clipId: 'clp_1',
-        originalStartMs: 1040,
-        adjustedStartMs: 1000,
-        deltaMs: -40,
-        snappedTo: 'beat',
-      },
-    ]);
+  it('snaps one shared cut without creating a gap', () => {
+    const result = optimizeTiming(
+      buildTimeline(
+        [
+          buildClip('clp_a', { startMs: 0, endMs: 1_040 }),
+          buildClip('clp_b', { startMs: 1_040, endMs: 2_000 }),
+        ],
+        2_000,
+      ),
+      context({ beats: [{ timeMs: 1_000, strength: 1, isDownbeat: true }] }),
+    );
+    const firstClip = result.timeline.clips[0];
+    const secondClip = result.timeline.clips[1];
+    expect(firstClip?.timeline.endMs).toBe(1_000);
+    expect(secondClip?.timeline.startMs).toBe(1_000);
+    expect(firstClip ? firstClip.source.endMs - firstClip.source.startMs : 0).toBe(1_000);
   });
 
-  it('does not move a clip when no beat is within the snap window', () => {
-    const clip = buildClip('clp_1', { startMs: 1000, endMs: 2000 });
-    const timeline = buildTimeline([clip]);
-    const beats: TimingBeat[] = [{ timeMs: 1500, strength: 0.5, isDownbeat: false }];
-
-    const result = optimizeTiming(timeline, context(beats));
-
-    expect(result.timeline.clips[0]?.timeline).toEqual({ startMs: 1000, endMs: 2000 });
-    expect(result.adjustments[0]).toMatchObject({ snappedTo: 'none', deltaMs: 0 });
+  it('does not lengthen a source past its moment bound', () => {
+    const result = optimizeTiming(
+      sourceBoundFixture(),
+      context({
+        beats: [{ timeMs: 1_200, strength: 1, isDownbeat: true }],
+        segmentFunctionById: new Map([['seg_clp_a', 'payoff']]),
+        sourceBoundsByMomentId: new Map([
+          ['mom_clp_a', { startMs: 0, endMs: 1_000 }],
+          ['mom_clp_b', { startMs: 0, endMs: 1_000 }],
+        ]),
+      }),
+    );
+    expect(result.adjustments[0]?.snappedTo).toBe('none');
   });
 
-  it('gives a punchline segment a wider window and prefers a downbeat over a closer plain beat', () => {
-    const clip = buildClip('clp_1', { startMs: 1000, endMs: 2000 });
-    const timeline = buildTimeline([clip]);
-    const beats: TimingBeat[] = [
-      { timeMs: 1050, strength: 0.9, isDownbeat: false },
-      { timeMs: 1200, strength: 0.5, isDownbeat: true },
-    ];
-    const segmentFunctionById = new Map([['seg_clp_1', 'payoff']]);
-
-    const result = optimizeTiming(timeline, context(beats, segmentFunctionById));
-
-    expect(result.adjustments[0]).toMatchObject({ adjustedStartMs: 1200, snappedTo: 'downbeat' });
-  });
-
-  it('does not reach past the snap window just because a segment is a punchline', () => {
-    const clip = buildClip('clp_1', { startMs: 1000, endMs: 2000 });
-    const timeline = buildTimeline([clip]);
-    const beats: TimingBeat[] = [{ timeMs: 1300, strength: 0.5, isDownbeat: true }];
-    const segmentFunctionById = new Map([['seg_clp_1', 'setup']]);
-
-    const result = optimizeTiming(timeline, context(beats, segmentFunctionById));
-
-    expect(result.adjustments[0]).toMatchObject({ snappedTo: 'none' });
-  });
-
-  it('prefers the beat with higher onset strength when two beats are equally close', () => {
-    const clip = buildClip('clp_1', { startMs: 1000, endMs: 2000 });
-    const timeline = buildTimeline([clip]);
-    const beats: TimingBeat[] = [
-      { timeMs: 1050, strength: 0.3, isDownbeat: false },
-      { timeMs: 950, strength: 0.9, isDownbeat: false },
-    ];
-
-    const result = optimizeTiming(timeline, context(beats));
-
-    expect(result.adjustments[0]).toMatchObject({ adjustedStartMs: 950, snappedTo: 'beat' });
-  });
-
-  it('never lets two adjacent clips overlap even when both are pulled toward the same downbeat', () => {
-    const clipA = buildClip('clp_a', { startMs: 1900, endMs: 2000 });
-    const clipB = buildClip('clp_b', { startMs: 2000, endMs: 2100 });
-    const timeline = buildTimeline([clipA, clipB], 3000);
-    const beats: TimingBeat[] = [{ timeMs: 2000, strength: 1, isDownbeat: true }];
-
-    const result = optimizeTiming(timeline, context(beats));
-
-    const ranges = result.timeline.clips.map((clip) => clip.timeline);
-    expect(ranges).toHaveLength(2);
-    const [rangeA, rangeB] = ranges as [TimelineRange, TimelineRange];
-    expect(rangeA.endMs).toBeLessThanOrEqual(rangeB.startMs);
-    // Slot durations (100ms each) are preserved even though positions shifted.
-    expect(rangeA.endMs - rangeA.startMs).toBe(100);
-    expect(rangeB.endMs - rangeB.startMs).toBe(100);
-  });
-
-  it('preserves slot duration and leaves source/transform/effects/reason untouched', () => {
-    const source = { assetId: 'ast_9', startMs: 300, endMs: 1300 };
-    const transform = { scale: 1.2, positionX: 0.4, positionY: 0.6, cropMode: 'contain' as const };
-    const reason = { segmentId: 'seg_clp_1', semanticScore: 0.8, finalScore: 0.7 };
-    const clip = buildClip('clp_1', { startMs: 1030, endMs: 2030 }, { source, transform, reason });
-    const timeline = buildTimeline([clip]);
-    const beats: TimingBeat[] = [{ timeMs: 1000, strength: 0.5, isDownbeat: false }];
-
-    const result = optimizeTiming(timeline, context(beats));
-
-    const adjustedClip = result.timeline.clips[0];
-    expect(adjustedClip?.timeline).toEqual({ startMs: 1000, endMs: 2000 });
-    expect(adjustedClip?.source).toEqual(source);
-    expect(adjustedClip?.transform).toEqual(transform);
-    expect(adjustedClip?.effects).toEqual([]);
-    expect(adjustedClip?.reason).toEqual(reason);
+  it('keeps the first and last timeline boundaries fixed', () => {
+    const result = optimizeTiming(
+      buildTimeline(
+        [
+          buildClip('clp_a', { startMs: 0, endMs: 1_040 }),
+          buildClip('clp_b', { startMs: 1_040, endMs: 2_000 }),
+        ],
+        2_000,
+      ),
+      context({ beats: [{ timeMs: 1_000, strength: 1, isDownbeat: true }] }),
+    );
+    expect(result.timeline.clips[0]?.timeline.startMs).toBe(0);
+    expect(result.timeline.clips.at(-1)?.timeline.endMs).toBe(2_000);
+    expect(result.timeline.durationMs).toBe(2_000);
   });
 
   it('returns the timeline unchanged with no adjustments when there are no clips', () => {
-    const timeline = buildTimeline([]);
-
-    const result = optimizeTiming(timeline, context([]));
-
+    const result = optimizeTiming(buildTimeline([]), context());
     expect(result.timeline.clips).toEqual([]);
     expect(result.adjustments).toEqual([]);
   });
 
   it('always produces a timeline that still satisfies the Timeline schema', () => {
-    const clip = buildClip('clp_1', { startMs: 1040, endMs: 2040 });
-    const timeline = buildTimeline([clip]);
-    const beats: TimingBeat[] = [{ timeMs: 1000, strength: 0.5, isDownbeat: false }];
-
-    const result = optimizeTiming(timeline, context(beats));
-
+    const result = optimizeTiming(
+      buildTimeline(
+        [
+          buildClip('clp_a', { startMs: 0, endMs: 1_040 }),
+          buildClip('clp_b', { startMs: 1_040, endMs: 2_000 }),
+        ],
+        2_000,
+      ),
+      context({ beats: [{ timeMs: 1_000, strength: 1, isDownbeat: true }] }),
+    );
     expect(() => TimelineSchema.parse(result.timeline)).not.toThrow();
   });
 });

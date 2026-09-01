@@ -1,5 +1,10 @@
 import type { Timeline, TimelineClip, TimelineRange } from '@memetize/timeline';
-import { PUNCHLINE_FUNCTIONS, PUNCHLINE_SNAP_WINDOW_MS, SNAP_WINDOW_MS } from './constants';
+import {
+  MIN_TIMED_CLIP_MS,
+  PUNCHLINE_FUNCTIONS,
+  PUNCHLINE_SNAP_WINDOW_MS,
+  SNAP_WINDOW_MS,
+} from './constants';
 import type {
   SnapTarget,
   TimingAdjustment,
@@ -9,65 +14,114 @@ import type {
 } from './types';
 
 /**
- * Realigns each clip's `timeline.startMs` to the nearest musical beat or
- * downbeat (spec section 32) without changing anything else: the slot
- * duration (`endMs - startMs`), `source`, `transform`, `effects` and
- * `reason` are all left untouched — this is the Timing Optimizer's whole
- * job, cut refinement, not clip selection (that's the Director's).
- *
- * Clips are processed in `timeline.startMs` order, each one clamped between
- * the previous clip's *already-adjusted* end and the next clip's *original*
- * start (or the timeline's `durationMs` for the last clip) — this makes
- * overlap structurally impossible no matter how far the snap target pulls,
- * without needing a second pass.
+ * Snaps shared internal cut boundaries to beats without creating gaps.
+ * Timeline 0 and `durationMs` stay fixed; source ranges resize so each
+ * source duration stays equal to its slot and inside moment bounds.
  */
 export function optimizeTiming(timeline: Timeline, context: TimingContext): TimingResult {
   const sorted = [...timeline.clips].sort((a, b) => a.timeline.startMs - b.timeline.startMs);
+  if (sorted.length === 0) {
+    return { timeline, adjustments: [] };
+  }
+
+  const rangeById = new Map<string, TimelineRange>(
+    sorted.map((clip) => [clip.id, { ...clip.timeline }]),
+  );
+  const sourceById = new Map(sorted.map((clip) => [clip.id, { ...clip.source }]));
   const adjustments: TimingAdjustment[] = [];
-  const adjustedRangeById = new Map<string, TimelineRange>();
 
-  let previousEndMs = 0;
-  for (let i = 0; i < sorted.length; i++) {
-    const clip = sorted[i];
-    if (!clip) continue;
+  for (let index = 0; index < sorted.length - 1; index += 1) {
+    const previous = sorted[index];
+    const next = sorted[index + 1];
+    if (!previous || !next) continue;
 
-    const originalStartMs = clip.timeline.startMs;
-    const slotMs = clip.timeline.endMs - originalStartMs;
-    const nextOriginalStartMs = sorted[i + 1]?.timeline.startMs ?? timeline.durationMs;
+    const previousRange = rangeById.get(previous.id);
+    const nextRange = rangeById.get(next.id);
+    if (!previousRange || !nextRange) continue;
 
-    const windowMs = isPunchlineClip(clip, context.segmentFunctionById)
-      ? PUNCHLINE_SNAP_WINDOW_MS
-      : SNAP_WINDOW_MS;
-    const target = findSnapTarget(context.beats, originalStartMs, windowMs);
+    const originalBoundaryMs = previousRange.endMs;
+    const windowMs =
+      isPunchlineClip(previous, context.segmentFunctionById) ||
+      isPunchlineClip(next, context.segmentFunctionById)
+        ? PUNCHLINE_SNAP_WINDOW_MS
+        : SNAP_WINDOW_MS;
+    const target = findSnapTarget(context.beats, originalBoundaryMs, windowMs);
 
-    let adjustedStartMs = originalStartMs;
     let snappedTo: SnapTarget = 'none';
-    if (target) {
-      const clampedStartMs = clampMs(target.timeMs, previousEndMs, nextOriginalStartMs - slotMs);
-      if (clampedStartMs !== originalStartMs) {
-        adjustedStartMs = clampedStartMs;
-        snappedTo = target.isDownbeat ? 'downbeat' : 'beat';
-      }
+    let adjustedBoundaryMs = originalBoundaryMs;
+    if (target && canMoveBoundary(previous, next, previousRange, nextRange, target.timeMs, context)) {
+      adjustedBoundaryMs = target.timeMs;
+      snappedTo = target.isDownbeat ? 'downbeat' : 'beat';
+      applyBoundary(previous, next, previousRange, nextRange, adjustedBoundaryMs, sourceById);
     }
 
-    const adjustedEndMs = adjustedStartMs + slotMs;
-    adjustedRangeById.set(clip.id, { startMs: adjustedStartMs, endMs: adjustedEndMs });
     adjustments.push({
-      clipId: clip.id,
-      originalStartMs,
-      adjustedStartMs,
-      deltaMs: adjustedStartMs - originalStartMs,
+      clipId: next.id,
+      originalStartMs: originalBoundaryMs,
+      adjustedStartMs: adjustedBoundaryMs,
+      deltaMs: adjustedBoundaryMs - originalBoundaryMs,
       snappedTo,
     });
-    previousEndMs = adjustedEndMs;
   }
 
   const clips = timeline.clips.map((clip) => {
-    const range = adjustedRangeById.get(clip.id);
-    return range ? { ...clip, timeline: range } : clip;
+    const range = rangeById.get(clip.id);
+    const source = sourceById.get(clip.id);
+    return range && source ? { ...clip, timeline: range, source } : clip;
   });
 
   return { timeline: { ...timeline, clips }, adjustments };
+}
+
+function canMoveBoundary(
+  previous: TimelineClip,
+  next: TimelineClip,
+  previousRange: TimelineRange,
+  nextRange: TimelineRange,
+  targetMs: number,
+  context: TimingContext,
+): boolean {
+  const previousDuration = targetMs - previousRange.startMs;
+  const nextDuration = nextRange.endMs - targetMs;
+  if (previousDuration < MIN_TIMED_CLIP_MS || nextDuration < MIN_TIMED_CLIP_MS) return false;
+
+  const previousSource = previous.source;
+  const nextSource = next.source;
+  if (!sourceFits(previous.momentId, previousSource.startMs, previousDuration, context)) return false;
+  if (!sourceFits(next.momentId, nextSource.startMs, nextDuration, context)) return false;
+  return true;
+}
+
+function sourceFits(
+  momentId: string,
+  sourceStartMs: number,
+  durationMs: number,
+  context: TimingContext,
+): boolean {
+  const bounds = context.sourceBoundsByMomentId.get(momentId);
+  if (!bounds) return durationMs >= 0;
+  const sourceEndMs = sourceStartMs + durationMs;
+  return sourceStartMs >= bounds.startMs && sourceEndMs <= bounds.endMs;
+}
+
+function applyBoundary(
+  previous: TimelineClip,
+  next: TimelineClip,
+  previousRange: TimelineRange,
+  nextRange: TimelineRange,
+  targetMs: number,
+  sourceById: Map<string, TimelineClip['source']>,
+): void {
+  previousRange.endMs = targetMs;
+  nextRange.startMs = targetMs;
+  const previousSource = sourceById.get(previous.id);
+  const nextSource = sourceById.get(next.id);
+  if (previousSource) {
+    previousSource.endMs = previousSource.startMs + (previousRange.endMs - previousRange.startMs);
+  }
+  if (nextSource) {
+    nextSource.endMs = nextSource.startMs + (nextRange.endMs - nextRange.startMs);
+  }
 }
 
 function isPunchlineClip(
@@ -78,12 +132,6 @@ function isPunchlineClip(
   return narrativeFunction ? PUNCHLINE_FUNCTIONS.has(narrativeFunction.toLowerCase()) : false;
 }
 
-/**
- * Picks the best beat within `windowMs` of `originalStartMs`: downbeats
- * beat plain beats, then higher onset `strength` wins, then whichever is
- * closer in time — the same priority order spec section 32 lists (downbeat
- * alignment, then audio onset).
- */
 function findSnapTarget(
   beats: readonly TimingBeat[],
   originalStartMs: number,
@@ -122,9 +170,4 @@ function findSnapTarget(
   }
 
   return best;
-}
-
-function clampMs(value: number, min: number, max: number): number {
-  if (max < min) return min;
-  return Math.min(Math.max(value, min), max);
 }

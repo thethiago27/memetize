@@ -3,6 +3,7 @@
  * named constants — not magic numbers — so `optimizeTiming` and its tests
  * all agree on the same snap windows.
  */
+export const MIN_TIMED_CLIP_MS = 1_000;
 export const SNAP_WINDOW_MS = 150;
 export const PUNCHLINE_SNAP_WINDOW_MS = 250;
 
