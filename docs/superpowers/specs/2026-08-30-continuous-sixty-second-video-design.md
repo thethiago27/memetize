@@ -188,7 +188,7 @@ Source ranges change by the same amount needed to keep each source duration equa
 The following become hard errors:
 
 - empty timeline;
-- initial, internal, or trailing visual gap of at least one frame;
+- initial, internal, or trailing visual gap of any positive integer duration;
 - overlapping clips;
 - invalid or out-of-bounds ranges;
 - source duration shorter than timeline slot duration;
