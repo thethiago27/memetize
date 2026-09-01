@@ -10,6 +10,7 @@ import type {
   JobType,
   LyricLine,
   LyricSource,
+  NarrativeSourceKind,
   ProjectStatus,
   RankedCandidate,
   RenderValidation,
@@ -325,6 +326,7 @@ export const narrativeSegments = pgTable(
       .references(() => projects.id, { onDelete: 'cascade' }),
     startMs: integer('start_ms').notNull(),
     endMs: integer('end_ms').notNull(),
+    sourceKind: text('source_kind').$type<NarrativeSourceKind>().notNull().default('LYRIC'),
     lyrics: text('lyrics').notNull(),
     meaning: text('meaning').notNull(),
     emotion: text('emotion').notNull(),
@@ -337,7 +339,13 @@ export const narrativeSegments = pgTable(
     extractorVersion: text('extractor_version').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('narrative_segments_project_idx').on(table.projectId)],
+  (table) => [
+    index('narrative_segments_project_idx').on(table.projectId),
+    check(
+      'narrative_segments_source_kind_check',
+      sql`${table.sourceKind} in ('LYRIC','INSTRUMENTAL')`,
+    ),
+  ],
 );
 
 /**

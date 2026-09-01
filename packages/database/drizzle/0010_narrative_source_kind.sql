@@ -1,0 +1,2 @@
+ALTER TABLE "narrative_segments" ADD COLUMN "source_kind" text DEFAULT 'LYRIC' NOT NULL;--> statement-breakpoint
+ALTER TABLE "narrative_segments" ADD CONSTRAINT "narrative_segments_source_kind_check" CHECK ("narrative_segments"."source_kind" in ('LYRIC','INSTRUMENTAL'));

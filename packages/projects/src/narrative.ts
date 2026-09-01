@@ -24,6 +24,7 @@ export function toNarrativeSegmentRows(
     projectId: params.projectId,
     startMs: assertIntegerMs(segment.startMs, 'startMs'),
     endMs: assertIntegerMs(segment.endMs, 'endMs'),
+    sourceKind: segment.sourceKind,
     lyrics: segment.lyrics,
     meaning: segment.meaning,
     emotion: segment.emotion,

@@ -89,8 +89,12 @@ export const NarrativeInput = z.object({
 });
 export type NarrativeInput = z.infer<typeof NarrativeInput>;
 
+export const NarrativeSourceKind = z.enum(['LYRIC', 'INSTRUMENTAL']);
+export type NarrativeSourceKind = z.infer<typeof NarrativeSourceKind>;
+
 /** One editorial/narrative unit derived from lyrics + musical structure (spec section 27). */
 export const NarrativeSegment = z.object({
+  sourceKind: NarrativeSourceKind.default('LYRIC'),
   startMs: z.number().int().nonnegative(),
   endMs: z.number().int().nonnegative(),
   lyrics: z.string(),
