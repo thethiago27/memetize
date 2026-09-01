@@ -7,7 +7,8 @@ export function sendError(reply: FastifyReply, status: number, code: string, mes
 
 export function sendSwapError(reply: FastifyReply, error: unknown) {
   if (error instanceof SwapClipError) {
-    const status = error.code === 'NOT_IN_SHORTLIST' ? 409 : 404;
+    const status =
+      error.code === 'NOT_IN_SHORTLIST' || error.code === 'MOMENT_TOO_SHORT' ? 409 : 404;
     return sendError(reply, status, error.code, error.message);
   }
   const message = error instanceof Error ? error.message : String(error);

@@ -12,7 +12,7 @@ import {
 import { Timeline } from '@memetize/timeline';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { type SwapClipError, swapClip } from './swap';
-import { insertTimelineVersion } from './timeline';
+import { insertTimelineVersion, listTimelineVersions } from './timeline';
 
 const handle = await createTestDatabase();
 const db = handle?.db as Database;
@@ -44,8 +44,8 @@ async function seedSwapFixture(db: Database, projectId: string): Promise<void> {
       sceneId: 'scn_swap_1',
       assetId: 'ast_swap_1',
       startMs: 0,
-      endMs: 1500,
-      durationMs: 1500,
+      endMs: 2000,
+      durationMs: 2000,
       description: 'first take',
       extractor: 'fixture',
       extractorVersion: '1.0.0',
@@ -55,9 +55,20 @@ async function seedSwapFixture(db: Database, projectId: string): Promise<void> {
       sceneId: 'scn_swap_1',
       assetId: 'ast_swap_1',
       startMs: 2000,
-      endMs: 3800,
-      durationMs: 1800,
+      endMs: 4000,
+      durationMs: 2000,
       description: 'second take',
+      extractor: 'fixture',
+      extractorVersion: '1.0.0',
+    },
+    {
+      id: 'mom_swap_short',
+      sceneId: 'scn_swap_1',
+      assetId: 'ast_swap_1',
+      startMs: 1000,
+      endMs: 2500,
+      durationMs: 1500,
+      description: 'short take',
       extractor: 'fixture',
       extractorVersion: '1.0.0',
     },
@@ -87,6 +98,7 @@ async function seedSwapFixture(db: Database, projectId: string): Promise<void> {
     shortlist: [
       { momentId: 'mom_swap_a', assetId: 'ast_swap_1', finalScore: 0.9, penalties: [] },
       { momentId: 'mom_swap_b', assetId: 'ast_swap_1', finalScore: 0.7, penalties: [] },
+      { momentId: 'mom_swap_short', assetId: 'ast_swap_1', finalScore: 0.6, penalties: [] },
     ],
     ranker: 'fixture',
     rankerVersion: '1.0.0',
@@ -107,7 +119,7 @@ function timelineWithClip(projectId: string) {
         id: 'clp_swap_1',
         momentId: 'mom_swap_a',
         timeline: { startMs: 0, endMs: 2000 },
-        source: { assetId: 'ast_swap_1', startMs: 0, endMs: 1500 },
+        source: { assetId: 'ast_swap_1', startMs: 0, endMs: 2000 },
         transform: { scale: 1, positionX: 0.5, positionY: 0.5, cropMode: 'cover' },
         effects: [{ type: 'zoom', startMs: 1350, endMs: 2000, from: 1, to: 1.12 }],
         reason: { segmentId: 'nar_swap_1', semanticScore: 0.8, finalScore: 0.9 },
@@ -153,7 +165,7 @@ describe.skipIf(!handle)('swapClip (integration)', () => {
 
     const clip = next.data.clips[0];
     expect(clip?.momentId).toBe('mom_swap_b');
-    expect(clip?.source).toEqual({ assetId: 'ast_swap_1', startMs: 2000, endMs: 3800 });
+    expect(clip?.source).toEqual({ assetId: 'ast_swap_1', startMs: 2000, endMs: 4000 });
     expect(clip?.timeline).toEqual({ startMs: 0, endMs: 2000 });
     expect(clip?.effects).toEqual([
       { type: 'zoom', startMs: 1350, endMs: 2000, from: 1, to: 1.12 },
@@ -175,6 +187,27 @@ describe.skipIf(!handle)('swapClip (integration)', () => {
     await expect(
       swapClip(db, { projectId, clipId: 'clp_swap_1', momentId: 'mom_missing' }),
     ).rejects.toMatchObject({ code: 'NOT_IN_SHORTLIST' } satisfies Partial<SwapClipError>);
+  });
+
+  it('rejects a shortlisted moment that is shorter than the existing slot', async () => {
+    const projectId = 'prj_swap_short';
+    await seedSwapFixture(db, projectId);
+    await insertTimelineVersion(db, {
+      projectId,
+      data: timelineWithClip(projectId),
+      director: 'fixture',
+      directorVersion: '1.0.0',
+      promptVersion: 'v1',
+    });
+
+    await expect(
+      swapClip(db, {
+        projectId,
+        clipId: 'clp_swap_1',
+        momentId: 'mom_swap_short',
+      }),
+    ).rejects.toMatchObject({ code: 'MOMENT_TOO_SHORT' } satisfies Partial<SwapClipError>);
+    expect(await listTimelineVersions(db, projectId)).toHaveLength(1);
   });
 
   it('rejects a swap when the project has no timeline', async () => {

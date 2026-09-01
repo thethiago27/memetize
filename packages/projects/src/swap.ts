@@ -11,7 +11,8 @@ export type SwapClipErrorCode =
   | 'NO_TIMELINE'
   | 'CLIP_NOT_FOUND'
   | 'NOT_IN_SHORTLIST'
-  | 'MOMENT_NOT_FOUND';
+  | 'MOMENT_NOT_FOUND'
+  | 'MOMENT_TOO_SHORT';
 
 export class SwapClipError extends Error {
   readonly code: SwapClipErrorCode;
@@ -67,7 +68,12 @@ export async function swapClip(db: Database, params: SwapClipParams): Promise<Ti
   }
 
   const slotMs = clip.timeline.endMs - clip.timeline.startMs;
-  const sourceDurationMs = Math.min(moment.durationMs, slotMs);
+  if (moment.durationMs < slotMs) {
+    throw new SwapClipError(
+      'MOMENT_TOO_SHORT',
+      `moment "${moment.id}" is ${moment.durationMs}ms but clip "${clip.id}" requires ${slotMs}ms`,
+    );
+  }
 
   const nextClips = source.data.clips.map((entry) => {
     if (entry.id !== clip.id) return entry;
@@ -77,7 +83,7 @@ export async function swapClip(db: Database, params: SwapClipParams): Promise<Ti
       source: {
         assetId: moment.assetId,
         startMs: moment.startMs,
-        endMs: moment.startMs + sourceDurationMs,
+        endMs: moment.startMs + slotMs,
       },
       reason: {
         ...entry.reason,

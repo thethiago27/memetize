@@ -9,6 +9,7 @@ optional dependency, so it stays deterministic and free under `pnpm test`
 from __future__ import annotations
 
 import math
+import subprocess
 from typing import TypedDict
 
 FIXTURE_NAME = "fixture"
@@ -21,6 +22,7 @@ BEAT_INTERVAL_MS = round(60_000 / FIXED_BPM)  # 500ms at 120 BPM
 BEATS_PER_BAR = 4
 SECTION_TYPES = ["intro", "verse", "chorus", "outro"]
 ENERGY_STEP_MS = 1000
+LIBROSA_SAMPLE_RATE = 22_050
 
 
 class Beat(TypedDict):
@@ -128,9 +130,7 @@ def _analyze_librosa(path: str, duration_ms: int) -> AudioAnalysisResult:
             "(uv sync --extra librosa)"
         ) from error
 
-    waveform, sample_rate = librosa.load(path, sr=22050, mono=True)
-    if waveform.size == 0:
-        raise ValueError(f"audio file is empty: {path}")
+    waveform, sample_rate = _load_waveform(path)
 
     onset_env = librosa.onset.onset_strength(y=waveform, sr=sample_rate)
     tempo, beat_frames = librosa.beat.beat_track(onset_envelope=onset_env, sr=sample_rate)
@@ -168,6 +168,43 @@ def _analyze_librosa(path: str, duration_ms: int) -> AudioAnalysisResult:
         "analyzer": LIBROSA_NAME,
         "analyzerVersion": LIBROSA_VERSION,
     }
+
+
+def _load_waveform(path: str, sample_rate: int = LIBROSA_SAMPLE_RATE) -> tuple[object, int]:
+    """Decode with ffmpeg so AAC-in-MP4 files named `.mp3` still load."""
+    import numpy as np
+
+    completed = subprocess.run(
+        [
+            "ffmpeg",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            path,
+            "-f",
+            "f32le",
+            "-acodec",
+            "pcm_f32le",
+            "-ac",
+            "1",
+            "-ar",
+            str(sample_rate),
+            "pipe:1",
+        ],
+        check=False,
+        capture_output=True,
+    )
+    if completed.returncode != 0:
+        stderr = completed.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(
+            f"ffmpeg failed to decode {path}: {stderr or f'exit {completed.returncode}'}"
+        )
+    waveform = np.frombuffer(completed.stdout, dtype=np.float32)
+    if waveform.size == 0:
+        raise ValueError(f"audio file is empty: {path}")
+    return np.copy(waveform), sample_rate
 
 
 def _librosa_energy_curve(

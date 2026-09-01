@@ -177,7 +177,14 @@ function placeNextClip(params: {
     return moment !== undefined && momentDuration(moment) >= params.minSlotMs;
   });
 
+  const eligiblePrimary =
+    params.usedMomentIds.size === 0 &&
+    params.pickMomentId !== undefined &&
+    longEnough.includes(params.pickMomentId)
+      ? chooseCandidate([params.pickMomentId], null, params.moments)
+      : null;
   const pick =
+    eligiblePrimary ??
     chooseCandidate(fullCover, params.lastAssetId, params.moments) ??
     chooseCandidate(longEnough, params.lastAssetId, params.moments);
   if (!pick) return null;
@@ -192,6 +199,7 @@ function placeNextClip(params: {
     params.beats,
     params.minSlotMs,
   );
+  if (takeMs === null) return null;
   if (takeMs < params.minSlotMs && takeMs !== params.remainder) return null;
 
   const timelineStart = params.cursor - params.windowStartMs;
@@ -251,14 +259,14 @@ function pickTakeMs(
   available: number,
   beats: readonly number[],
   minSlotMs: number,
-): number {
+): number | null {
   if (available >= remainder) return remainder;
   const reach = cursor + available;
   const split = strongestReachableBeat(beats, cursor, reach, remainder, minSlotMs);
   if (split !== null) return split - cursor;
   const leftover = remainder - available;
   if (leftover === 0 || leftover >= minSlotMs) return available;
-  return available;
+  return null;
 }
 
 function strongestReachableBeat(

@@ -153,6 +153,33 @@ describe('validateTimeline', () => {
       expect.objectContaining({ code: 'SOURCE_SHORTER_THAN_SLOT', clipId: 'clp_1' }),
     );
   });
+
+  it('fails when timeline duration differs from the selected edit window', () => {
+    const result = validateTimeline(
+      timeline({
+        durationMs: 1_000,
+        clips: [clip({ id: 'clp_1', timeline: { startMs: 0, endMs: 1_000 } })],
+      }),
+      { expectedDurationMs: 2_000 },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({ code: 'TIMELINE_DURATION_MISMATCH' }),
+    );
+  });
+
+  it('accepts a complete timeline matching the selected edit-window duration', () => {
+    const result = validateTimeline(
+      timeline({
+        durationMs: 1_000,
+        clips: [clip({ id: 'clp_1', timeline: { startMs: 0, endMs: 1_000 } })],
+      }),
+      { expectedDurationMs: 1_000 },
+    );
+
+    expect(result.ok).toBe(true);
+  });
 });
 
 function gappedTimeline(): Timeline {
