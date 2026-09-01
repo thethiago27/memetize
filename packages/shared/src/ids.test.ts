@@ -5,6 +5,8 @@ import {
   clipId,
   editWindowId,
   embeddingId,
+  feedbackEmbeddingId,
+  feedbackEventId,
   jobId,
   lyricsId,
   matchId,
@@ -35,6 +37,8 @@ describe('ids', () => {
     expect(clipId()).toMatch(/^clp_[0-9a-z]{21}$/);
     expect(renderId()).toMatch(/^rnd_[0-9a-z]{21}$/);
     expect(editWindowId()).toMatch(/^win_[0-9a-z]{21}$/);
+    expect(feedbackEventId()).toMatch(/^fb_[0-9a-z]{21}$/);
+    expect(feedbackEmbeddingId()).toMatch(/^fbe_[0-9a-z]{21}$/);
   });
 
   it('is collision-resistant across many ids', () => {

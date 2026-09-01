@@ -21,6 +21,7 @@ export const JOB_RESOURCE_CLASS: Record<JobType, ResourceClass> = {
   TIMING: 'CPU_LIGHT',
   EFFECTS: 'CPU_LIGHT',
   RENDER: 'RENDER',
+  FEEDBACK_EMBED: 'GPU',
 };
 
 /**
@@ -40,9 +41,10 @@ export const WORKER_VERSION: Record<JobType, string> = {
   AUDIO_ANALYZE: '1.0.0',
   LYRICS: '1.0.0',
   NARRATIVE: '1.0.0',
-  MATCH: '1.0.0',
-  DIRECTOR: '1.0.0',
+  MATCH: '2.0.0',
+  DIRECTOR: '1.1.0',
   TIMING: '1.0.0',
-  EFFECTS: '1.0.0',
+  EFFECTS: '1.1.0',
   RENDER: '1.0.0',
+  FEEDBACK_EMBED: '1.0.0',
 };

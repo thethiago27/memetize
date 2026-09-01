@@ -5,6 +5,10 @@ import type {
   EmbeddingType,
   EnergyPoint,
   ExtractedFrame,
+  FeedbackContext,
+  FeedbackKind,
+  FeedbackPolarity,
+  FeedbackSource,
   HighlightScoreBreakdown,
   JobStatus,
   JobType,
@@ -369,6 +373,9 @@ export const segmentMatches = pgTable(
     shortlist: jsonb('shortlist').$type<ShortlistCandidate[]>().notNull().default([]),
     ranker: text('ranker').notNull(),
     rankerVersion: text('ranker_version').notNull(),
+    // Newest feedback event the ranker considered (editorial-memory spec);
+    // null before ranker 2.0.0 or when no feedback existed.
+    feedbackCutoffAt: timestamp('feedback_cutoff_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -489,3 +496,82 @@ export type RenderRow = typeof renders.$inferSelect;
 export type NewRenderRow = typeof renders.$inferInsert;
 export type EditWindowRow = typeof editWindows.$inferSelect;
 export type NewEditWindowRow = typeof editWindows.$inferInsert;
+
+/**
+ * Editorial memory (editorial-memory spec): one append-only row per swap,
+ * rating, ban, note, or system placement. Deliberately no foreign keys to
+ * projects, moments, or assets — the memory must outlive catalog and
+ * project reprocessing, otherwise every lesson would vanish with its source.
+ */
+export const feedbackEvents = pgTable(
+  'feedback_events',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id'),
+    timelineVersion: integer('timeline_version'),
+    clipId: text('clip_id'),
+    segmentId: text('segment_id'),
+    momentId: text('moment_id'),
+    assetId: text('asset_id'),
+    kind: text('kind').$type<FeedbackKind>().notNull(),
+    value: real('value'),
+    note: text('note'),
+    context: jsonb('context').$type<FeedbackContext>().notNull().default({}),
+    source: text('source').$type<FeedbackSource>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('feedback_events_moment_idx').on(table.momentId),
+    index('feedback_events_project_idx').on(table.projectId),
+    index('feedback_events_kind_idx').on(table.kind),
+    check(
+      'feedback_events_kind_check',
+      sql`${table.kind} in ('SWAP_OUT','SWAP_IN','CLIP_UP','CLIP_DOWN','VIDEO_RATING','BAN_MOMENT','UNBAN_MOMENT','BAN_ASSET','UNBAN_ASSET','NOTE','PLACED')`,
+    ),
+    check('feedback_events_source_check', sql`${table.source} in ('USER','SYSTEM')`),
+  ],
+);
+
+/**
+ * Vectors learned from swaps: the segment text a moment was chosen for
+ * (POSITIVE) or rejected from (NEGATIVE). Kept apart from
+ * `moment_embeddings` so a catalog re-embed never wipes them.
+ */
+export const momentFeedbackEmbeddings = pgTable(
+  'moment_feedback_embeddings',
+  {
+    id: text('id').primaryKey(),
+    feedbackEventId: text('feedback_event_id')
+      .notNull()
+      .references(() => feedbackEvents.id, { onDelete: 'cascade' }),
+    momentId: text('moment_id').notNull(),
+    assetId: text('asset_id').notNull(),
+    polarity: text('polarity').$type<FeedbackPolarity>().notNull(),
+    sourceText: text('source_text').notNull(),
+    embedding: vector('embedding', { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
+    model: text('model').notNull(),
+    modelVersion: text('model_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('moment_feedback_embeddings_unique').on(
+      table.feedbackEventId,
+      table.model,
+      table.modelVersion,
+    ),
+    index('moment_feedback_embeddings_moment_idx').on(table.momentId),
+    index('moment_feedback_embeddings_cosine_idx').using(
+      'hnsw',
+      table.embedding.op('vector_cosine_ops'),
+    ),
+    check(
+      'moment_feedback_embeddings_polarity_check',
+      sql`${table.polarity} in ('POSITIVE','NEGATIVE')`,
+    ),
+  ],
+);
+
+export type FeedbackEventRow = typeof feedbackEvents.$inferSelect;
+export type NewFeedbackEventRow = typeof feedbackEvents.$inferInsert;
+export type MomentFeedbackEmbeddingRow = typeof momentFeedbackEmbeddings.$inferSelect;
+export type NewMomentFeedbackEmbeddingRow = typeof momentFeedbackEmbeddings.$inferInsert;

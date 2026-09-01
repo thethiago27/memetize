@@ -18,7 +18,9 @@ export type IdPrefix =
   | 'tlv'
   | 'clp'
   | 'rnd'
-  | 'win';
+  | 'win'
+  | 'fb'
+  | 'fbe';
 
 /** Builds a URL-safe, sortable-enough id like `ast_9x3k...`. */
 export function prefixedId(prefix: IdPrefix): string {
@@ -40,3 +42,5 @@ export const timelineVersionId = (): string => prefixedId('tlv');
 export const clipId = (): string => prefixedId('clp');
 export const renderId = (): string => prefixedId('rnd');
 export const editWindowId = (): string => prefixedId('win');
+export const feedbackEventId = (): string => prefixedId('fb');
+export const feedbackEmbeddingId = (): string => prefixedId('fbe');

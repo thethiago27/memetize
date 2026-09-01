@@ -25,10 +25,18 @@ export const MatchOutput = z.object({
 export type MatchOutput = z.infer<typeof MatchOutput>;
 
 /** What the Candidate Retriever returns per segment (spec section 28). */
+export const RetrievedCandidateSource = z.enum(['CATALOG', 'FEEDBACK']);
+export type RetrievedCandidateSource = z.infer<typeof RetrievedCandidateSource>;
+
 export const RetrievedCandidate = z.object({
   momentId: z.string(),
   assetId: z.string(),
   semanticScore: z.number().min(0).max(1),
+  /** Which index produced the best score (editorial-memory spec). Defaults
+   * keep rows persisted before feedback retrieval parseable. */
+  source: RetrievedCandidateSource.default('CATALOG'),
+  /** Best similarity against a NEGATIVE feedback vector of this moment, 0 when none. */
+  negativeScore: z.number().min(0).max(1).default(0),
 });
 export type RetrievedCandidate = z.infer<typeof RetrievedCandidate>;
 

@@ -3,6 +3,7 @@ export * from './director';
 export * from './effects';
 export * from './embeddings';
 export * from './enums';
+export * from './feedback';
 export * from './http';
 export * from './match';
 export * from './media';

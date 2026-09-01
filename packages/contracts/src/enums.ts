@@ -33,6 +33,7 @@ export const JobType = z.enum([
   'TIMING',
   'EFFECTS',
   'RENDER',
+  'FEEDBACK_EMBED',
 ]);
 export type JobType = z.infer<typeof JobType>;
 
