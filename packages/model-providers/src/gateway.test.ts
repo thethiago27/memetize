@@ -1,4 +1,4 @@
-import { DIRECTOR_PROMPT_V1, DIRECTOR_PROMPT_VERSION } from '@memetize/prompts';
+import { DIRECTOR_PROMPT_V2, DIRECTOR_PROMPT_VERSION } from '@memetize/prompts';
 import { generateObject } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GatewayLLMProvider } from './gateway';
@@ -56,7 +56,7 @@ describe('GatewayLLMProvider.directTimeline', () => {
     const call = generateObjectMock.mock.calls[0]?.[0];
     expect(call).toMatchObject({
       model: 'anthropic/claude-sonnet-4.5',
-      system: DIRECTOR_PROMPT_V1,
+      system: DIRECTOR_PROMPT_V2,
     });
     expect(call?.prompt).toBe(
       JSON.stringify({

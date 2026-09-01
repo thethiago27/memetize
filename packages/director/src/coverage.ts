@@ -1,0 +1,289 @@
+import type { DirectorPick } from '@memetize/contracts';
+import { MIN_VISUAL_SLOT_MS } from '@memetize/edit-planner';
+import { clipId } from '@memetize/shared';
+import type { AssembleMoment, AssembleSegment, AssembleSegmentMatch } from './assemble';
+
+export class InsufficientCatalogError extends Error {
+  readonly code = 'INSUFFICIENT_CATALOG';
+
+  constructor(message = 'no eligible catalog moment can cover the minimum visual slot') {
+    super(message);
+    this.name = 'InsufficientCatalogError';
+  }
+}
+
+export interface ResolveCoverageInput {
+  window: { sourceStartMs: number; sourceEndMs: number };
+  segments: readonly AssembleSegment[];
+  picks: readonly DirectorPick[];
+  matches: ReadonlyMap<string, AssembleSegmentMatch>;
+  moments: ReadonlyMap<string, AssembleMoment>;
+  beats: readonly number[];
+}
+
+export interface ResolvedCoverageClip {
+  id: string;
+  momentId: string;
+  segmentId: string;
+  timeline: { startMs: number; endMs: number };
+  source: { assetId: string; startMs: number; endMs: number };
+}
+
+export interface CoverageDecision {
+  segmentId: string;
+  momentId: string;
+  role: 'primary' | 'fallback' | 'tile';
+  reason: string;
+}
+
+export interface CoverageResolution {
+  clips: ResolvedCoverageClip[];
+  decisions: CoverageDecision[];
+}
+
+export function resolveCoverage(input: ResolveCoverageInput): CoverageResolution {
+  const windowMs = input.window.sourceEndMs - input.window.sourceStartMs;
+  const minSlotMs = windowMs > 0 && windowMs < MIN_VISUAL_SLOT_MS ? windowMs : MIN_VISUAL_SLOT_MS;
+  const pickBySegment = new Map(input.picks.map((pick) => [pick.segmentId, pick.momentId]));
+  const clips: ResolvedCoverageClip[] = [];
+  const decisions: CoverageDecision[] = [];
+  let lastAssetId: string | null = null;
+
+  const sortedSegments = [...input.segments].sort((a, b) => a.startMs - b.startMs);
+  for (const segment of sortedSegments) {
+    const resolved = resolveSegment(segment, {
+      pickMomentId: pickBySegment.get(segment.id),
+      match: input.matches.get(segment.id),
+      moments: input.moments,
+      beats: input.beats,
+      minSlotMs,
+      lastAssetId,
+      windowStartMs: input.window.sourceStartMs,
+    });
+    clips.push(...resolved.clips);
+    decisions.push(...resolved.decisions);
+    lastAssetId = resolved.clips.at(-1)?.source.assetId ?? lastAssetId;
+  }
+
+  if (clips.length === 0) {
+    throw new InsufficientCatalogError(
+      `no clips could be resolved for window [${input.window.sourceStartMs}, ${input.window.sourceEndMs}]`,
+    );
+  }
+
+  return { clips, decisions };
+}
+
+function resolveSegment(
+  segment: AssembleSegment,
+  context: {
+    pickMomentId: string | undefined;
+    match: AssembleSegmentMatch | undefined;
+    moments: ReadonlyMap<string, AssembleMoment>;
+    beats: readonly number[];
+    minSlotMs: number;
+    lastAssetId: string | null;
+    windowStartMs: number;
+  },
+): { clips: ResolvedCoverageClip[]; decisions: CoverageDecision[] } {
+  const candidates = orderedCandidates(segment.id, context.pickMomentId, context.match, context.moments);
+  const usedMomentIds = new Set<string>();
+  const clips: ResolvedCoverageClip[] = [];
+  const decisions: CoverageDecision[] = [];
+  let cursor = segment.startMs;
+  let lastAssetId = context.lastAssetId;
+
+  while (cursor < segment.endMs) {
+    const remainder = segment.endMs - cursor;
+    const placed = placeNextClip({
+      segment,
+      cursor,
+      remainder,
+      candidates,
+      usedMomentIds,
+      lastAssetId,
+      pickMomentId: context.pickMomentId,
+      moments: context.moments,
+      beats: context.beats,
+      minSlotMs: remainder < context.minSlotMs ? remainder : context.minSlotMs,
+      windowStartMs: context.windowStartMs,
+    });
+
+    if (!placed) {
+      const absorbed = absorbRemainder(clips, remainder, context.moments);
+      if (absorbed) break;
+      throw new InsufficientCatalogError(
+        `cannot cover segment ${segment.id} remainder ${remainder}ms at ${cursor}ms`,
+      );
+    }
+
+    clips.push(placed.clip);
+    decisions.push(placed.decision);
+    usedMomentIds.add(placed.clip.momentId);
+    lastAssetId = placed.clip.source.assetId;
+    cursor = context.windowStartMs + placed.clip.timeline.endMs;
+  }
+
+  return { clips, decisions };
+}
+
+function orderedCandidates(
+  segmentId: string,
+  pickMomentId: string | undefined,
+  match: AssembleSegmentMatch | undefined,
+  moments: ReadonlyMap<string, AssembleMoment>,
+): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  const add = (momentId: string | undefined): void => {
+    if (!momentId || seen.has(momentId) || !moments.has(momentId)) return;
+    seen.add(momentId);
+    ordered.push(momentId);
+  };
+
+  add(pickMomentId);
+  const shortlist = [...(match?.shortlist ?? [])].sort((a, b) => b.finalScore - a.finalScore);
+  for (const entry of shortlist) add(entry.momentId);
+  const ranked = [...(match?.ranked ?? [])].sort((a, b) => b.finalScore - a.finalScore);
+  for (const entry of ranked) add(entry.momentId);
+  return ordered;
+}
+
+function placeNextClip(params: {
+  segment: AssembleSegment;
+  cursor: number;
+  remainder: number;
+  candidates: readonly string[];
+  usedMomentIds: ReadonlySet<string>;
+  lastAssetId: string | null;
+  pickMomentId: string | undefined;
+  moments: ReadonlyMap<string, AssembleMoment>;
+  beats: readonly number[];
+  minSlotMs: number;
+  windowStartMs: number;
+}): { clip: ResolvedCoverageClip; decision: CoverageDecision } | null {
+  const unused = params.candidates.filter((momentId) => !params.usedMomentIds.has(momentId));
+  const fullCover = unused.filter((momentId) => {
+    const moment = params.moments.get(momentId);
+    return moment !== undefined && momentDuration(moment) >= params.remainder;
+  });
+  const longEnough = unused.filter((momentId) => {
+    const moment = params.moments.get(momentId);
+    return moment !== undefined && momentDuration(moment) >= params.minSlotMs;
+  });
+
+  const pick = chooseCandidate(fullCover, params.lastAssetId, params.moments)
+    ?? chooseCandidate(longEnough, params.lastAssetId, params.moments);
+  if (!pick) return null;
+
+  const moment = params.moments.get(pick.momentId);
+  if (!moment) return null;
+  const available = momentDuration(moment);
+  const takeMs = pickTakeMs(params.cursor, params.remainder, available, params.beats, params.minSlotMs);
+  if (takeMs < params.minSlotMs && takeMs !== params.remainder) return null;
+
+  const timelineStart = params.cursor - params.windowStartMs;
+  const clip: ResolvedCoverageClip = {
+    id: clipId(),
+    momentId: pick.momentId,
+    segmentId: params.segment.id,
+    timeline: { startMs: timelineStart, endMs: timelineStart + takeMs },
+    source: {
+      assetId: moment.assetId,
+      startMs: moment.startMs,
+      endMs: moment.startMs + takeMs,
+    },
+  };
+
+  const role: CoverageDecision['role'] =
+    params.usedMomentIds.size === 0
+      ? params.pickMomentId === pick.momentId
+        ? 'primary'
+        : 'fallback'
+      : 'tile';
+
+  return {
+    clip,
+    decision: {
+      segmentId: params.segment.id,
+      momentId: pick.momentId,
+      role,
+      reason: pick.reason,
+    },
+  };
+}
+
+function chooseCandidate(
+  momentIds: readonly string[],
+  lastAssetId: string | null,
+  moments: ReadonlyMap<string, AssembleMoment>,
+): { momentId: string; reason: string } | null {
+  if (momentIds.length === 0) return null;
+  const avoided = lastAssetId
+    ? momentIds.filter((momentId) => moments.get(momentId)?.assetId !== lastAssetId)
+    : momentIds;
+  const chosen = avoided[0] ?? momentIds[0];
+  if (!chosen) return null;
+  return {
+    momentId: chosen,
+    reason:
+      avoided[0] && avoided[0] !== momentIds[0]
+        ? 'avoided adjacent asset reuse'
+        : 'duration-compatible candidate',
+  };
+}
+
+function pickTakeMs(
+  cursor: number,
+  remainder: number,
+  available: number,
+  beats: readonly number[],
+  minSlotMs: number,
+): number {
+  if (available >= remainder) return remainder;
+  const reach = cursor + available;
+  const split = strongestReachableBeat(beats, cursor, reach, remainder, minSlotMs);
+  if (split !== null) return split - cursor;
+  const leftover = remainder - available;
+  if (leftover === 0 || leftover >= minSlotMs) return available;
+  return available;
+}
+
+function strongestReachableBeat(
+  beats: readonly number[],
+  cursor: number,
+  reach: number,
+  remainder: number,
+  minSlotMs: number,
+): number | null {
+  let best: number | null = null;
+  for (const beat of beats) {
+    if (beat <= cursor || beat > reach) continue;
+    const after = cursor + remainder - beat;
+    if (after !== 0 && after < minSlotMs) continue;
+    if (beat - cursor < minSlotMs && beat !== cursor + remainder) continue;
+    if (best === null || beat > best) best = beat;
+  }
+  return best;
+}
+
+function absorbRemainder(
+  clips: ResolvedCoverageClip[],
+  remainder: number,
+  moments: ReadonlyMap<string, AssembleMoment>,
+): boolean {
+  const previous = clips.at(-1);
+  if (!previous || remainder <= 0) return false;
+  const moment = moments.get(previous.momentId);
+  if (!moment) return false;
+  const used = previous.source.endMs - previous.source.startMs;
+  const unused = momentDuration(moment) - used;
+  if (unused < remainder) return false;
+  previous.timeline.endMs += remainder;
+  previous.source.endMs += remainder;
+  return true;
+}
+
+function momentDuration(moment: AssembleMoment): number {
+  return moment.durationMs > 0 ? moment.durationMs : Math.max(0, moment.endMs - moment.startMs);
+}

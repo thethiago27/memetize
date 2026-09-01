@@ -169,6 +169,9 @@ importers:
       '@memetize/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@memetize/edit-planner':
+        specifier: workspace:0.0.0
+        version: link:../edit-planner
       '@memetize/shared':
         specifier: workspace:*
         version: link:../shared

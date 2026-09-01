@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { DirectorInput } from '@memetize/contracts';
 import { moments as momentsTable } from '@memetize/database';
 import type { AssembleMoment, AssembleSegmentMatch } from '@memetize/director';
-import { assembleTimeline } from '@memetize/director';
+import { assembleDirectedTimeline, InsufficientCatalogError } from '@memetize/director';
 import { JobFailure } from '@memetize/job-system';
 import type { DirectorSegmentInput } from '@memetize/model-providers';
 import { createProviders } from '@memetize/model-providers';
@@ -11,10 +11,12 @@ import type { JobHandler } from '@memetize/orchestrator';
 import {
   directorDebugFile,
   getAudioAnalysis,
+  getLatestEditWindow,
   getProjectAudio,
   insertTimelineVersion,
   listNarrativeSegments,
   listSegmentMatches,
+  setProjectStatus,
   timelineFile,
 } from '@memetize/projects';
 import { ensureDir } from '@memetize/shared';
@@ -23,13 +25,8 @@ import { hydrateShortlist } from './hydrate';
 import { DirectorInvalidPickError, validatePicks } from './validate';
 
 /**
- * DIRECTOR handler (spec sections 31, 34-35, 39, 54): reads exactly what the
- * Director is allowed to see — narrative segments plus each one's shortlist
- * from `MATCH`, never the raw catalog — asks the configured `LLMProvider`
- * to pick at most one moment per segment, validates every pick against that
- * segment's own shortlist, assembles the official `Timeline`, and persists
- * it as the next append-only version before chaining into TIMING (and then
- * EFFECTS, which is what advances the project to `TIMELINE_READY`).
+ * DIRECTOR handler: picks a primary moment per shortlist, then the coverage
+ * resolver tiles every narrative span into duration-compatible clips.
  */
 export function createDirectorHandler(): JobHandler {
   return async (ctx) => {
@@ -38,6 +35,15 @@ export function createDirectorHandler(): JobHandler {
       throw new JobFailure('INVALID_INPUT', parsed.error.message, false);
     }
     const { projectId } = parsed.data;
+
+    const window = await getLatestEditWindow(ctx.db, projectId);
+    if (!window) {
+      throw new JobFailure(
+        'DIRECTOR_NO_WINDOW',
+        `project ${projectId} has no edit window — reprocess from narrative`,
+        false,
+      );
+    }
 
     const audio = await getAudioAnalysis(ctx.db, projectId);
     if (!audio) {
@@ -70,6 +76,7 @@ export function createDirectorHandler(): JobHandler {
     const momentIds = new Set<string>();
     for (const match of matches) {
       for (const entry of match.shortlist) momentIds.add(entry.momentId);
+      for (const entry of match.ranked) momentIds.add(entry.momentId);
     }
     const momentRows =
       momentIds.size > 0
@@ -79,8 +86,6 @@ export function createDirectorHandler(): JobHandler {
         : [];
     const momentById = new Map(momentRows.map((moment) => [moment.id, moment]));
 
-    // Only the fields spec section 31 allows the Director to see — never
-    // the raw catalog (asset paths, extractor internals, ...).
     const directorSegments: DirectorSegmentInput[] = segments.map((segment) => {
       const match = matchBySegment.get(segment.id);
       const shortlist = hydrateShortlist(match?.shortlist ?? [], momentById);
@@ -101,8 +106,10 @@ export function createDirectorHandler(): JobHandler {
     let suggestion: Awaited<ReturnType<typeof llm.directTimeline>>;
     try {
       suggestion = await llm.directTimeline({
-        durationMs: audio.durationMs,
-        sections: audio.sections,
+        durationMs: window.durationMs,
+        sections: audio.sections.filter(
+          (section) => section.endMs > window.sourceStartMs && section.startMs < window.sourceEndMs,
+        ),
         segments: directorSegments,
       });
     } catch (error) {
@@ -131,7 +138,12 @@ export function createDirectorHandler(): JobHandler {
     const momentContext = new Map<string, AssembleMoment>(
       momentRows.map((moment) => [
         moment.id,
-        { assetId: moment.assetId, startMs: moment.startMs, durationMs: moment.durationMs },
+        {
+          assetId: moment.assetId,
+          startMs: moment.startMs,
+          endMs: moment.endMs,
+          durationMs: moment.durationMs,
+        },
       ]),
     );
     const matchContext = new Map<string, AssembleSegmentMatch>(
@@ -140,12 +152,20 @@ export function createDirectorHandler(): JobHandler {
         { ranked: match.ranked, shortlist: match.shortlist },
       ]),
     );
+    const beats = uniqueSorted([
+      ...audio.beats.map((beat) => beat.timeMs),
+      ...audio.downbeats,
+    ]);
 
-    let timeline: ReturnType<typeof assembleTimeline>;
+    let assembled: ReturnType<typeof assembleDirectedTimeline>;
     try {
-      timeline = assembleTimeline({
+      assembled = assembleDirectedTimeline({
         projectId,
-        durationMs: audio.durationMs,
+        window: {
+          sourceStartMs: window.sourceStartMs,
+          sourceEndMs: window.sourceEndMs,
+          durationMs: window.durationMs,
+        },
         audioPath: projectAudio.originalPath,
         picks: suggestion.picks,
         segments: segments.map((segment) => ({
@@ -155,8 +175,13 @@ export function createDirectorHandler(): JobHandler {
         })),
         moments: momentContext,
         matches: matchContext,
+        beats,
       });
     } catch (error) {
+      if (error instanceof InsufficientCatalogError) {
+        await setProjectStatus(ctx.db, projectId, 'FAILED');
+        throw new JobFailure('INSUFFICIENT_CATALOG', error.message, false);
+      }
       throw new JobFailure(
         'DIRECTOR_ERROR',
         error instanceof Error ? error.message : String(error),
@@ -164,6 +189,7 @@ export function createDirectorHandler(): JobHandler {
       );
     }
 
+    const { timeline, decisions } = assembled;
     const persisted = await insertTimelineVersion(ctx.db, {
       projectId,
       data: timeline,
@@ -172,10 +198,6 @@ export function createDirectorHandler(): JobHandler {
       promptVersion: suggestion.promptVersion,
     });
 
-    // The Timing Optimizer (spec sections 32, 56) is separate from the
-    // Director on purpose — it only aligns cuts to beats/downbeats, never
-    // picks moments. Timing then chains into EFFECTS, which is what
-    // actually advances the project to `TIMELINE_READY`.
     await ctx.enqueue({ type: 'TIMING', entityId: projectId, input: { projectId } });
 
     const debugFile = directorDebugFile(ctx.config, projectId);
@@ -183,7 +205,13 @@ export function createDirectorHandler(): JobHandler {
     await writeFile(
       debugFile.absolute,
       JSON.stringify(
-        { projectId, picks: suggestion.picks, promptVersion: suggestion.promptVersion },
+        {
+          projectId,
+          picks: suggestion.picks,
+          promptVersion: suggestion.promptVersion,
+          windowVersion: window.version,
+          decisions,
+        },
         null,
         2,
       ),
@@ -197,8 +225,13 @@ export function createDirectorHandler(): JobHandler {
       projectId,
       version: persisted.version,
       clipCount: timeline.clips.length,
+      windowVersion: window.version,
     });
 
     return { projectId, version: persisted.version, clipCount: timeline.clips.length };
   };
+}
+
+function uniqueSorted(values: readonly number[]): number[] {
+  return [...new Set(values)].sort((a, b) => a - b);
 }
