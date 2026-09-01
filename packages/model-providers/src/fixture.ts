@@ -6,6 +6,7 @@ import {
 } from '@memetize/prompts';
 import { sha256Hex } from '@memetize/shared';
 import type {
+  AudioSectionRef,
   DirectTimelineInput,
   DirectTimelineResult,
   EmbeddingProvider,
@@ -93,12 +94,22 @@ export class FixtureLLMProvider implements LLMProvider {
    * up from the nearest point on the audio analyzer's energy curve.
    */
   async analyzeNarrative(input: NarrativeAnalyzeInput): Promise<NarrativeAnalyzeResult> {
+    const lyrics = input.lyrics
+      .map((line) => clampRange(line, input.sourceStartMs, input.sourceEndMs))
+      .filter((line): line is LyricLineRef => line !== null);
+    const sections = input.sections
+      .map((section) => clampRange(section, input.sourceStartMs, input.sourceEndMs))
+      .filter((section): section is AudioSectionRef => section !== null);
+    const energyCurve = input.energyCurve.filter(
+      (point) => point.timeMs >= input.sourceStartMs && point.timeMs <= input.sourceEndMs,
+    );
+
     const segments: NarrativeSegmentSuggestion[] =
-      input.lyrics.length > 0
-        ? input.lyrics.map((line, index) =>
-            fixtureSegmentFromLyric(line, index, input.lyrics.length, input.energyCurve),
+      lyrics.length > 0
+        ? lyrics.map((line, index) =>
+            fixtureSegmentFromLyric(line, index, lyrics.length, energyCurve),
           )
-        : input.sections.map((section) => fixtureSegmentFromSection(section, input.energyCurve));
+        : sections.map((section) => fixtureSegmentFromSection(section, energyCurve));
 
     return {
       segments,
@@ -131,6 +142,17 @@ export class FixtureLLMProvider implements LLMProvider {
       promptVersion: DIRECTOR_PROMPT_VERSION,
     };
   }
+}
+
+function clampRange<T extends { startMs: number; endMs: number }>(
+  range: T,
+  windowStartMs: number,
+  windowEndMs: number,
+): T | null {
+  const startMs = Math.max(range.startMs, windowStartMs);
+  const endMs = Math.min(range.endMs, windowEndMs);
+  if (startMs >= endMs) return null;
+  return { ...range, startMs, endMs };
 }
 
 /** Nearest energy-curve value to `timeMs`, or a neutral default when the curve is empty. */

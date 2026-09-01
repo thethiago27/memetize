@@ -582,6 +582,12 @@ importers:
       '@memetize/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@memetize/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@memetize/edit-planner':
+        specifier: workspace:0.0.0
+        version: link:../../packages/edit-planner
       '@memetize/job-system':
         specifier: workspace:*
         version: link:../../packages/job-system

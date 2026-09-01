@@ -87,6 +87,8 @@ describe('GatewayLLMProvider narrative and moments', () => {
     const provider = new GatewayLLMProvider({ model: 'anthropic/claude-sonnet-4.5' });
     const result = await provider.analyzeNarrative({
       durationMs: 1000,
+      sourceStartMs: 0,
+      sourceEndMs: 1000,
       sections: [],
       energyCurve: [],
       lyrics: [{ startMs: 0, endMs: 1000, text: 'a line' }],

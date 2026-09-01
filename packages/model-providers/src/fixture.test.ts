@@ -49,6 +49,8 @@ describe('FixtureLLMProvider.analyzeNarrative', () => {
     const provider = new FixtureLLMProvider();
     const result = await provider.analyzeNarrative({
       durationMs: 2000,
+      sourceStartMs: 0,
+      sourceEndMs: 2000,
       sections: [],
       energyCurve,
       lyrics: [
@@ -70,6 +72,8 @@ describe('FixtureLLMProvider.analyzeNarrative', () => {
     const provider = new FixtureLLMProvider();
     const result = await provider.analyzeNarrative({
       durationMs: 4000,
+      sourceStartMs: 0,
+      sourceEndMs: 4000,
       sections: [
         { type: 'intro', startMs: 0, endMs: 2000 },
         { type: 'chorus', startMs: 2000, endMs: 4000 },
@@ -88,6 +92,8 @@ describe('FixtureLLMProvider.analyzeNarrative', () => {
     const provider = new FixtureLLMProvider();
     const input = {
       durationMs: 1000,
+      sourceStartMs: 0,
+      sourceEndMs: 1000,
       sections: [],
       energyCurve,
       lyrics: [{ startMs: 0, endMs: 1000, text: 'same line' }],
@@ -101,11 +107,28 @@ describe('FixtureLLMProvider.analyzeNarrative', () => {
     const provider = new FixtureLLMProvider();
     const result = await provider.analyzeNarrative({
       durationMs: 2000,
+      sourceStartMs: 0,
+      sourceEndMs: 2000,
       sections: [],
       energyCurve,
       lyrics: [{ startMs: 900, endMs: 1000, text: 'near the second point' }],
     });
     expect(result.segments[0]?.energy).toBe(0.8);
+  });
+
+  it('keeps suggestions inside the selected source window', async () => {
+    const provider = new FixtureLLMProvider();
+    const result = await provider.analyzeNarrative({
+      durationMs: 120_000,
+      sourceStartMs: 60_000,
+      sourceEndMs: 120_000,
+      sections: [{ type: 'chorus', startMs: 60_000, endMs: 120_000 }],
+      energyCurve: [{ timeMs: 60_000, value: 0.9 }],
+      lyrics: [{ startMs: 61_000, endMs: 63_000, text: 'hook' }],
+    });
+    expect(result.segments).toEqual([
+      expect.objectContaining({ startMs: 61_000, endMs: 63_000, lyrics: 'hook' }),
+    ]);
   });
 });
 

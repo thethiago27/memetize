@@ -97,6 +97,8 @@ export interface NarrativeSegmentSuggestion {
 
 export interface NarrativeAnalyzeInput {
   durationMs: number;
+  sourceStartMs: number;
+  sourceEndMs: number;
   sections: AudioSectionRef[];
   energyCurve: EnergyPointRef[];
   lyrics: LyricLineRef[];

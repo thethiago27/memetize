@@ -1,12 +1,14 @@
 import { writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { NarrativeInput, NarrativeSegment } from '@memetize/contracts';
+import { planNarrativeCoverage, selectEditWindow } from '@memetize/edit-planner';
 import { JobFailure } from '@memetize/job-system';
 import { createProviders } from '@memetize/model-providers';
 import type { JobHandler } from '@memetize/orchestrator';
 import {
   getAudioAnalysis,
   getLyrics,
+  insertEditWindow,
   narrativeDebugFile,
   replaceNarrativeSegments,
   setProjectStatus,
@@ -14,14 +16,8 @@ import {
 import { ensureDir } from '@memetize/shared';
 
 /**
- * NARRATIVE handler (spec section 27): reads the project's audio analysis
- * and lyrics (both required — the AUDIO_ANALYZE + LYRICS barrier only
- * enqueues this once both are COMPLETED), asks the configured `LLMProvider`
- * to interpret lyrics + musical structure, validates every segment falls
- * within the track's duration, persists, keeps a debug snapshot (spec
- * section 64), then advances the project to PLANNING and enqueues MATCH
- * (spec sections 28-30). Does not search moments or build a timeline
- * itself — that's the matching worker's job.
+ * NARRATIVE handler: selects a source window, asks the LLM for meaning
+ * inside that window, then normalizes continuous coverage before MATCH.
  */
 export function createNarrativeHandler(): JobHandler {
   return async (ctx) => {
@@ -44,15 +40,40 @@ export function createNarrativeHandler(): JobHandler {
       throw new JobFailure('NARRATIVE_NO_LYRICS', `project ${projectId} has no lyrics yet`, false);
     }
 
+    let selection: ReturnType<typeof selectEditWindow>;
+    try {
+      selection = selectEditWindow({
+        trackDurationMs: audio.durationMs,
+        sections: audio.sections,
+        beats: audio.beats,
+        downbeats: audio.downbeats,
+        energyCurve: audio.energyCurve,
+        lyrics: lyricsRow.lines,
+      });
+    } catch (error) {
+      throw new JobFailure(
+        'HIGHLIGHT_INVALID_ANALYSIS',
+        error instanceof Error ? error.message : String(error),
+        false,
+      );
+    }
+    const window = await insertEditWindow(ctx.db, { projectId, selection });
+
     const { llm } = createProviders(ctx.config);
 
     let suggestion: Awaited<ReturnType<typeof llm.analyzeNarrative>>;
     try {
       suggestion = await llm.analyzeNarrative({
         durationMs: audio.durationMs,
-        sections: audio.sections,
-        energyCurve: audio.energyCurve,
-        lyrics: lyricsRow.lines,
+        sourceStartMs: window.sourceStartMs,
+        sourceEndMs: window.sourceEndMs,
+        sections: clipRanges(audio.sections, window.sourceStartMs, window.sourceEndMs),
+        energyCurve: audio.energyCurve.filter(
+          (point) => point.timeMs >= window.sourceStartMs && point.timeMs <= window.sourceEndMs,
+        ),
+        lyrics: clipRanges(lyricsRow.lines, window.sourceStartMs, window.sourceEndMs).map(
+          (line) => ({ startMs: line.startMs, endMs: line.endMs, text: line.text }),
+        ),
       });
     } catch (error) {
       throw new JobFailure(
@@ -62,18 +83,20 @@ export function createNarrativeHandler(): JobHandler {
       );
     }
 
-    const segments: NarrativeSegment[] = [];
-    for (const candidate of suggestion.segments) {
-      if (candidate.startMs < 0 || candidate.endMs > audio.durationMs) {
-        throw new JobFailure(
-          'NARRATIVE_OUT_OF_BOUNDS',
-          `segment [${candidate.startMs}, ${candidate.endMs}] falls outside [0, ${audio.durationMs}]`,
-          false,
-        );
-      }
-      segments.push(NarrativeSegment.parse(candidate));
-    }
+    const beats = uniqueSorted([
+      ...audio.beats.map((beat) => beat.timeMs),
+      ...audio.downbeats,
+    ]);
+    const normalized = planNarrativeCoverage({
+      window: { sourceStartMs: window.sourceStartMs, sourceEndMs: window.sourceEndMs },
+      suggestions: suggestion.segments,
+      sections: audio.sections,
+      beats,
+      energyCurve: audio.energyCurve,
+    });
+    validateCoverage(normalized, window.sourceStartMs, window.sourceEndMs);
 
+    const segments = normalized.map((segment) => NarrativeSegment.parse(segment));
     const persisted = await replaceNarrativeSegments(ctx.db, {
       projectId,
       segments,
@@ -91,6 +114,16 @@ export function createNarrativeHandler(): JobHandler {
           promptVersion: suggestion.promptVersion,
           extractor: suggestion.extractor,
           extractorVersion: suggestion.extractorVersion,
+          window: {
+            version: window.version,
+            sourceStartMs: window.sourceStartMs,
+            sourceEndMs: window.sourceEndMs,
+            durationMs: window.durationMs,
+            score: window.score,
+            scoreBreakdown: window.scoreBreakdown,
+            selector: window.selector,
+            selectorVersion: window.selectorVersion,
+          },
           raw: suggestion.segments,
           parsed: persisted,
         },
@@ -99,9 +132,6 @@ export function createNarrativeHandler(): JobHandler {
       ),
     );
 
-    // The matching funnel (spec sections 28-30) only makes sense once the
-    // project has a semantic timeline; PLANNING is the project's next
-    // lifecycle stage after ANALYZING_AUDIO (spec section 41).
     await setProjectStatus(ctx.db, projectId, 'PLANNING');
     await ctx.enqueue({ type: 'MATCH', entityId: projectId, input: { projectId } });
 
@@ -109,12 +139,71 @@ export function createNarrativeHandler(): JobHandler {
       projectId,
       segmentCount: persisted.length,
       extractor: suggestion.extractor,
+      windowVersion: window.version,
     });
     return {
       segmentCount: persisted.length,
       extractor: suggestion.extractor,
       extractorVersion: suggestion.extractorVersion,
       promptVersion: suggestion.promptVersion,
+      windowVersion: window.version,
     };
   };
+}
+
+function clipRanges<T extends { startMs: number; endMs: number }>(
+  ranges: readonly T[],
+  windowStartMs: number,
+  windowEndMs: number,
+): T[] {
+  const clipped: T[] = [];
+  for (const range of ranges) {
+    const startMs = Math.max(range.startMs, windowStartMs);
+    const endMs = Math.min(range.endMs, windowEndMs);
+    if (startMs >= endMs) continue;
+    clipped.push({ ...range, startMs, endMs });
+  }
+  return clipped;
+}
+
+function uniqueSorted(values: readonly number[]): number[] {
+  return [...new Set(values)].sort((a, b) => a - b);
+}
+
+function validateCoverage(
+  segments: NarrativeSegment[],
+  sourceStartMs: number,
+  sourceEndMs: number,
+): void {
+  if (segments.length === 0) {
+    throw new JobFailure(
+      'NARRATIVE_COVERAGE_INVALID',
+      `normalized coverage is empty for window [${sourceStartMs}, ${sourceEndMs}]`,
+      false,
+    );
+  }
+  if (segments[0]?.startMs !== sourceStartMs || segments.at(-1)?.endMs !== sourceEndMs) {
+    throw new JobFailure(
+      'NARRATIVE_COVERAGE_INVALID',
+      `normalized spans do not cover [${sourceStartMs}, ${sourceEndMs}]`,
+      false,
+    );
+  }
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    if (!segment || segment.endMs <= segment.startMs) {
+      throw new JobFailure('NARRATIVE_COVERAGE_INVALID', 'normalized span has a non-positive duration', false);
+    }
+    if (segment.startMs < sourceStartMs || segment.endMs > sourceEndMs) {
+      throw new JobFailure(
+        'NARRATIVE_COVERAGE_INVALID',
+        `span [${segment.startMs}, ${segment.endMs}] falls outside [${sourceStartMs}, ${sourceEndMs}]`,
+        false,
+      );
+    }
+    const next = segments[index + 1];
+    if (next && segment.endMs !== next.startMs) {
+      throw new JobFailure('NARRATIVE_COVERAGE_INVALID', 'normalized spans are not contiguous', false);
+    }
+  }
 }

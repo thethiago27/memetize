@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@memetize/contracts": "workspace:*",
+    "@memetize/database": "workspace:*",
+    "@memetize/edit-planner": "workspace:0.0.0",
     "@memetize/job-system": "workspace:*",
     "@memetize/model-providers": "workspace:*",
     "@memetize/orchestrator": "workspace:*",
