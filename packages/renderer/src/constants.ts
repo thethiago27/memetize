@@ -4,6 +4,8 @@
  * and their tests all agree on the same cutoffs.
  */
 export const MIN_CLIP_MS = 300;
+export const AUDIO_FADE_IN_MS = 120;
+export const AUDIO_FADE_OUT_MS = 250;
 export const DURATION_DRIFT_MS = 100;
 export const RENDERER_NAME = 'ffmpeg';
 export const RENDERER_VERSION = '1.0.0';

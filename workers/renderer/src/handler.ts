@@ -89,7 +89,9 @@ export function createRenderHandler(): JobHandler {
       resolvedClips.push({ clipId: clip.id, videoPath });
     }
 
+    const validationStarted = performance.now();
     const timelineValidation = validateTimeline(timeline);
+    const validationMs = performance.now() - validationStarted;
     if (!timelineValidation.ok) {
       throw new JobFailure(
         'RENDER_INVALID_TIMELINE',
@@ -98,13 +100,20 @@ export function createRenderHandler(): JobHandler {
       );
     }
 
-    const graph = buildFfmpegGraph(timeline, { audioPath, clips: resolvedClips });
+    const graphStarted = performance.now();
+    const graph = buildFfmpegGraph(timeline, {
+      audioPath,
+      audioDurationMs: projectAudio.durationMs,
+      clips: resolvedClips,
+    });
+    const graphBuildMs = performance.now() - graphStarted;
 
     const nextVersion = ((await getLatestRender(ctx.db, projectId))?.version ?? 0) + 1;
     const output = renderFile(ctx.config, projectId, nextVersion);
     await ensureDir(renderDir(ctx.config, projectId).absolute);
     const args = toFfmpegArgs(graph, output.absolute);
 
+    const ffmpegStarted = performance.now();
     try {
       await execFileAsync('ffmpeg', args, {
         maxBuffer: 32 * 1024 * 1024,
@@ -114,8 +123,11 @@ export function createRenderHandler(): JobHandler {
       const message = error instanceof Error ? error.message : String(error);
       throw new JobFailure('RENDER_FFMPEG_ERROR', `ffmpeg failed: ${message}`, false);
     }
+    const ffmpegMs = performance.now() - ffmpegStarted;
 
+    const probeStarted = performance.now();
     const probe = await probeOutput(output.absolute);
+    const probeMs = performance.now() - probeStarted;
     const outputValidation = validateOutput(probe, timeline);
     if (!outputValidation.valid) {
       throw new JobFailure(
@@ -146,12 +158,28 @@ export function createRenderHandler(): JobHandler {
       validation,
     });
 
+    const performanceMetrics = {
+      validationMs,
+      graphBuildMs,
+      ffmpegMs,
+      probeMs,
+      clipCount: timeline.clips.length,
+      uniqueSourceCount: new Set(resolvedClips.map((clip) => clip.videoPath)).size,
+    };
+
     const debugFile = renderDebugFile(ctx.config, projectId);
     await ensureDir(dirname(debugFile.absolute));
     await writeFile(
       debugFile.absolute,
       JSON.stringify(
-        { projectId, timelineVersion: timelineVersion.version, args, graph, validation },
+        {
+          projectId,
+          timelineVersion: timelineVersion.version,
+          args,
+          graph,
+          validation,
+          performance: performanceMetrics,
+        },
         null,
         2,
       ),

@@ -5,15 +5,22 @@ import type { TimelineIssue, TimelineValidation } from './types';
 import { isRenderableZoom } from './zoom';
 
 /**
- * Validates a `Timeline` before any FFmpeg spawn (spec sections 37-38):
- * overlaps, out-of-range clips and `startMs >= endMs` are hard failures —
- * the Renderer must never hand a broken graph to FFmpeg. Gaps, short
- * slots, source/slot mismatches and unsupported effects are warnings only
- * (spec section 38's editorial checks); they still render, just imperfectly.
+ * Validates a `Timeline` before any FFmpeg spawn. Overlaps, out-of-range
+ * clips, empty coverage, any positive gap, and source-short slots are hard
+ * failures — the Renderer must never hand a broken graph to FFmpeg.
+ * Short slots and unsupported effects remain warnings.
  */
 export function validateTimeline(timeline: Timeline): TimelineValidation {
   const errors: TimelineIssue[] = [];
   const warnings: RenderWarning[] = [];
+
+  if (timeline.clips.length === 0) {
+    errors.push({
+      code: 'EMPTY_TIMELINE',
+      message: 'timeline has no clips',
+    });
+    return { ok: false, errors, warnings };
+  }
 
   for (const clip of timeline.clips) {
     const { startMs, endMs } = clip.timeline;
@@ -48,10 +55,6 @@ export function validateTimeline(timeline: Timeline): TimelineValidation {
     }
   }
 
-  if (timeline.clips.length === 0) {
-    warnings.push({ code: 'EMPTY_TIMELINE' });
-  }
-
   for (const clip of timeline.clips) {
     const slotMs = clip.timeline.endMs - clip.timeline.startMs;
     if (slotMs > 0 && slotMs < MIN_CLIP_MS) {
@@ -60,7 +63,11 @@ export function validateTimeline(timeline: Timeline): TimelineValidation {
 
     const sourceMs = clip.source.endMs - clip.source.startMs;
     if (sourceMs < slotMs) {
-      warnings.push({ code: 'SOURCE_SHORTER_THAN_SLOT', clipId: clip.id, durationMs: sourceMs });
+      errors.push({
+        code: 'SOURCE_SHORTER_THAN_SLOT',
+        clipId: clip.id,
+        message: `clip "${clip.id}" source (${sourceMs}ms) is shorter than its slot (${slotMs}ms)`,
+      });
     }
 
     if (clip.effects.some((effect) => !isRenderableZoom(effect, clip))) {
@@ -72,20 +79,23 @@ export function validateTimeline(timeline: Timeline): TimelineValidation {
     }
   }
 
-  if (sorted.length > 0) {
-    const frameMs = timeline.canvas.fps > 0 ? 1000 / timeline.canvas.fps : 0;
-    let cursorMs = 0;
-    for (const clip of sorted) {
-      const gapMs = clip.timeline.startMs - cursorMs;
-      if (gapMs > 0 && gapMs >= frameMs) {
-        warnings.push({ code: 'TIMELINE_GAP', startMs: cursorMs, endMs: clip.timeline.startMs });
-      }
-      cursorMs = Math.max(cursorMs, clip.timeline.endMs);
+  let cursorMs = 0;
+  for (const clip of sorted) {
+    const gapMs = clip.timeline.startMs - cursorMs;
+    if (gapMs > 0) {
+      errors.push({
+        code: 'TIMELINE_GAP',
+        message: `timeline has a ${gapMs}ms gap from ${cursorMs}ms to ${clip.timeline.startMs}ms`,
+      });
     }
-    const trailingGapMs = timeline.durationMs - cursorMs;
-    if (trailingGapMs > 0 && trailingGapMs >= frameMs) {
-      warnings.push({ code: 'TIMELINE_GAP', startMs: cursorMs, endMs: timeline.durationMs });
-    }
+    cursorMs = Math.max(cursorMs, clip.timeline.endMs);
+  }
+  const trailingGapMs = timeline.durationMs - cursorMs;
+  if (trailingGapMs > 0) {
+    errors.push({
+      code: 'TIMELINE_GAP',
+      message: `timeline has a ${trailingGapMs}ms gap from ${cursorMs}ms to ${timeline.durationMs}ms`,
+    });
   }
 
   return { ok: errors.length === 0, errors, warnings };

@@ -7,7 +7,13 @@ import type { RenderWarning } from '@memetize/contracts';
  */
 
 export interface TimelineIssue {
-  code: 'CLIP_OVERLAP' | 'CLIP_OUT_OF_BOUNDS' | 'INVALID_RANGE';
+  code:
+    | 'CLIP_OVERLAP'
+    | 'CLIP_OUT_OF_BOUNDS'
+    | 'INVALID_RANGE'
+    | 'EMPTY_TIMELINE'
+    | 'TIMELINE_GAP'
+    | 'SOURCE_SHORTER_THAN_SLOT';
   message: string;
   clipId?: string;
 }
@@ -28,6 +34,7 @@ export interface ResolvedClip {
 export interface ResolvedAssets {
   /** Absolute path. */
   audioPath: string;
+  audioDurationMs: number;
   clips: readonly ResolvedClip[];
 }
 

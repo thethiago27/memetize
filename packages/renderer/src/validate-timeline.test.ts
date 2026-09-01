@@ -3,11 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { validateTimeline } from './validate-timeline';
 
 function clip(overrides: Partial<TimelineClip> & { id: string }): TimelineClip {
+  const range = overrides.timeline ?? { startMs: 0, endMs: 1000 };
   return {
     id: overrides.id,
     momentId: overrides.momentId ?? `mom_${overrides.id}`,
-    timeline: overrides.timeline ?? { startMs: 0, endMs: 1000 },
-    source: overrides.source ?? { assetId: 'ast_1', startMs: 0, endMs: 1000 },
+    timeline: range,
+    source: overrides.source ?? {
+      assetId: 'ast_1',
+      startMs: 0,
+      endMs: range.endMs - range.startMs,
+    },
     transform: overrides.transform ?? DEFAULT_TRANSFORM,
     effects: overrides.effects ?? [],
     reason: overrides.reason ?? { segmentId: 'nar_1', semanticScore: 0.5, finalScore: 0.5 },
@@ -63,14 +68,12 @@ describe('validateTimeline', () => {
     );
   });
 
-  it('warns about a gap at the start of the timeline', () => {
-    const tl = timeline({
-      durationMs: 3000,
-      clips: [clip({ id: 'clp_1', timeline: { startMs: 1000, endMs: 3000 } })],
-    });
-    const result = validateTimeline(tl);
-    expect(result.ok).toBe(true);
-    expect(result.warnings).toContainEqual({ code: 'TIMELINE_GAP', startMs: 0, endMs: 1000 });
+  it('fails when there is a gap at the start of the timeline', () => {
+    const tl = gappedTimeline();
+    expect(validateTimeline(tl).ok).toBe(false);
+    expect(validateTimeline(tl).errors).toContainEqual(
+      expect.objectContaining({ code: 'TIMELINE_GAP' }),
+    );
   });
 
   it('warns when a clip slot is shorter than the minimum', () => {
@@ -86,11 +89,11 @@ describe('validateTimeline', () => {
     });
   });
 
-  it('marks an empty timeline as valid with an EMPTY_TIMELINE warning and no gap warning', () => {
-    const tl = timeline({ durationMs: 3000, clips: [] });
-    const result = validateTimeline(tl);
-    expect(result.ok).toBe(true);
-    expect(result.warnings).toEqual([{ code: 'EMPTY_TIMELINE' }]);
+  it('rejects an empty timeline as a hard error', () => {
+    expect(validateTimeline(timeline({ durationMs: 3_000, clips: [] }))).toMatchObject({
+      ok: false,
+      errors: [expect.objectContaining({ code: 'EMPTY_TIMELINE' })],
+    });
   });
 
   it('does not warn about a gap between adjacent clips', () => {
@@ -145,24 +148,29 @@ describe('validateTimeline', () => {
     );
   });
 
-  it('warns when the source is shorter than the timeline slot', () => {
-    const tl = timeline({
-      durationMs: 2000,
-      clips: [
-        clip({
-          id: 'clp_1',
-          timeline: { startMs: 0, endMs: 2000 },
-          source: { assetId: 'ast_1', startMs: 0, endMs: 500 },
-        }),
-      ],
-    });
-    const result = validateTimeline(tl);
-    expect(result.warnings).toContainEqual(
-      expect.objectContaining({
-        code: 'SOURCE_SHORTER_THAN_SLOT',
-        clipId: 'clp_1',
-        durationMs: 500,
-      }),
+  it('fails when the source is shorter than the timeline slot', () => {
+    expect(validateTimeline(sourceShortTimeline()).errors).toContainEqual(
+      expect.objectContaining({ code: 'SOURCE_SHORTER_THAN_SLOT', clipId: 'clp_1' }),
     );
   });
 });
+
+function gappedTimeline(): Timeline {
+  return timeline({
+    durationMs: 3_000,
+    clips: [clip({ id: 'clp_1', timeline: { startMs: 1_000, endMs: 3_000 } })],
+  });
+}
+
+function sourceShortTimeline(): Timeline {
+  return timeline({
+    durationMs: 2_000,
+    clips: [
+      clip({
+        id: 'clp_1',
+        timeline: { startMs: 0, endMs: 2_000 },
+        source: { assetId: 'ast_1', startMs: 0, endMs: 500 },
+      }),
+    ],
+  });
+}

@@ -1,38 +1,32 @@
 import type { Timeline, TimelineCanvas, TimelineTransform } from '@memetize/timeline';
+import { AUDIO_FADE_IN_MS, AUDIO_FADE_OUT_MS } from './constants';
 import type { FfmpegGraph, FfmpegInput, ResolvedAssets } from './types';
 import { buildZoomFilter, parseZoomEffect } from './zoom';
 
 /**
- * Builds the single `-filter_complex` graph for a `Timeline` (spec section
- * 37): hard cuts, black segments over every gap, and a per-clip
- * scale/crop/pad chain. Every concat segment is pinned to SAR 1:1 —
- * `scale`+`crop` of a 16:9 proxy otherwise drifts (e.g. 10240:10239)
- * and FFmpeg refuses to concat it with `color=` gaps. No file is
- * touched here — this is pure string assembly so it's cheap to unit
- * test without spawning FFmpeg.
+ * Builds the single `-filter_complex` graph for a fully covered `Timeline`.
+ * Gaps, empty clips, and source-short slots throw instead of inserting
+ * black or clone-pad fallbacks. Audio is trimmed and timestamp-rebased.
  */
 export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): FfmpegGraph {
-  const { width, height, fps } = timeline.canvas;
+  const { fps } = timeline.canvas;
   const videoPathByClipId = new Map(assets.clips.map((clip) => [clip.clipId, clip.videoPath]));
   const clips = [...timeline.clips].sort((a, b) => a.timeline.startMs - b.timeline.startMs);
+
+  if (clips.length === 0) {
+    throw new Error('buildFfmpegGraph: empty timeline');
+  }
 
   const inputs: FfmpegInput[] = [{ path: assets.audioPath, kind: 'audio' }];
   const filterParts: string[] = [];
   const segmentLabels: string[] = [];
-  let gapCount = 0;
   let cursorMs = 0;
 
-  const pushGap = (gapMs: number): void => {
-    if (gapMs <= 0) return;
-    const label = `gap${gapCount++}`;
-    filterParts.push(
-      `color=c=black:s=${width}x${height}:r=${fps}:d=${toSeconds(gapMs)}:sar=1[${label}]`,
-    );
-    segmentLabels.push(`[${label}]`);
-  };
-
   clips.forEach((clip, index) => {
-    pushGap(clip.timeline.startMs - cursorMs);
+    const gapMs = clip.timeline.startMs - cursorMs;
+    if (gapMs > 0) {
+      throw new Error('buildFfmpegGraph: timeline gap');
+    }
 
     const videoPath = videoPathByClipId.get(clip.id);
     if (!videoPath) {
@@ -43,14 +37,15 @@ export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): Ff
 
     const slotMs = clip.timeline.endMs - clip.timeline.startMs;
     const sourceMs = clip.source.endMs - clip.source.startMs;
+    if (sourceMs < slotMs) {
+      throw new Error('buildFfmpegGraph: source shorter than slot');
+    }
+
     const transformFilter = buildTransformFilter(clip.transform, timeline.canvas);
 
     let chain =
       `[${inputIndex}:v]trim=start=${toSeconds(clip.source.startMs)}:end=${toSeconds(clip.source.endMs)},` +
       `setpts=PTS-STARTPTS,${transformFilter}`;
-    if (sourceMs < slotMs) {
-      chain += `,tpad=stop_mode=clone:stop_duration=${toSeconds(slotMs - sourceMs)}`;
-    }
     const zooms = clip.effects
       .map((effect) => parseZoomEffect(effect, clip))
       .filter((zoom): zoom is NonNullable<typeof zoom> => zoom !== null)
@@ -58,8 +53,6 @@ export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): Ff
     for (const zoom of zooms) {
       chain += `,${buildZoomFilter(zoom, clip, timeline.canvas)}`;
     }
-    // concat rejects mixed SAR; scale+crop of a 16:9 proxy yields 10240:10239
-    // while color= gaps stay 1:1.
     chain += ',setsar=1';
     const label = `v${index}`;
     filterParts.push(`${chain}[${label}]`);
@@ -68,13 +61,12 @@ export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): Ff
     cursorMs = clip.timeline.endMs;
   });
 
-  pushGap(timeline.durationMs - cursorMs);
+  if (timeline.durationMs - cursorMs > 0) {
+    throw new Error('buildFfmpegGraph: timeline gap');
+  }
 
   filterParts.push(`${segmentLabels.join('')}concat=n=${segmentLabels.length}:v=1:a=0[vout]`);
-  filterParts.push(
-    `[0:a]atrim=start=${toSeconds(timeline.audio.sourceStartMs)}:duration=${toSeconds(timeline.durationMs)},` +
-      `volume=${timeline.audio.volume}[aout]`,
-  );
+  filterParts.push(buildAudioFilter(timeline, assets));
 
   const outputArgs = [
     '-map',
@@ -111,8 +103,7 @@ export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): Ff
 
 /**
  * `toFfmpegArgs` always prefixes the quiet flags and ends with the output
- * path (spec section 37) so the worker only has to append this array to
- * `execFile('ffmpeg', ...)`.
+ * path so the worker only has to append this array to `execFile('ffmpeg', ...)`.
  */
 export function toFfmpegArgs(graph: FfmpegGraph, outputPath: string): string[] {
   const args = ['-y', '-hide_banner', '-loglevel', 'error'];
@@ -123,13 +114,38 @@ export function toFfmpegArgs(graph: FfmpegGraph, outputPath: string): string[] {
   return args;
 }
 
+function buildAudioFilter(timeline: Timeline, assets: ResolvedAssets): string {
+  const sourceStartMs = timeline.audio.sourceStartMs;
+  const durationMs = timeline.durationMs;
+  const parts = [
+    `atrim=start=${toSeconds(sourceStartMs)}:duration=${toSeconds(durationMs)}`,
+    'asetpts=PTS-STARTPTS',
+  ];
+
+  const halfDurationMs = Math.floor(durationMs / 2);
+  if (sourceStartMs > 0) {
+    const fadeInMs = Math.min(AUDIO_FADE_IN_MS, halfDurationMs);
+    if (fadeInMs > 0) {
+      parts.push(`afade=t=in:st=0:d=${toSeconds(fadeInMs)}`);
+    }
+  }
+  if (sourceStartMs + durationMs < assets.audioDurationMs) {
+    const fadeOutMs = Math.min(AUDIO_FADE_OUT_MS, halfDurationMs);
+    if (fadeOutMs > 0) {
+      parts.push(`afade=t=out:st=${toSeconds(durationMs - fadeOutMs)}:d=${toSeconds(fadeOutMs)}`);
+    }
+  }
+  parts.push(`volume=${timeline.audio.volume}`);
+  return `[0:a]${parts.join(',')}[aout]`;
+}
+
 function toSeconds(ms: number): string {
   return (ms / 1000).toFixed(3);
 }
 
 /**
- * `cover` crops to fill the canvas, `contain` letterboxes in black (spec
- * section 37). `transform.scale` zooms in/out before the crop/pad and
+ * `cover` crops to fill the canvas, `contain` letterboxes in black.
+ * `transform.scale` zooms in/out before the crop/pad and
  * `positionX`/`positionY` (0-1) choose where the extra pixels get cut or
  * padded, so a centered default (`0.5, 0.5, cover`) exactly fills the
  * canvas with no visible transform.

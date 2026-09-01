@@ -19,7 +19,6 @@ import {
 } from '@memetize/projects';
 import { SCENE_DETECTOR_DIR } from '@memetize/scene-detector';
 import type { AppConfig } from '@memetize/shared';
-import { Timeline } from '@memetize/timeline';
 import { TRANSCRIPT_DIR } from '@memetize/transcript';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildRegistry } from './registry';
@@ -176,32 +175,17 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('renderer pipeline (
     expect((await getProject(db, project.id))?.status).toBe('COMPLETED');
   }, 120_000);
 
-  it('renders a black MP4 with an EMPTY_TIMELINE warning when the project has no catalog', async () => {
+  it('fails at director with INSUFFICIENT_CATALOG and never renders when there is no catalog', async () => {
     await truncateAll(db);
 
     const { project } = await ingestProject({ db, config, filePath: songFixture });
-    await orchestrator.drain({ entityId: project.id });
-    expect((await getProject(db, project.id))?.status).toBe('TIMELINE_READY');
-
-    await renderProject(db, project.id);
     const outcomes = await orchestrator.drain({ entityId: project.id });
-    expect(outcomes.map((outcome) => outcome.job.type)).toEqual(['RENDER']);
-    expect(outcomes[0]?.status).toBe('COMPLETED');
-    expect((await getProject(db, project.id))?.status).toBe('COMPLETED');
+    const director = outcomes.find((outcome) => outcome.job.type === 'DIRECTOR');
 
-    const render = await getLatestRender(db, project.id);
-    expect(render).toBeTruthy();
-    expect(existsSync(resolveStorage(config, render?.path ?? ''))).toBe(true);
-    expect(render?.validation.warnings).toContainEqual(
-      expect.objectContaining({ code: 'EMPTY_TIMELINE' }),
-    );
-
-    // The Timeline document on disk still parses (empty catalog, not a broken pipeline).
-    const onDisk = JSON.parse(
-      await readFile(join(config.storageDir, 'cache', project.id, 'timeline.json'), 'utf8'),
-    );
-    const parsed = Timeline.safeParse(onDisk);
-    expect(parsed.success).toBe(true);
-    expect(parsed.success && parsed.data.clips).toEqual([]);
+    expect((await getProject(db, project.id))?.status).toBe('FAILED');
+    expect(director?.status).toBe('FAILED');
+    expect(director?.error?.code).toBe('INSUFFICIENT_CATALOG');
+    expect(outcomes.some((outcome) => outcome.job.type === 'RENDER')).toBe(false);
+    expect(await getLatestRender(db, project.id)).toBeUndefined();
   }, 60_000);
 });
