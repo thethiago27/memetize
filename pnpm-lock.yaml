@@ -176,6 +176,12 @@ importers:
         specifier: workspace:*
         version: link:../timeline
 
+  packages/edit-planner:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:0.0.0
+        version: link:../contracts
+
   packages/effects:
     dependencies:
       '@memetize/timeline':

@@ -112,3 +112,24 @@ export const NarrativeOutput = z.object({
   promptVersion: z.string(),
 });
 export type NarrativeOutput = z.infer<typeof NarrativeOutput>;
+
+export const HighlightScoreBreakdown = z.object({
+  section: z.number().min(0).max(1),
+  energy: z.number().min(0).max(1),
+  lyrics: z.number().min(0).max(1),
+  narrativeArc: z.number().min(0).max(1),
+  boundaries: z.number().min(0).max(1),
+});
+export type HighlightScoreBreakdown = z.infer<typeof HighlightScoreBreakdown>;
+
+export const EditWindowSelection = z.object({
+  sourceStartMs: z.number().int().nonnegative(),
+  sourceEndMs: z.number().int().positive(),
+  durationMs: z.number().int().positive(),
+  targetDurationMs: z.number().int().positive(),
+  score: z.number().min(0).max(1),
+  scoreBreakdown: HighlightScoreBreakdown,
+  selector: z.string(),
+  selectorVersion: z.string(),
+});
+export type EditWindowSelection = z.infer<typeof EditWindowSelection>;
