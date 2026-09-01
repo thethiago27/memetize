@@ -3,6 +3,7 @@ import {
   assetId,
   audioAnalysisId,
   clipId,
+  editWindowId,
   embeddingId,
   jobId,
   lyricsId,
@@ -33,6 +34,7 @@ describe('ids', () => {
     expect(timelineVersionId()).toMatch(/^tlv_[0-9a-z]{21}$/);
     expect(clipId()).toMatch(/^clp_[0-9a-z]{21}$/);
     expect(renderId()).toMatch(/^rnd_[0-9a-z]{21}$/);
+    expect(editWindowId()).toMatch(/^win_[0-9a-z]{21}$/);
   });
 
   it('is collision-resistant across many ids', () => {

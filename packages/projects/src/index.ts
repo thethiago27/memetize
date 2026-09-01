@@ -12,3 +12,4 @@ export * from './render';
 export * from './reprocess';
 export * from './swap';
 export * from './timeline';
+export * from './window';

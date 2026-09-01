@@ -5,6 +5,7 @@ import type {
   EmbeddingType,
   EnergyPoint,
   ExtractedFrame,
+  HighlightScoreBreakdown,
   JobStatus,
   JobType,
   LyricLine,
@@ -412,6 +413,30 @@ export const timelineVersions = pgTable(
  * — `insertRender` always inserts the next `version`, so an old MP4 stays
  * reachable on disk and in the database after a re-render.
  */
+export const editWindows = pgTable(
+  'edit_windows',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull(),
+    sourceStartMs: integer('source_start_ms').notNull(),
+    sourceEndMs: integer('source_end_ms').notNull(),
+    durationMs: integer('duration_ms').notNull(),
+    targetDurationMs: integer('target_duration_ms').notNull(),
+    score: real('score').notNull(),
+    scoreBreakdown: jsonb('score_breakdown').$type<HighlightScoreBreakdown>().notNull(),
+    selector: text('selector').notNull(),
+    selectorVersion: text('selector_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('edit_windows_unique').on(table.projectId, table.version),
+    index('edit_windows_project_idx').on(table.projectId),
+  ],
+);
+
 export const renders = pgTable(
   'renders',
   {
@@ -455,3 +480,5 @@ export type TimelineVersionRow = typeof timelineVersions.$inferSelect;
 export type NewTimelineVersionRow = typeof timelineVersions.$inferInsert;
 export type RenderRow = typeof renders.$inferSelect;
 export type NewRenderRow = typeof renders.$inferInsert;
+export type EditWindowRow = typeof editWindows.$inferSelect;
+export type NewEditWindowRow = typeof editWindows.$inferInsert;
