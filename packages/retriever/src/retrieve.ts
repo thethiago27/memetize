@@ -60,7 +60,13 @@ export async function retrieveForSegment(
       const semanticScore = Math.max(0, Math.min(1, hit.score));
       const existing = byMoment.get(hit.momentId);
       if (!existing || semanticScore > existing.semanticScore) {
-        byMoment.set(hit.momentId, { momentId: hit.momentId, assetId: hit.assetId, semanticScore });
+        byMoment.set(hit.momentId, {
+          momentId: hit.momentId,
+          assetId: hit.assetId,
+          semanticScore,
+          source: 'CATALOG',
+          negativeScore: 0,
+        });
       }
     }
   }

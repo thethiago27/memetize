@@ -17,6 +17,7 @@
     "@memetize/director-worker": "workspace:*",
     "@memetize/effects-worker": "workspace:*",
     "@memetize/embedding": "workspace:*",
+    "@memetize/feedback-embedder": "workspace:*",
     "@memetize/frame-extractor": "workspace:*",
     "@memetize/lyrics": "workspace:*",
     "@memetize/matching": "workspace:*",

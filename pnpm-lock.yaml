@@ -283,6 +283,9 @@ importers:
       '@memetize/database':
         specifier: workspace:*
         version: link:../database
+      '@memetize/feedback':
+        specifier: workspace:*
+        version: link:../feedback
       '@memetize/job-system':
         specifier: workspace:*
         version: link:../job-system
@@ -342,6 +345,9 @@ importers:
       '@memetize/embedding':
         specifier: workspace:*
         version: link:../../workers/embedding
+      '@memetize/feedback-embedder':
+        specifier: workspace:*
+        version: link:../../workers/feedback-embedder
       '@memetize/frame-extractor':
         specifier: workspace:*
         version: link:../../workers/frame-extractor
@@ -471,6 +477,9 @@ importers:
       '@memetize/effects':
         specifier: workspace:*
         version: link:../../packages/effects
+      '@memetize/feedback':
+        specifier: workspace:*
+        version: link:../../packages/feedback
       '@memetize/job-system':
         specifier: workspace:*
         version: link:../../packages/job-system
@@ -498,6 +507,30 @@ importers:
       '@memetize/media-catalog':
         specifier: workspace:*
         version: link:../../packages/media-catalog
+      '@memetize/model-providers':
+        specifier: workspace:*
+        version: link:../../packages/model-providers
+      '@memetize/orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/orchestrator
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+
+  workers/feedback-embedder:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@memetize/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@memetize/feedback':
+        specifier: workspace:*
+        version: link:../../packages/feedback
+      '@memetize/job-system':
+        specifier: workspace:*
+        version: link:../../packages/job-system
       '@memetize/model-providers':
         specifier: workspace:*
         version: link:../../packages/model-providers

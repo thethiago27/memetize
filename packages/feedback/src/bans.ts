@@ -1,4 +1,4 @@
-import { type Database, feedbackEvents, type FeedbackEventRow } from '@memetize/database';
+import { type Database, type FeedbackEventRow, feedbackEvents } from '@memetize/database';
 import { asc, inArray } from 'drizzle-orm';
 import { recordFeedbackEvents } from './events';
 import type { FeedbackEventLike } from './types';

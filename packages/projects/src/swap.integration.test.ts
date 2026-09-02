@@ -9,6 +9,8 @@ import {
   segmentMatches,
   truncateAll,
 } from '@memetize/database';
+import { banMoment, listFeedbackEvents } from '@memetize/feedback';
+import { listJobsForEntity } from '@memetize/job-system';
 import { Timeline } from '@memetize/timeline';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { type SwapClipError, swapClip } from './swap';
@@ -152,7 +154,7 @@ describe.skipIf(!handle)('swapClip (integration)', () => {
       effectsPlannerVersion: '1.0.0',
     });
 
-    const next = await swapClip(db, {
+    const { timeline: next, events } = await swapClip(db, {
       projectId,
       clipId: 'clp_swap_1',
       momentId: 'mom_swap_b',
@@ -171,6 +173,52 @@ describe.skipIf(!handle)('swapClip (integration)', () => {
       { type: 'zoom', startMs: 1350, endMs: 2000, from: 1, to: 1.12 },
     ]);
     expect(clip?.reason.finalScore).toBe(0.7);
+
+    // Editorial memory: the swap is recorded as a rejected/accepted pair with
+    // the segment context, and both get a FEEDBACK_EMBED job.
+    expect(events.map((event) => [event.kind, event.momentId])).toEqual([
+      ['SWAP_OUT', 'mom_swap_a'],
+      ['SWAP_IN', 'mom_swap_b'],
+    ]);
+    for (const event of events) {
+      expect(event).toMatchObject({
+        projectId,
+        timelineVersion: 2,
+        clipId: 'clp_swap_1',
+        segmentId: 'nar_swap_1',
+        assetId: 'ast_swap_1',
+        source: 'USER',
+      });
+      expect(event.context).toMatchObject({
+        segmentId: 'nar_swap_1',
+        narrativeFunction: 'payoff',
+        emotion: 'joy',
+        visualIdeas: ['hello'],
+        retrieved: [],
+      });
+    }
+    const persisted = await listFeedbackEvents(db, { projectId });
+    expect(persisted).toHaveLength(2);
+    const jobs = await Promise.all(events.map((event) => listJobsForEntity(db, event.id)));
+    expect(jobs.flat().map((job) => job.type)).toEqual(['FEEDBACK_EMBED', 'FEEDBACK_EMBED']);
+  });
+
+  it('rejects a banned moment before touching the timeline', async () => {
+    const projectId = 'prj_swap_banned';
+    await seedSwapFixture(db, projectId);
+    await insertTimelineVersion(db, {
+      projectId,
+      data: timelineWithClip(projectId),
+      director: 'fixture',
+      directorVersion: '1.0.0',
+      promptVersion: 'v1',
+    });
+    await banMoment(db, { momentId: 'mom_swap_b', assetId: 'ast_swap_1' });
+
+    await expect(
+      swapClip(db, { projectId, clipId: 'clp_swap_1', momentId: 'mom_swap_b' }),
+    ).rejects.toMatchObject({ code: 'MOMENT_BANNED' } satisfies Partial<SwapClipError>);
+    expect(await listTimelineVersions(db, projectId)).toHaveLength(1);
   });
 
   it('rejects a moment that is not on the segment shortlist', async () => {

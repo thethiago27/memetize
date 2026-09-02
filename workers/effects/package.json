@@ -14,6 +14,7 @@
   "dependencies": {
     "@memetize/contracts": "workspace:*",
     "@memetize/effects": "workspace:*",
+    "@memetize/feedback": "workspace:*",
     "@memetize/job-system": "workspace:*",
     "@memetize/orchestrator": "workspace:*",
     "@memetize/projects": "workspace:*",

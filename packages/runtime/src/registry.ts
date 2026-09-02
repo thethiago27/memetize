@@ -2,6 +2,7 @@ import { createAudioAnalyzeHandler } from '@memetize/audio-analyzer';
 import { createDirectorHandler } from '@memetize/director-worker';
 import { createEffectsHandler } from '@memetize/effects-worker';
 import { createEmbedHandler } from '@memetize/embedding';
+import { createFeedbackEmbedHandler } from '@memetize/feedback-embedder';
 import { createFrameExtractHandler } from '@memetize/frame-extractor';
 import { createLyricsHandler } from '@memetize/lyrics';
 import { createMatchHandler } from '@memetize/matching';
@@ -41,5 +42,6 @@ export function buildRegistry(): JobRegistry {
     TIMING: createTimingHandler(),
     EFFECTS: createEffectsHandler(),
     RENDER: createRenderHandler(),
+    FEEDBACK_EMBED: createFeedbackEmbedHandler(),
   };
 }

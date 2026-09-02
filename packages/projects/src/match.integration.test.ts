@@ -56,7 +56,15 @@ describe.skipIf(!handle)('replaceSegmentMatches (integration)', () => {
       matches: [
         {
           segmentId,
-          retrieved: [{ momentId: 'mom_1', assetId: 'ast_1', semanticScore: 0.9 }],
+          retrieved: [
+            {
+              momentId: 'mom_1',
+              assetId: 'ast_1',
+              semanticScore: 0.9,
+              source: 'CATALOG',
+              negativeScore: 0,
+            },
+          ],
           ranked: [
             {
               momentId: 'mom_1',
@@ -86,7 +94,15 @@ describe.skipIf(!handle)('replaceSegmentMatches (integration)', () => {
       matches: [
         {
           segmentId,
-          retrieved: [{ momentId: 'mom_2', assetId: 'ast_2', semanticScore: 0.8 }],
+          retrieved: [
+            {
+              momentId: 'mom_2',
+              assetId: 'ast_2',
+              semanticScore: 0.8,
+              source: 'CATALOG',
+              negativeScore: 0,
+            },
+          ],
           ranked: [],
           shortlist: [],
         },

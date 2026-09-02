@@ -1,5 +1,6 @@
 export * from './audio';
 export * from './barrier';
+export * from './feedback';
 export * from './generate';
 export * from './ingest';
 export * from './lyrics';

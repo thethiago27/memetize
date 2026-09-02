@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { EffectsInput, WORKER_VERSION } from '@memetize/contracts';
 import { planEffects } from '@memetize/effects';
+import { recordFeedbackEvents, toPlacedEvents } from '@memetize/feedback';
 import { JobFailure } from '@memetize/job-system';
 import type { JobHandler } from '@memetize/orchestrator';
 import {
@@ -90,10 +91,23 @@ export function createEffectsHandler(): JobHandler {
 
     await setProjectStatus(ctx.db, projectId, 'TIMELINE_READY');
 
+    // Editorial memory: every clip on the finished slate is a placement the
+    // cross-project novelty term and later video ratings can refer to.
+    const placed = await recordFeedbackEvents(
+      ctx.db,
+      toPlacedEvents({
+        projectId,
+        timelineVersion: persisted.version,
+        timeline: result.timeline,
+        segments,
+      }),
+    );
+
     ctx.logger.info('effects_completed', {
       projectId,
       version: persisted.version,
       clipsWithEffects: result.planned.length,
+      placedEvents: placed.length,
     });
 
     return {

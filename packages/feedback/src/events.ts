@@ -1,8 +1,8 @@
 import type { FeedbackKind } from '@memetize/contracts';
 import {
   type Database,
-  feedbackEvents,
   type FeedbackEventRow,
+  feedbackEvents,
   type NewFeedbackEventRow,
 } from '@memetize/database';
 import { feedbackEventId } from '@memetize/shared';

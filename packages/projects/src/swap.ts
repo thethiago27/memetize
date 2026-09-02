@@ -1,10 +1,19 @@
 import {
   type Database,
+  type FeedbackEventRow,
   moments as momentsTable,
   type TimelineVersionRow,
 } from '@memetize/database';
+import {
+  buildSegmentContext,
+  type FeedbackEventInput,
+  listActiveBans,
+  recordFeedbackEvents,
+} from '@memetize/feedback';
+import { enqueueJob } from '@memetize/job-system';
 import { eq } from 'drizzle-orm';
 import { listSegmentMatches } from './match';
+import { listNarrativeSegments } from './narrative';
 import { getLatestTimeline, insertTimelineVersion } from './timeline';
 
 export type SwapClipErrorCode =
@@ -12,7 +21,8 @@ export type SwapClipErrorCode =
   | 'CLIP_NOT_FOUND'
   | 'NOT_IN_SHORTLIST'
   | 'MOMENT_NOT_FOUND'
-  | 'MOMENT_TOO_SHORT';
+  | 'MOMENT_TOO_SHORT'
+  | 'MOMENT_BANNED';
 
 export class SwapClipError extends Error {
   readonly code: SwapClipErrorCode;
@@ -30,13 +40,24 @@ export interface SwapClipParams {
   momentId: string;
 }
 
+export interface SwapClipResult {
+  timeline: TimelineVersionRow;
+  /** `[SWAP_OUT, SWAP_IN]` — the editorial memory this swap wrote. */
+  events: FeedbackEventRow[];
+}
+
 /**
  * Editorial clip swap (spec section 58): replace one clip's moment with
  * another from that segment's shortlist and persist a new append-only
  * `timeline_versions` row. No job, no IA — the slot, transform and effects
  * stay put so Timing/Effects work is not undone.
+ *
+ * The swap is also the strongest feedback signal the system gets
+ * (editorial-memory spec): it records `SWAP_OUT` for the removed moment and
+ * `SWAP_IN` for the new one, each with the segment context and the
+ * segment's retrieval pool, and enqueues `FEEDBACK_EMBED` for both.
  */
-export async function swapClip(db: Database, params: SwapClipParams): Promise<TimelineVersionRow> {
+export async function swapClip(db: Database, params: SwapClipParams): Promise<SwapClipResult> {
   const source = await getLatestTimeline(db, params.projectId);
   if (!source) {
     throw new SwapClipError('NO_TIMELINE', `project ${params.projectId} has no timeline yet`);
@@ -67,6 +88,14 @@ export async function swapClip(db: Database, params: SwapClipParams): Promise<Ti
     throw new SwapClipError('MOMENT_NOT_FOUND', `moment not found: ${params.momentId}`);
   }
 
+  const bans = await listActiveBans(db);
+  if (bans.momentIds.has(moment.id) || bans.assetIds.has(moment.assetId)) {
+    throw new SwapClipError(
+      'MOMENT_BANNED',
+      `moment "${moment.id}" is banned — unban it before swapping it in`,
+    );
+  }
+
   const slotMs = clip.timeline.endMs - clip.timeline.startMs;
   if (moment.durationMs < slotMs) {
     throw new SwapClipError(
@@ -92,7 +121,7 @@ export async function swapClip(db: Database, params: SwapClipParams): Promise<Ti
     };
   });
 
-  return insertTimelineVersion(db, {
+  const timeline = await insertTimelineVersion(db, {
     projectId: params.projectId,
     data: { ...source.data, clips: nextClips },
     director: 'user',
@@ -103,4 +132,32 @@ export async function swapClip(db: Database, params: SwapClipParams): Promise<Ti
     effectsPlanner: source.effectsPlanner,
     effectsPlannerVersion: source.effectsPlannerVersion,
   });
+
+  const segments = await listNarrativeSegments(db, params.projectId);
+  const segment = segments.find((row) => row.id === clip.reason.segmentId);
+  const context = segment
+    ? buildSegmentContext(segment, match?.retrieved ?? [])
+    : { segmentId: clip.reason.segmentId, retrieved: match?.retrieved ?? [] };
+  const base = {
+    projectId: params.projectId,
+    timelineVersion: timeline.version,
+    clipId: clip.id,
+    segmentId: clip.reason.segmentId,
+    context,
+    source: 'USER' as const,
+  };
+  const inputs: FeedbackEventInput[] = [
+    { ...base, kind: 'SWAP_OUT', momentId: clip.momentId, assetId: clip.source.assetId },
+    { ...base, kind: 'SWAP_IN', momentId: moment.id, assetId: moment.assetId },
+  ];
+  const events = await recordFeedbackEvents(db, inputs);
+  for (const event of events) {
+    await enqueueJob(db, {
+      type: 'FEEDBACK_EMBED',
+      entityId: event.id,
+      input: { feedbackEventId: event.id },
+    });
+  }
+
+  return { timeline, events };
 }
