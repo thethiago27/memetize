@@ -3,6 +3,7 @@ import multipart from '@fastify/multipart';
 import type { AppRuntime } from '@memetize/runtime';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { registerAssetRoutes } from './routes/assets';
+import { registerFeedbackRoutes } from './routes/feedback';
 import { registerJobRoutes } from './routes/jobs';
 import { registerMediaRoutes } from './routes/media';
 import { registerProjectRoutes } from './routes/projects';
@@ -21,6 +22,7 @@ export async function buildApi(runtime: AppRuntime): Promise<FastifyInstance> {
   registerProjectRoutes(app, runtime);
   registerJobRoutes(app, runtime);
   registerSearchRoutes(app, runtime);
+  registerFeedbackRoutes(app, runtime);
   registerMediaRoutes(app, runtime);
 
   return app;

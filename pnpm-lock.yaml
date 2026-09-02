@@ -41,6 +41,9 @@ importers:
       '@memetize/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@memetize/feedback':
+        specifier: workspace:*
+        version: link:../../packages/feedback
       '@memetize/job-system':
         specifier: workspace:*
         version: link:../../packages/job-system

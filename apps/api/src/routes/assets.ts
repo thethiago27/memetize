@@ -1,4 +1,5 @@
 import { AssetReprocessFrom, ReprocessBody } from '@memetize/contracts';
+import { listActiveBans } from '@memetize/feedback';
 import {
   getAsset,
   ingestAsset,
@@ -22,11 +23,17 @@ export function registerAssetRoutes(app: FastifyInstance, runtime: AppRuntime): 
     const { id } = request.params as { id: string };
     const asset = await getAsset(runtime.db, id);
     if (!asset) return sendError(reply, 404, 'NOT_FOUND', `asset not found: ${id}`);
-    const [scenes, moments] = await Promise.all([
+    const [scenes, moments, bans] = await Promise.all([
       listScenes(runtime.db, id),
       listMoments(runtime.db, id),
+      listActiveBans(runtime.db),
     ]);
-    return { asset, scenes, moments };
+    return {
+      asset,
+      scenes,
+      moments: moments.map((moment) => ({ ...moment, banned: bans.momentIds.has(moment.id) })),
+      banned: bans.assetIds.has(id),
+    };
   });
 
   app.get('/v1/assets/:id/scenes', async (request, reply) => {

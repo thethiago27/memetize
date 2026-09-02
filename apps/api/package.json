@@ -13,6 +13,7 @@
     "@fastify/multipart": "^9.3.0",
     "@memetize/contracts": "workspace:*",
     "@memetize/database": "workspace:*",
+    "@memetize/feedback": "workspace:*",
     "@memetize/job-system": "workspace:*",
     "@memetize/media-catalog": "workspace:*",
     "@memetize/projects": "workspace:*",

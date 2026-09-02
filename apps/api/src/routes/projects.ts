@@ -10,6 +10,7 @@ import {
   getProject,
   ingestProject,
   listNarrativeSegments,
+  listProjectFeedback,
   listProjects,
   listRenders,
   listSegmentMatches,
@@ -53,18 +54,29 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
     const { id } = request.params as { id: string };
     const project = await getProject(runtime.db, id);
     if (!project) return sendError(reply, 404, 'NOT_FOUND', `project not found: ${id}`);
-    const [audio, lyrics, narrative, matches, timeline, render, renders, jobs, editWindow] =
-      await Promise.all([
-        getAudioAnalysis(runtime.db, id),
-        getLyrics(runtime.db, id),
-        listNarrativeSegments(runtime.db, id),
-        listSegmentMatches(runtime.db, id),
-        getLatestTimeline(runtime.db, id),
-        getLatestRender(runtime.db, id),
-        listRenders(runtime.db, id),
-        listJobsForEntity(runtime.db, id),
-        getLatestEditWindow(runtime.db, id),
-      ]);
+    const [
+      audio,
+      lyrics,
+      narrative,
+      matches,
+      timeline,
+      render,
+      renders,
+      jobs,
+      editWindow,
+      feedback,
+    ] = await Promise.all([
+      getAudioAnalysis(runtime.db, id),
+      getLyrics(runtime.db, id),
+      listNarrativeSegments(runtime.db, id),
+      listSegmentMatches(runtime.db, id),
+      getLatestTimeline(runtime.db, id),
+      getLatestRender(runtime.db, id),
+      listRenders(runtime.db, id),
+      listJobsForEntity(runtime.db, id),
+      getLatestEditWindow(runtime.db, id),
+      listProjectFeedback(runtime.db, id),
+    ]);
     return {
       project,
       audio,
@@ -76,6 +88,7 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
       renders,
       jobs,
       editWindow: editWindow ?? null,
+      feedback,
     };
   });
 
@@ -169,12 +182,14 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
     const parsed = SwapClipInput.safeParse(request.body);
     if (!parsed.success) return sendError(reply, 400, 'INVALID_INPUT', parsed.error.message);
     try {
-      const timeline = await swapClip(runtime.db, {
+      const { timeline, events } = await swapClip(runtime.db, {
         projectId: id,
         clipId,
         momentId: parsed.data.momentId,
       });
-      return { timeline };
+      // Each swap event carries its own FEEDBACK_EMBED job keyed by event id.
+      for (const event of events) kickDrain(runtime, event.id);
+      return { timeline, events };
     } catch (error) {
       return sendSwapError(reply, error);
     }
