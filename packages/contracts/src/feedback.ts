@@ -20,6 +20,8 @@ export const FeedbackKind = z.enum([
   'UNBAN_ASSET',
   'NOTE',
   'PLACED',
+  'EXCLUDE_RANGE',
+  'INCLUDE_RANGE',
 ]);
 export type FeedbackKind = z.infer<typeof FeedbackKind>;
 
@@ -98,3 +100,13 @@ export const BanInput = z.object({
   note: z.string().trim().max(2000).optional(),
 });
 export type BanInput = z.infer<typeof BanInput>;
+
+/** `POST` / `DELETE /v1/assets/:id/exclusions` body: a source-time range in ms. */
+export const ExclusionInput = z
+  .object({
+    startMs: z.number().int().nonnegative(),
+    endMs: z.number().int().positive(),
+    note: z.string().trim().max(2000).optional(),
+  })
+  .refine((value) => value.endMs > value.startMs, { message: 'endMs must be after startMs' });
+export type ExclusionInput = z.infer<typeof ExclusionInput>;

@@ -35,6 +35,17 @@ describe('resolveBans', () => {
     expect([...bans.assetIds]).toEqual(['ast_2']);
   });
 
+  it('keeps excluded ranges per asset until an INCLUDE with the same bounds', () => {
+    const bans = resolveBans([
+      event({ kind: 'EXCLUDE_RANGE', assetId: 'ast_1', context: { startMs: 0, endMs: 2000 } }),
+      event({ kind: 'EXCLUDE_RANGE', assetId: 'ast_1', context: { startMs: 5000, endMs: 6000 } }),
+      event({ kind: 'INCLUDE_RANGE', assetId: 'ast_1', context: { startMs: 0, endMs: 2000 } }),
+      event({ kind: 'EXCLUDE_RANGE', assetId: 'ast_2', context: { startMs: 10, endMs: 5 } }),
+    ]);
+    expect(bans.excludedRanges.get('ast_1')).toEqual([{ startMs: 5000, endMs: 6000 }]);
+    expect(bans.excludedRanges.has('ast_2')).toBe(false);
+  });
+
   it('ignores non-ban kinds', () => {
     const bans = resolveBans([event({ kind: 'SWAP_OUT', momentId: 'mom_a', assetId: 'ast_1' })]);
     expect(bans.momentIds.size).toBe(0);

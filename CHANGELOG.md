@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Exclude source ranges of an asset (`EXCLUDE_RANGE` / `INCLUDE_RANGE` feedback events): every moment touching an excluded range is banned from retrieval and swaps, surviving reprocessing. Exposed as `POST`/`DELETE /v1/assets/:id/exclusions`, `pnpm cli asset exclude|include`, and per-scene, per-moment, and custom-range controls on the Studio asset page.
+
 - Fix a spurious `INSUFFICIENT_CATALOG`: the coverage resolver now tries every duration-compatible candidate in preference order instead of giving up when the Director's pick would leave an unabsorbable tail.
 
 - Redesign the Studio in Portuguese: projects home with cards and a new-project dialog, an editor with pipeline stepper, 9:16 preview, horizontal timeline strip with thumbnails and seek, a clip inspector with segment, current moment, and candidates, tabs for narrative, renders, editorial memory, and jobs, a library grid with drag-and-drop upload, an asset page with scene frames, and toasts for every action.

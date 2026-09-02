@@ -1,6 +1,20 @@
-import { createTestDatabase, type Database, truncateAll } from '@memetize/database';
+import {
+  createTestDatabase,
+  type Database,
+  mediaAssets,
+  moments,
+  scenes,
+  truncateAll,
+} from '@memetize/database';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { banAsset, banMoment, listActiveBans, unbanMoment } from './bans';
+import {
+  banAsset,
+  banMoment,
+  excludeRange,
+  includeRange,
+  listActiveBans,
+  unbanMoment,
+} from './bans';
 import { getFeedbackEvent, listFeedbackEvents, recordFeedbackEvents } from './events';
 
 const handle = await createTestDatabase();
@@ -68,5 +82,57 @@ describe.skipIf(!handle)('feedback events repository', () => {
     const bans = await listActiveBans(db);
     expect([...bans.momentIds]).toEqual(['mom_b']);
     expect([...bans.assetIds]).toEqual(['ast_9']);
+  });
+
+  it('resolves excluded ranges to every moment touching them, surviving reprocess', async () => {
+    await db.insert(mediaAssets).values({
+      id: 'ast_r',
+      filename: 'clip.mp4',
+      originalPath: 'storage/assets/ast_r/original.mp4',
+      checksum: 'sum_r',
+      durationMs: 10_000,
+      status: 'READY',
+    });
+    await db.insert(scenes).values({
+      id: 'scn_r',
+      assetId: 'ast_r',
+      startMs: 0,
+      endMs: 10_000,
+      durationMs: 10_000,
+      detector: 'fixture',
+      detectorVersion: '1.0.0',
+    });
+    const seed = (id: string, startMs: number, endMs: number) => ({
+      id,
+      sceneId: 'scn_r',
+      assetId: 'ast_r',
+      startMs,
+      endMs,
+      durationMs: endMs - startMs,
+      description: id,
+      extractor: 'fixture',
+      extractorVersion: '1.0.0',
+    });
+    await db
+      .insert(moments)
+      .values([
+        seed('mom_before', 0, 2000),
+        seed('mom_touch', 1500, 3500),
+        seed('mom_after', 6000, 8000),
+      ]);
+
+    await excludeRange(db, { assetId: 'ast_r', startMs: 2000, endMs: 5000 });
+    let bans = await listActiveBans(db);
+    expect([...bans.momentIds].sort()).toEqual(['mom_touch']);
+    expect(bans.excludedRanges.get('ast_r')).toEqual([{ startMs: 2000, endMs: 5000 }]);
+
+    // A "reprocessed" moment with a new id inside the range is excluded too.
+    await db.insert(moments).values([seed('mom_new', 2500, 4000)]);
+    bans = await listActiveBans(db);
+    expect([...bans.momentIds].sort()).toEqual(['mom_new', 'mom_touch']);
+
+    await includeRange(db, { assetId: 'ast_r', startMs: 2000, endMs: 5000 });
+    bans = await listActiveBans(db);
+    expect(bans.momentIds.size).toBe(0);
   });
 });

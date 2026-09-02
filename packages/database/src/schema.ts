@@ -530,7 +530,7 @@ export const feedbackEvents = pgTable(
     index('feedback_events_kind_idx').on(table.kind),
     check(
       'feedback_events_kind_check',
-      sql`${table.kind} in ('SWAP_OUT','SWAP_IN','CLIP_UP','CLIP_DOWN','VIDEO_RATING','BAN_MOMENT','UNBAN_MOMENT','BAN_ASSET','UNBAN_ASSET','NOTE','PLACED')`,
+      sql`${table.kind} in ('SWAP_OUT','SWAP_IN','CLIP_UP','CLIP_DOWN','VIDEO_RATING','BAN_MOMENT','UNBAN_MOMENT','BAN_ASSET','UNBAN_ASSET','NOTE','PLACED','EXCLUDE_RANGE','INCLUDE_RANGE')`,
     ),
     check('feedback_events_source_check', sql`${table.source} in ('USER','SYSTEM')`),
   ],

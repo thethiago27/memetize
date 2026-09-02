@@ -12,7 +12,12 @@ import {
 } from '@memetize/clip-ranker';
 import { MatchInput, type RetrievedCandidate } from '@memetize/contracts';
 import { moments as momentsTable, scenes as scenesTable } from '@memetize/database';
-import { aggregateFeedback, listFeedbackEvents, rejectionKey } from '@memetize/feedback';
+import {
+  aggregateFeedback,
+  listActiveBans,
+  listFeedbackEvents,
+  rejectionKey,
+} from '@memetize/feedback';
 import { JobFailure } from '@memetize/job-system';
 import type { JobHandler } from '@memetize/orchestrator';
 import {
@@ -57,6 +62,8 @@ export function createMatchHandler(): JobHandler {
     // Editorial memory is read once per run and the cutoff persisted, so a
     // reprocess can be reproduced against the same feedback state.
     const feedback = aggregateFeedback(await listFeedbackEvents(ctx.db));
+    // Bans resolved against the catalog: direct bans plus excluded ranges.
+    const bans = await listActiveBans(ctx.db);
 
     const segments = await listNarrativeSegments(ctx.db, projectId);
 
@@ -72,7 +79,7 @@ export function createMatchHandler(): JobHandler {
           emotion: segment.emotion,
           narrativeFunction: segment.narrativeFunction,
         },
-        { exclude: feedback.bans, rejectedMomentIds: rejected },
+        { exclude: bans, rejectedMomentIds: rejected },
       );
       retrievedBySegment.set(segment.id, retrieved);
       for (const candidate of retrieved) allMomentIds.add(candidate.momentId);
@@ -186,8 +193,9 @@ export function createMatchHandler(): JobHandler {
           feedback: {
             eventCount: feedback.eventCount,
             cutoffAt: feedback.cutoffAt?.toISOString() ?? null,
-            bannedMoments: feedback.bans.momentIds.size,
-            bannedAssets: feedback.bans.assetIds.size,
+            bannedMoments: bans.momentIds.size,
+            bannedAssets: bans.assetIds.size,
+            excludedRanges: [...bans.excludedRanges.values()].reduce((n, r) => n + r.length, 0),
           },
           segments: debugSegments,
         },

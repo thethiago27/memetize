@@ -87,6 +87,18 @@ export const api = {
     request<{ event: FeedbackEventRow }>(`/v1/assets/${assetId}/ban`, { method: 'POST' }),
   unbanAsset: (assetId: string) =>
     request<{ event: FeedbackEventRow }>(`/v1/assets/${assetId}/ban`, { method: 'DELETE' }),
+  excludeRange: (assetId: string, range: ExcludedRange) =>
+    request<{ event: FeedbackEventRow }>(`/v1/assets/${assetId}/exclusions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(range),
+    }),
+  includeRange: (assetId: string, range: ExcludedRange) =>
+    request<{ event: FeedbackEventRow }>(`/v1/assets/${assetId}/exclusions`, {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(range),
+    }),
 };
 
 export type ProjectFeedbackBody =
@@ -136,11 +148,17 @@ export interface AssetMomentRow {
   banned: boolean;
 }
 
+export interface ExcludedRange {
+  startMs: number;
+  endMs: number;
+}
+
 export interface AssetDetail {
   asset: AssetRow;
   scenes: SceneRow[];
   moments: AssetMomentRow[];
   banned: boolean;
+  exclusions: ExcludedRange[];
 }
 
 export interface MomentSummary {

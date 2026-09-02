@@ -1,0 +1,2 @@
+ALTER TABLE "feedback_events" DROP CONSTRAINT "feedback_events_kind_check";--> statement-breakpoint
+ALTER TABLE "feedback_events" ADD CONSTRAINT "feedback_events_kind_check" CHECK ("feedback_events"."kind" in ('SWAP_OUT','SWAP_IN','CLIP_UP','CLIP_DOWN','VIDEO_RATING','BAN_MOMENT','UNBAN_MOMENT','BAN_ASSET','UNBAN_ASSET','NOTE','PLACED','EXCLUDE_RANGE','INCLUDE_RANGE'));

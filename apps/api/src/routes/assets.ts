@@ -1,5 +1,5 @@
-import { AssetReprocessFrom, ReprocessBody } from '@memetize/contracts';
-import { listActiveBans } from '@memetize/feedback';
+import { AssetReprocessFrom, ExclusionInput, ReprocessBody } from '@memetize/contracts';
+import { excludeRange, includeRange, listActiveBans } from '@memetize/feedback';
 import {
   getAsset,
   ingestAsset,
@@ -33,6 +33,7 @@ export function registerAssetRoutes(app: FastifyInstance, runtime: AppRuntime): 
       scenes,
       moments: moments.map((moment) => ({ ...moment, banned: bans.momentIds.has(moment.id) })),
       banned: bans.assetIds.has(id),
+      exclusions: bans.excludedRanges.get(id) ?? [],
     };
   });
 
@@ -84,5 +85,34 @@ export function registerAssetRoutes(app: FastifyInstance, runtime: AppRuntime): 
     await reprocessAsset(runtime.db, id, from.data);
     kickDrain(runtime, id);
     return { ok: true, from: from.data };
+  });
+
+  app.post('/v1/assets/:id/exclusions', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = ExclusionInput.safeParse(request.body);
+    if (!parsed.success) return sendError(reply, 400, 'INVALID_INPUT', parsed.error.message);
+    const asset = await getAsset(runtime.db, id);
+    if (!asset) return sendError(reply, 404, 'NOT_FOUND', `asset not found: ${id}`);
+    const event = await excludeRange(runtime.db, {
+      assetId: id,
+      startMs: parsed.data.startMs,
+      endMs: parsed.data.endMs,
+      note: parsed.data.note ?? null,
+    });
+    return reply.status(201).send({ event });
+  });
+
+  app.delete('/v1/assets/:id/exclusions', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = ExclusionInput.safeParse(request.body);
+    if (!parsed.success) return sendError(reply, 400, 'INVALID_INPUT', parsed.error.message);
+    const asset = await getAsset(runtime.db, id);
+    if (!asset) return sendError(reply, 404, 'NOT_FOUND', `asset not found: ${id}`);
+    const event = await includeRange(runtime.db, {
+      assetId: id,
+      startMs: parsed.data.startMs,
+      endMs: parsed.data.endMs,
+    });
+    return { event };
   });
 }

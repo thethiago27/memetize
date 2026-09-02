@@ -16,9 +16,17 @@ export interface MomentUsageStats {
   projects: Set<string>;
 }
 
+export interface ExcludedRange {
+  startMs: number;
+  endMs: number;
+}
+
 export interface FeedbackAggregate {
   usage: Map<string, MomentUsageStats>;
+  /** Direct bans only; range exclusions need the catalog to resolve to moments (`listActiveBans`). */
   bans: { momentIds: Set<string>; assetIds: Set<string> };
+  /** assetId → excluded source ranges still in force. */
+  excludedRanges: Map<string, ExcludedRange[]>;
   /** `rejectionKey(projectId, segmentId)` → moments the editor swapped out of that slot. */
   rejectedBySegment: Map<string, Set<string>>;
   /** Newest `createdAt` considered, null when no event was. */
@@ -75,6 +83,7 @@ export function aggregateFeedback(
   const aggregate: FeedbackAggregate = {
     usage: new Map(),
     bans: { momentIds: new Set(), assetIds: new Set() },
+    excludedRanges: new Map(),
     rejectedBySegment: new Map(),
     cutoffAt: null,
     eventCount: 0,
@@ -139,10 +148,43 @@ export function aggregateFeedback(
       case 'UNBAN_ASSET':
         if (event.assetId) aggregate.bans.assetIds.delete(event.assetId);
         break;
+      case 'EXCLUDE_RANGE':
+      case 'INCLUDE_RANGE':
+        applyRangeEvent(aggregate.excludedRanges, event);
+        break;
       case 'NOTE':
         break;
     }
   }
 
   return aggregate;
+}
+
+export function rangeOf(event: FeedbackEventLike): ExcludedRange | null {
+  const { startMs, endMs } = event.context;
+  if (startMs === undefined || endMs === undefined || endMs <= startMs) return null;
+  return { startMs, endMs };
+}
+
+/** EXCLUDE adds a range; INCLUDE with the same bounds removes it (latest wins). */
+export function applyRangeEvent(
+  excludedRanges: Map<string, ExcludedRange[]>,
+  event: FeedbackEventLike,
+): void {
+  const range = rangeOf(event);
+  if (!event.assetId || !range) return;
+  const current = excludedRanges.get(event.assetId) ?? [];
+  const without = current.filter(
+    (entry) => entry.startMs !== range.startMs || entry.endMs !== range.endMs,
+  );
+  if (event.kind === 'EXCLUDE_RANGE') without.push(range);
+  if (without.length > 0) excludedRanges.set(event.assetId, without);
+  else excludedRanges.delete(event.assetId);
+}
+
+export function overlapsRange(
+  moment: { startMs: number; endMs: number },
+  range: ExcludedRange,
+): boolean {
+  return moment.startMs < range.endMs && moment.endMs > range.startMs;
 }

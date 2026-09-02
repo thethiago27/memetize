@@ -17,6 +17,8 @@ describe('feedback contracts', () => {
       'UNBAN_ASSET',
       'NOTE',
       'PLACED',
+      'EXCLUDE_RANGE',
+      'INCLUDE_RANGE',
     ]);
   });
 

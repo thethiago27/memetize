@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { banAsset, unbanAsset } from '@memetize/feedback';
+import { banAsset, excludeRange, includeRange, unbanAsset } from '@memetize/feedback';
 import {
   getAsset,
   ingestAsset,
@@ -167,6 +167,63 @@ export function registerAssetCommands(program: Command): void {
         }
         const event = await unbanAsset(ctx.db, { assetId });
         process.stdout.write(`Unbanned ${assetId} (${event.id})\n`);
+      } finally {
+        await ctx.close();
+      }
+    });
+
+  const parseSeconds = (value: string, flag: string): number => {
+    const seconds = Number.parseFloat(value);
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      throw new Error(`${flag} must be a non-negative number of seconds, got "${value}"`);
+    }
+    return Math.round(seconds * 1000);
+  };
+
+  asset
+    .command('exclude')
+    .description('Exclude a source range (seconds) of an asset from every future retrieval')
+    .argument('<assetId>', 'asset id (ast_...)')
+    .requiredOption('--from <seconds>', 'range start in seconds')
+    .requiredOption('--to <seconds>', 'range end in seconds')
+    .option('--note <text>', 'why')
+    .action(async (assetId: string, options: { from: string; to: string; note?: string }) => {
+      const startMs = parseSeconds(options.from, '--from');
+      const endMs = parseSeconds(options.to, '--to');
+      if (endMs <= startMs) {
+        process.stdout.write('--to must be after --from.\n');
+        return;
+      }
+      const ctx = await buildContext();
+      try {
+        if (!(await getAsset(ctx.db, assetId))) {
+          process.stdout.write(`Asset not found: ${assetId}\n`);
+          return;
+        }
+        const event = await excludeRange(ctx.db, { assetId, startMs, endMs, note: options.note });
+        process.stdout.write(`Excluded ${startMs}-${endMs} ms of ${assetId} (${event.id})\n`);
+      } finally {
+        await ctx.close();
+      }
+    });
+
+  asset
+    .command('include')
+    .description('Re-admit a previously excluded source range (same seconds as the exclusion)')
+    .argument('<assetId>', 'asset id (ast_...)')
+    .requiredOption('--from <seconds>', 'range start in seconds')
+    .requiredOption('--to <seconds>', 'range end in seconds')
+    .action(async (assetId: string, options: { from: string; to: string }) => {
+      const startMs = parseSeconds(options.from, '--from');
+      const endMs = parseSeconds(options.to, '--to');
+      const ctx = await buildContext();
+      try {
+        if (!(await getAsset(ctx.db, assetId))) {
+          process.stdout.write(`Asset not found: ${assetId}\n`);
+          return;
+        }
+        const event = await includeRange(ctx.db, { assetId, startMs, endMs });
+        process.stdout.write(`Re-admitted ${startMs}-${endMs} ms of ${assetId} (${event.id})\n`);
       } finally {
         await ctx.close();
       }

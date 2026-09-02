@@ -246,6 +246,83 @@ describe.skipIf(!handle)('studio API (inject)', () => {
     );
   });
 
+  it('excludes a source range of an asset and reports its moments as banned', async () => {
+    const app = await appPromise;
+    await db.insert(mediaAssets).values({
+      id: 'ast_x',
+      filename: 'clip.mp4',
+      originalPath: 'storage/assets/ast_x/original.mp4',
+      checksum: 'sum_x',
+      durationMs: 6000,
+      status: 'READY',
+    });
+    await db.insert(scenes).values({
+      id: 'scn_x',
+      assetId: 'ast_x',
+      startMs: 0,
+      endMs: 6000,
+      durationMs: 6000,
+      detector: 'fixture',
+      detectorVersion: '1.0.0',
+    });
+    await db.insert(moments).values([
+      {
+        id: 'mom_x1',
+        sceneId: 'scn_x',
+        assetId: 'ast_x',
+        startMs: 0,
+        endMs: 2000,
+        durationMs: 2000,
+        description: 'a',
+        extractor: 'fixture',
+        extractorVersion: '1.0.0',
+      },
+      {
+        id: 'mom_x2',
+        sceneId: 'scn_x',
+        assetId: 'ast_x',
+        startMs: 3000,
+        endMs: 5000,
+        durationMs: 2000,
+        description: 'b',
+        extractor: 'fixture',
+        extractorVersion: '1.0.0',
+      },
+    ]);
+
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/v1/assets/ast_x/exclusions',
+      payload: { startMs: 5000, endMs: 1000 },
+    });
+    expect(bad.statusCode).toBe(400);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/v1/assets/ast_x/exclusions',
+      payload: { startMs: 2500, endMs: 6000 },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().event).toMatchObject({ kind: 'EXCLUDE_RANGE', assetId: 'ast_x' });
+
+    let detail = (await app.inject({ method: 'GET', url: '/v1/assets/ast_x' })).json();
+    expect(detail.exclusions).toEqual([{ startMs: 2500, endMs: 6000 }]);
+    expect(detail.moments.map((m: { id: string; banned: boolean }) => [m.id, m.banned])).toEqual([
+      ['mom_x1', false],
+      ['mom_x2', true],
+    ]);
+
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: '/v1/assets/ast_x/exclusions',
+      payload: { startMs: 2500, endMs: 6000 },
+    });
+    expect(removed.statusCode).toBe(200);
+    detail = (await app.inject({ method: 'GET', url: '/v1/assets/ast_x' })).json();
+    expect(detail.exclusions).toEqual([]);
+    expect(detail.moments[1].banned).toBe(false);
+  });
+
   it('projects referenced moments with descriptions, asset names, and nearest frames', async () => {
     const app = await appPromise;
     const projectId = 'prj_api_moments';
