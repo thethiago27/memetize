@@ -286,6 +286,9 @@ importers:
       '@memetize/shared':
         specifier: workspace:*
         version: link:../shared
+      '@memetize/timeline':
+        specifier: workspace:*
+        version: link:../timeline
       ai:
         specifier: ^7.0.84
         version: 7.0.84(zod@4.5.4)

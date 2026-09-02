@@ -39,7 +39,11 @@ function isGatewayModelId(model: string): boolean {
  * `gateway` requires a `provider/model` id and `AI_GATEWAY_API_KEY`.
  */
 export function createLLMProvider(llm: ProviderConfig, apiKey?: string | null): LLMProvider {
-  if (llm.kind === 'fixture') return new FixtureLLMProvider();
+  if (llm.kind === 'fixture') {
+    return new FixtureLLMProvider({
+      directorStyles: llm.model?.trim() === 'styled' ? 'styled' : 'plain',
+    });
+  }
   if (llm.kind === 'gateway') {
     const model = llm.model?.trim() ?? '';
     if (!isGatewayModelId(model)) {

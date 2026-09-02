@@ -31,6 +31,15 @@ describe('createLLMProvider', () => {
     expect(createLLMProvider({ kind: 'fixture', model: null })).toBeInstanceOf(FixtureLLMProvider);
   });
 
+  it('selects the styled fixture when LLM_MODEL is "styled"', () => {
+    const provider = createLLMProvider({ kind: 'fixture', model: 'styled' });
+    expect(provider).toBeInstanceOf(FixtureLLMProvider);
+    expect((provider as FixtureLLMProvider).directorStyles).toBe('styled');
+    expect(
+      (createLLMProvider({ kind: 'fixture', model: null }) as FixtureLLMProvider).directorStyles,
+    ).toBe('plain');
+  });
+
   it('returns the gateway provider when model and key are set', () => {
     expect(createLLMProvider({ kind: 'gateway', model: GATEWAY_MODEL }, 'gw_test')).toBeInstanceOf(
       GatewayLLMProvider,

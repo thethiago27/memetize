@@ -168,8 +168,8 @@ describe('FixtureLLMProvider.directTimeline', () => {
     });
 
     expect(result.picks).toEqual([
-      { segmentId: 'nar_1', momentId: 'mom_a' },
-      { segmentId: 'nar_2', momentId: 'mom_c' },
+      { segmentId: 'nar_1', momentId: 'mom_a', clipStyle: 'none', transitionOut: 'hard' },
+      { segmentId: 'nar_2', momentId: 'mom_c', clipStyle: 'none', transitionOut: 'hard' },
     ]);
     expect(result.director).toBe('fixture');
     expect(result.promptVersion).toBeTruthy();
@@ -183,7 +183,37 @@ describe('FixtureLLMProvider.directTimeline', () => {
       segments: [segment('nar_1', []), segment('nar_2', [{ momentId: 'mom_a', finalScore: 0.5 }])],
     });
 
-    expect(result.picks).toEqual([{ segmentId: 'nar_2', momentId: 'mom_a' }]);
+    expect(result.picks).toEqual([
+      { segmentId: 'nar_2', momentId: 'mom_a', clipStyle: 'none', transitionOut: 'hard' },
+    ]);
+  });
+
+  it('assigns fixed cut styles by segment position in styled mode', async () => {
+    const provider = new FixtureLLMProvider({ directorStyles: 'styled' });
+    const segments = ['nar_1', 'nar_2', 'nar_3', 'nar_4', 'nar_5', 'nar_6'].map((id, index) =>
+      segment(id, [{ momentId: `mom_${index}`, finalScore: 0.5 }]),
+    );
+    const result = await provider.directTimeline({ durationMs: 6000, sections: [], segments });
+
+    expect(result.picks.map((pick) => pick.transitionOut)).toEqual([
+      'hard',
+      'dip_black',
+      'flash',
+      'crossfade',
+      'whip',
+      'hard',
+    ]);
+    expect(result.picks.map((pick) => pick.clipStyle)).toEqual([
+      'none',
+      'hold',
+      'speed_up',
+      'slow_down',
+      'none',
+      'hold',
+    ]);
+
+    const again = await provider.directTimeline({ durationMs: 6000, sections: [], segments });
+    expect(again).toEqual(result);
   });
 
   it('is deterministic for the same input', async () => {

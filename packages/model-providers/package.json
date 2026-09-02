@@ -15,6 +15,7 @@
     "@memetize/contracts": "workspace:*",
     "@memetize/prompts": "workspace:*",
     "@memetize/shared": "workspace:*",
+    "@memetize/timeline": "workspace:*",
     "ai": "^7.0.84",
     "zod": "^4.5.4"
   }

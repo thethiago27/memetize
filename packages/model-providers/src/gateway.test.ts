@@ -1,7 +1,7 @@
-import { DIRECTOR_PROMPT_V3, DIRECTOR_PROMPT_VERSION } from '@memetize/prompts';
+import { DIRECTOR_PROMPT_V4, DIRECTOR_PROMPT_VERSION } from '@memetize/prompts';
 import { generateObject } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { GatewayLLMProvider } from './gateway';
+import { DirectorPicksSchema, GatewayLLMProvider } from './gateway';
 import type { DirectTimelineInput } from './types';
 
 vi.mock('ai', () => ({
@@ -69,7 +69,7 @@ describe('GatewayLLMProvider.directTimeline', () => {
     const call = generateObjectMock.mock.calls[0]?.[0];
     expect(call).toMatchObject({
       model: 'anthropic/claude-sonnet-4.5',
-      system: DIRECTOR_PROMPT_V3,
+      system: DIRECTOR_PROMPT_V4,
     });
     expect(call?.prompt).toBe(
       JSON.stringify({
@@ -79,7 +79,9 @@ describe('GatewayLLMProvider.directTimeline', () => {
         memory,
       }),
     );
-    expect(result.picks).toEqual(picks);
+    expect(result.picks).toEqual([
+      { segmentId: 'nar_1', momentId: 'mom_a', clipStyle: 'none', transitionOut: 'hard' },
+    ]);
     expect(result.director).toBe('gateway');
     expect(result.directorVersion).toBe('1.0.0');
     expect(result.promptVersion).toBe(DIRECTOR_PROMPT_VERSION);
@@ -97,6 +99,32 @@ describe('GatewayLLMProvider.directTimeline', () => {
     generateObjectMock.mockRejectedValue(new Error('gateway timeout'));
     const provider = new GatewayLLMProvider({ model: 'anthropic/claude-sonnet-4.5' });
     await expect(provider.directTimeline(directorInput())).rejects.toThrow('gateway timeout');
+  });
+});
+
+describe('DirectorPicksSchema', () => {
+  it('defaults omitted cut styles and keeps explicit ones', () => {
+    const parsed = DirectorPicksSchema.parse({
+      picks: [
+        { segmentId: 'nar_1', momentId: 'mom_a' },
+        { segmentId: 'nar_2', momentId: 'mom_b', clipStyle: 'hold', transitionOut: 'flash' },
+      ],
+    });
+    expect(parsed.picks[0]).toEqual({
+      segmentId: 'nar_1',
+      momentId: 'mom_a',
+      clipStyle: 'none',
+      transitionOut: 'hard',
+    });
+    expect(parsed.picks[1]).toMatchObject({ clipStyle: 'hold', transitionOut: 'flash' });
+  });
+
+  it('rejects a style outside the closed vocabulary', () => {
+    expect(
+      DirectorPicksSchema.safeParse({
+        picks: [{ segmentId: 'nar_1', momentId: 'mom_a', transitionOut: 'glitch' }],
+      }).success,
+    ).toBe(false);
   });
 });
 

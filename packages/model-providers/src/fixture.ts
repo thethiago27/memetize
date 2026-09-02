@@ -5,6 +5,7 @@ import {
   VISION_PROMPT_VERSION,
 } from '@memetize/prompts';
 import { sha256Hex } from '@memetize/shared';
+import { CLIP_STYLES, TRANSITION_STYLES } from '@memetize/timeline';
 import type {
   AudioSectionRef,
   DirectTimelineInput,
@@ -12,6 +13,8 @@ import type {
   EmbeddingProvider,
   EmbedResult,
   EnergyPointRef,
+  FixtureDirectorStyles,
+  FixtureLLMOptions,
   LLMProvider,
   LyricLineRef,
   MomentSuggestInput,
@@ -65,6 +68,11 @@ export class FixtureVisionProvider implements VisionProvider {
  */
 export class FixtureLLMProvider implements LLMProvider {
   readonly name = FIXTURE_NAME;
+  readonly directorStyles: FixtureDirectorStyles;
+
+  constructor(options: FixtureLLMOptions = {}) {
+    this.directorStyles = options.directorStyles ?? 'plain';
+  }
 
   async suggestMoments(input: MomentSuggestInput): Promise<MomentSuggestResult> {
     const [firstEmotion] = input.vision.emotionTrajectory;
@@ -127,13 +135,16 @@ export class FixtureLLMProvider implements LLMProvider {
    * failure.
    */
   async directTimeline(input: DirectTimelineInput): Promise<DirectTimelineResult> {
-    const picks = input.segments
-      .filter((segment) => segment.shortlist.length > 0)
-      .map((segment) => {
-        const top = segment.shortlist[0];
-        if (!top) throw new Error('unreachable: filtered for non-empty shortlist');
-        return { segmentId: segment.id, momentId: top.momentId };
-      });
+    const eligible = input.segments.filter((segment) => segment.shortlist.length > 0);
+    const picks = eligible.map((segment, index) => {
+      const top = segment.shortlist[0];
+      if (!top) throw new Error('unreachable: filtered for non-empty shortlist');
+      const styles =
+        this.directorStyles === 'styled'
+          ? styledCutStyles(index, index === eligible.length - 1)
+          : { clipStyle: 'none' as const, transitionOut: 'hard' as const };
+      return { segmentId: segment.id, momentId: top.momentId, ...styles };
+    });
 
     return {
       picks,
@@ -142,6 +153,19 @@ export class FixtureLLMProvider implements LLMProvider {
       promptVersion: DIRECTOR_PROMPT_VERSION,
     };
   }
+}
+
+/**
+ * `styled` fixture mode walks both vocabularies by segment position so a
+ * six-segment fixture covers every transition and clip style once. The
+ * last segment always cuts `hard`: there is nothing after it.
+ */
+function styledCutStyles(index: number, isLast: boolean) {
+  const transitionOut = isLast
+    ? 'hard'
+    : (TRANSITION_STYLES[index % TRANSITION_STYLES.length] ?? 'hard');
+  const clipStyle = CLIP_STYLES[index % CLIP_STYLES.length] ?? 'none';
+  return { clipStyle, transitionOut };
 }
 
 function clampRange<T extends { startMs: number; endMs: number }>(

@@ -1,4 +1,5 @@
 import type { VisionSceneAnalysis } from '@memetize/contracts';
+import type { ClipStyle, TransitionStyle } from '@memetize/timeline';
 
 /**
  * No worker depends directly on a specific model (spec section 20): they only
@@ -161,6 +162,21 @@ export interface DirectTimelineInput {
 export interface DirectorPickSuggestion {
   segmentId: string;
   momentId: string;
+  /** Cut-styles spec: proposals, resolved later by Effects. */
+  clipStyle: ClipStyle;
+  transitionOut: TransitionStyle;
+}
+
+/**
+ * `plain` proposes no cut style (every pipeline test stays byte-identical
+ * to a pre-cut-styles run); `styled` assigns fixed styles by segment
+ * position so resolver, renderer, and end-to-end tests exercise every
+ * vocabulary entry deterministically. Selected with `LLM_MODEL=styled`.
+ */
+export type FixtureDirectorStyles = 'plain' | 'styled';
+
+export interface FixtureLLMOptions {
+  directorStyles?: FixtureDirectorStyles;
 }
 
 export interface DirectTimelineResult {
