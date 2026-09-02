@@ -520,6 +520,9 @@ importers:
       '@memetize/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@memetize/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       '@memetize/effects':
         specifier: workspace:*
         version: link:../../packages/effects
@@ -541,6 +544,9 @@ importers:
       '@memetize/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
 
   workers/embedding:
     dependencies:

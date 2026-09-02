@@ -1,12 +1,14 @@
 import { writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { EffectsInput, WORKER_VERSION } from '@memetize/contracts';
-import { planEffects } from '@memetize/effects';
+import { moments as momentsTable } from '@memetize/database';
+import { beatMsFromBpm, planEffects } from '@memetize/effects';
 import { recordFeedbackEvents, toPlacedEvents } from '@memetize/feedback';
 import { JobFailure } from '@memetize/job-system';
 import type { JobHandler } from '@memetize/orchestrator';
 import {
   effectsDebugFile,
+  getAudioAnalysis,
   getLatestTimeline,
   insertTimelineVersion,
   listNarrativeSegments,
@@ -15,12 +17,15 @@ import {
 } from '@memetize/projects';
 import { validateTimeline } from '@memetize/renderer';
 import { ensureDir } from '@memetize/shared';
+import { inArray } from 'drizzle-orm';
 
 /**
- * EFFECTS handler (spec sections 33, 57): runs right after `TIMING`, before
- * `RENDER`. Separate from the Director (`which` clip) and Timing (`when`)
- * — it only fills `clip.effects` with a punchline zoom. No model, no GPU.
- * This is the worker that advances the project to `TIMELINE_READY`.
+ * EFFECTS handler (spec sections 33, 57; cut-styles spec): runs right after
+ * `TIMING`, before `RENDER`. Separate from the Director (`which` clip) and
+ * Timing (`when`) — it resolves the Director's cut styles against real
+ * source handles and tempo, then fills `clip.effects` with a punchline
+ * zoom. No model, no GPU. This is the worker that advances the project to
+ * `TIMELINE_READY`.
  */
 export function createEffectsHandler(): JobHandler {
   return async (ctx) => {
@@ -47,7 +52,23 @@ export function createEffectsHandler(): JobHandler {
       ]),
     );
 
-    const result = planEffects(sourceVersion.data, { segmentById });
+    // Cut styles need the tempo (for durations) and each moment's full
+    // range (for source handles), the same bounds the Timing worker uses.
+    const audio = await getAudioAnalysis(ctx.db, projectId);
+    const momentIds = [...new Set(sourceVersion.data.clips.map((clip) => clip.momentId))];
+    const momentRows =
+      momentIds.length > 0
+        ? await ctx.db.query.moments.findMany({ where: inArray(momentsTable.id, momentIds) })
+        : [];
+    const sourceBoundsByMomentId = new Map(
+      momentRows.map((moment) => [moment.id, { startMs: moment.startMs, endMs: moment.endMs }]),
+    );
+
+    const result = planEffects(sourceVersion.data, {
+      segmentById,
+      beatMs: beatMsFromBpm(audio?.bpm),
+      sourceBoundsByMomentId,
+    });
 
     const validation = validateTimeline(result.timeline);
     if (!validation.ok) {
@@ -79,6 +100,7 @@ export function createEffectsHandler(): JobHandler {
           projectId,
           sourceTimelineVersion: sourceVersion.version,
           planned: result.planned,
+          cuts: result.cuts,
         },
         null,
         2,
@@ -107,6 +129,7 @@ export function createEffectsHandler(): JobHandler {
       projectId,
       version: persisted.version,
       clipsWithEffects: result.planned.length,
+      cutDecisions: result.cuts.length,
       placedEvents: placed.length,
     });
 

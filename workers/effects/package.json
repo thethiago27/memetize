@@ -13,12 +13,14 @@
   },
   "dependencies": {
     "@memetize/contracts": "workspace:*",
+    "@memetize/database": "workspace:*",
     "@memetize/effects": "workspace:*",
     "@memetize/feedback": "workspace:*",
     "@memetize/job-system": "workspace:*",
     "@memetize/orchestrator": "workspace:*",
     "@memetize/projects": "workspace:*",
     "@memetize/renderer": "workspace:*",
-    "@memetize/shared": "workspace:*"
+    "@memetize/shared": "workspace:*",
+    "drizzle-orm": "^0.45.2"
   }
 }
