@@ -33,6 +33,8 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
   const [busy, setBusy] = useState<string | null>(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  /** Selected frames as "sceneId:timestampMs". */
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const load = useCallback(() => {
     api
@@ -53,6 +55,44 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
   if (!detail) return <p className="mute">Carregando…</p>;
 
   const exclusions = detail.exclusions ?? [];
+
+  /** A frame stands for the span until the next frame of its scene (or the scene end). */
+  const frameRange = (scene: (typeof detail.scenes)[number], index: number): ExcludedRange => {
+    const frame = scene.frames[index];
+    const next = scene.frames[index + 1];
+    const startMs = frame?.timestampMs ?? scene.startMs;
+    return { startMs, endMs: next ? next.timestampMs : scene.endMs };
+  };
+  const frameKey = (sceneId: string, timestampMs: number) => `${sceneId}:${timestampMs}`;
+  const togglePicked = (key: string, on: boolean) =>
+    setPicked((current) => {
+      const next = new Set(current);
+      if (on) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  /** Merge adjacent selected frames of each scene into contiguous ranges. */
+  const pickedRanges = (): ExcludedRange[] => {
+    const ranges: ExcludedRange[] = [];
+    for (const scene of detail.scenes) {
+      let open: ExcludedRange | null = null;
+      scene.frames.forEach((frame, index) => {
+        const range = frameRange(scene, index);
+        if (picked.has(frameKey(scene.id, frame.timestampMs))) {
+          if (open && open.endMs === range.startMs) open.endMs = range.endMs;
+          else {
+            if (open) ranges.push(open);
+            open = { ...range };
+          }
+        } else if (open) {
+          ranges.push(open);
+          open = null;
+        }
+      });
+      if (open) ranges.push(open);
+    }
+    return ranges;
+  };
 
   const run = async (label: string, action: () => Promise<unknown>, success: string) => {
     setBusy(label);
@@ -185,6 +225,42 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
             {busy === 'range' ? 'Salvando…' : 'Excluir intervalo'}
           </button>
         </form>
+        {picked.size > 0 ? (
+          <div className="notice cluster" style={{ justifyContent: 'space-between' }}>
+            <span>
+              {picked.size} frame{picked.size > 1 ? 's' : ''} selecionado
+              {picked.size > 1 ? 's' : ''} · {pickedRanges().length} trecho
+              {pickedRanges().length > 1 ? 's' : ''}
+            </span>
+            <span className="cluster">
+              <button
+                className="btn btn-sm btn-ghost"
+                type="button"
+                disabled={busy !== null}
+                onClick={() => setPicked(new Set())}
+              >
+                Limpar seleção
+              </button>
+              <button
+                className="btn btn-sm btn-danger"
+                type="button"
+                disabled={busy !== null}
+                onClick={() =>
+                  run(
+                    'frames',
+                    async () => {
+                      for (const range of pickedRanges()) await api.excludeRange(id, range);
+                      setPicked(new Set());
+                    },
+                    'Frames selecionados excluídos.',
+                  )
+                }
+              >
+                {busy === 'frames' ? 'Excluindo…' : 'Excluir frames selecionados'}
+              </button>
+            </span>
+          </div>
+        ) : null}
         {exclusions.length === 0 ? (
           <p className="mute">Nenhum trecho excluído.</p>
         ) : (
@@ -223,6 +299,32 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
                       {formatTimecode(scene.startMs)}–{formatTimecode(scene.endMs)}
                     </span>
                     {excluded ? <StatusPill label="Excluída" tone="bad" /> : null}
+                    {scene.frames.length > 0 && !excluded ? (
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        type="button"
+                        onClick={() => {
+                          const keys = scene.frames.map((frame) =>
+                            frameKey(scene.id, frame.timestampMs),
+                          );
+                          const all = keys.every((key) => picked.has(key));
+                          setPicked((current) => {
+                            const next = new Set(current);
+                            for (const key of keys) {
+                              if (all) next.delete(key);
+                              else next.add(key);
+                            }
+                            return next;
+                          });
+                        }}
+                      >
+                        {scene.frames.every((frame) =>
+                          picked.has(frameKey(scene.id, frame.timestampMs)),
+                        )
+                          ? 'Desmarcar frames'
+                          : 'Marcar frames'}
+                      </button>
+                    ) : null}
                   </span>
                   {exact ? (
                     <button
@@ -246,12 +348,35 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
                 </div>
                 {scene.frames.length > 0 ? (
                   <div className="frames">
-                    {scene.frames.map((frame) => (
-                      <figure key={frame.path} className="frame" style={{ margin: 0 }}>
-                        <img src={mediaUrl(frame.path) ?? ''} alt="" loading="lazy" />
-                        <figcaption>{formatTimecode(frame.timestampMs)}</figcaption>
-                      </figure>
-                    ))}
+                    {scene.frames.map((frame, index) => {
+                      const key = frameKey(scene.id, frame.timestampMs);
+                      const range = frameRange(scene, index);
+                      const gone = exclusions.some(
+                        (entry) => entry.startMs <= range.startMs && entry.endMs >= range.endMs,
+                      );
+                      const on = picked.has(key);
+                      return (
+                        <label
+                          key={frame.path}
+                          className="frame"
+                          data-picked={on ? 'true' : 'false'}
+                          data-gone={gone ? 'true' : 'false'}
+                          title={`${formatTimecode(range.startMs)}–${formatTimecode(range.endMs)}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            disabled={gone || busy !== null}
+                            onChange={(event) => togglePicked(key, event.target.checked)}
+                          />
+                          <img src={mediaUrl(frame.path) ?? ''} alt="" loading="lazy" />
+                          <span>
+                            {formatTimecode(frame.timestampMs)}
+                            {gone ? ' · excluído' : ''}
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
                 ) : (
                   <span className="mute small">Sem frames extraídos.</span>

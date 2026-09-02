@@ -795,12 +795,43 @@ p {
   font-size: 0.7rem;
 }
 
+.frame {
+  position: relative;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px;
+  outline: 2px solid transparent;
+}
+
+.frame input {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--cut);
+  cursor: pointer;
+}
+
+.frame[data-picked="true"] {
+  outline-color: var(--cut);
+  background: rgba(196, 67, 42, 0.12);
+}
+
+.frame[data-gone="true"] {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .frame img {
   width: 96px;
   height: 54px;
   object-fit: cover;
   border-radius: 4px;
   background: #0d0b09;
+  display: block;
 }
 
 .lamp {
