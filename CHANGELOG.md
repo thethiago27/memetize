@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add editorial memory: append-only `feedback_events` (swaps, clip thumbs, video ratings, bans, notes, system placements) and `moment_feedback_embeddings` learned from swaps, with a `FEEDBACK_EMBED` job.
+- Record `SWAP_OUT` / `SWAP_IN` on every clip swap, `PLACED` per clip at `TIMELINE_READY`, and expose rating, thumbs, notes, and bans in the API, CLI, and Studio.
+- Clip ranker 2.0.0: usage from smoothed win rates (overall and per narrative role), damping for moments rejected from similar segments, cross-project novelty; `WORKER_VERSION.MATCH` 2.0.0.
+- Retriever excludes banned moments and assets, drops moments swapped out of the same segment, and merges POSITIVE feedback vectors as candidates while flagging NEGATIVE matches.
+- Add `pnpm cli eval ranker`: replays past editorial decisions against the current ranker with leave-one-out-by-time and reports top-1, top-3, MRR, and rejected-still-first.
+- Director prompt v3 with `memory` (templated lessons, editor notes, few-shot examples); `WORKER_VERSION.DIRECTOR` 1.1.0, `EFFECTS` 1.1.0.
+
 - Select a deterministic edit window: the full track when it is at most 60 seconds, otherwise exactly 60,000 ms scored by section, energy, lyrics, narrative arc, and boundaries.
 - Persist selected windows append-only and show the range, duration, selector, and score in the API, CLI, and Studio.
 - Plan continuous narrative coverage, including instrumental gaps, with `LYRIC` / `INSTRUMENTAL` source kinds.

@@ -24,10 +24,10 @@ export const MatchOutput = z.object({
 });
 export type MatchOutput = z.infer<typeof MatchOutput>;
 
-/** What the Candidate Retriever returns per segment (spec section 28). */
 export const RetrievedCandidateSource = z.enum(['CATALOG', 'FEEDBACK']);
 export type RetrievedCandidateSource = z.infer<typeof RetrievedCandidateSource>;
 
+/** What the Candidate Retriever returns per segment (spec section 28). */
 export const RetrievedCandidate = z.object({
   momentId: z.string(),
   assetId: z.string(),

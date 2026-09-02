@@ -59,36 +59,36 @@
 
 ## Phase 1: Capture
 
-- [ ] **Task 1: Contracts and ids.** Feedback enums, context schema, job type, versions, `RetrievedCandidate` defaults, id prefixes. Tests for schema defaults and version bumps.
-- [ ] **Task 2: Schema and migration.** Tables, column, truncate list. Generate `0011_editorial_memory.sql`; run `pnpm db:migrate` against the dev DB and confirm the test DB migrates in the integration suite.
-- [ ] **Task 3: Feedback package core.** `recordFeedbackEvents`, `listFeedbackEvents`, `resolveBans` + ban helpers, `buildFeedbackText`, `toPlacedEvents`. Unit tests for the pure parts, integration test for the repository.
-- [ ] **Task 4: Aggregation.** `aggregateFeedback` with `before` cutoff, wins/losses per function, projects, bans, rejected-by-segment, cutoff timestamp. Unit tests covering each kind and the cutoff.
-- [ ] **Task 5: Swap emits feedback.** `swapClip` returns `{ timeline, events }`, rejects banned moments, records `SWAP_OUT`/`SWAP_IN` with context, enqueues `FEEDBACK_EMBED`. Integration tests.
-- [ ] **Task 6: Project feedback helpers.** `rateProject`, `rateClip`, `addProjectNote` in `packages/projects`. Integration tests.
-- [ ] **Task 7: `FEEDBACK_EMBED` worker.** Handler, registry entry, integration test with the fixture embedding provider.
-- [ ] **Task 8: `PLACED` from EFFECTS.** Emit events after `TIMELINE_READY`; extend the existing effects tests.
-- [ ] **Task 9: API.** Feedback routes, ban routes, extended project and asset payloads, error mapping. `app.test.ts` coverage.
-- [ ] **Task 10: CLI.** `feedback`, `moment ban/unban`, `asset ban/unban`.
-- [ ] **Task 11: Studio.** API client methods and types; rating, keep/miss, ban, notes, memory panel; asset ban toggle. `pnpm --filter @memetize/web build` passes.
+- [x] **Task 1: Contracts and ids.** Feedback enums, context schema, job type, versions, `RetrievedCandidate` defaults, id prefixes. Tests for schema defaults and version bumps.
+- [x] **Task 2: Schema and migration.** Tables, column, truncate list. Generate `0011_editorial_memory.sql`; run `pnpm db:migrate` against the dev DB and confirm the test DB migrates in the integration suite.
+- [x] **Task 3: Feedback package core.** `recordFeedbackEvents`, `listFeedbackEvents`, `resolveBans` + ban helpers, `buildFeedbackText`, `toPlacedEvents`. Unit tests for the pure parts, integration test for the repository.
+- [x] **Task 4: Aggregation.** `aggregateFeedback` with `before` cutoff, wins/losses per function, projects, bans, rejected-by-segment, cutoff timestamp. Unit tests covering each kind and the cutoff.
+- [x] **Task 5: Swap emits feedback.** `swapClip` returns `{ timeline, events }`, rejects banned moments, records `SWAP_OUT`/`SWAP_IN` with context, enqueues `FEEDBACK_EMBED`. Integration tests.
+- [x] **Task 6: Project feedback helpers.** `rateProject`, `rateClip`, `addProjectNote` in `packages/projects`. Integration tests.
+- [x] **Task 7: `FEEDBACK_EMBED` worker.** Handler, registry entry, integration test with the fixture embedding provider.
+- [x] **Task 8: `PLACED` from EFFECTS.** Emit events after `TIMELINE_READY`; extend the existing effects tests.
+- [x] **Task 9: API.** Feedback routes, ban routes, extended project and asset payloads, error mapping. `app.test.ts` coverage.
+- [x] **Task 10: CLI.** `feedback`, `moment ban/unban`, `asset ban/unban`.
+- [x] **Task 11: Studio.** API client methods and types; rating, keep/miss, ban, notes, memory panel; asset ban toggle. `pnpm --filter @memetize/web build` passes.
 
 ## Phase 2: Ranker v2 and retrieval
 
-- [ ] **Task 12: Ranker v2.** `usage` and `projectId` params; smoothed usage with function context and negative penalty; cross-project novelty. Unit tests for neutral defaults, wins/losses, penalty threshold, novelty floor.
-- [ ] **Task 13: Retriever.** Exclusions in `searchMoments`; `searchFeedbackMoments`; `retrieveForSegment` union, rejection filter, negative scores. Integration tests.
-- [ ] **Task 14: MATCH handler.** Load and aggregate feedback once, wire exclusions, usage, rejected sets, `feedbackCutoffAt`, ranker `2.0.0`, debug summary. E2E: rejected moment absent after `reprocess --from match`.
+- [x] **Task 12: Ranker v2.** `usage` and `projectId` params; smoothed usage with function context and negative penalty; cross-project novelty. Unit tests for neutral defaults, wins/losses, penalty threshold, novelty floor.
+- [x] **Task 13: Retriever.** Exclusions in `searchMoments`; `searchFeedbackMoments`; `retrieveForSegment` union, rejection filter, negative scores. Integration tests.
+- [x] **Task 14: MATCH handler.** Load and aggregate feedback once, wire exclusions, usage, rejected sets, `feedbackCutoffAt`, ranker `2.0.0`, debug summary. E2E: rejected moment absent after `reprocess --from match`.
 
 ## Phase 3: Evaluation harness
 
-- [ ] **Task 15: Evaluation core.** `buildRankerCases`, `evaluateRanker`, metrics. Unit tests with synthetic events.
-- [ ] **Task 16: Loader and CLI.** `loadRankerCases(db)`, `eval ranker [--json]`, report file. Integration test for the loader.
+- [x] **Task 15: Evaluation core.** `buildRankerCases`, `evaluateRanker`, metrics. Unit tests with synthetic events.
+- [x] **Task 16: Loader and CLI.** `loadRankerCases(db)`, `eval ranker [--json]`, report file. Integration test for the loader.
 
 ## Phase 4: Director memory
 
-- [ ] **Task 17: Lessons and examples.** `buildLessons`, `buildExamples`. Unit tests for ordering, caps, dedupe.
-- [ ] **Task 18: Provider contract and prompt v3.** `memory` on `DirectTimelineInput`, prompt v3, fixture unchanged, gateway payload. Tests for prompt version and fixture determinism.
-- [ ] **Task 19: Director handler.** Build memory from feedback and current shortlists; record it in the debug file. E2E assertion on the debug file.
+- [x] **Task 17: Lessons and examples.** `buildLessons`, `buildExamples`. Unit tests for ordering, caps, dedupe.
+- [x] **Task 18: Provider contract and prompt v3.** `memory` on `DirectTimelineInput`, prompt v3, fixture unchanged, gateway payload. Tests for prompt version and fixture determinism.
+- [x] **Task 19: Director handler.** Build memory from feedback and current shortlists; record it in the debug file. E2E assertion on the debug file.
 
 ## Phase 5: Wrap-up
 
-- [ ] **Task 20: Docs.** README section, CHANGELOG entries.
+- [x] **Task 20: Docs.** README section, CHANGELOG entries.
 - [ ] **Task 21: Verification.** `pnpm exec vitest run`, `pnpm typecheck`, `pnpm lint`, `pnpm --filter @memetize/web build`.
