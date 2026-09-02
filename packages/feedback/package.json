@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@memetize/clip-ranker": "workspace:*",
     "@memetize/contracts": "workspace:*",
     "@memetize/database": "workspace:*",
     "@memetize/shared": "workspace:*",

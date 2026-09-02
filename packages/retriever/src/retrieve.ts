@@ -1,7 +1,8 @@
 import { RETRIEVE_LIMIT, type RetrievedCandidate } from '@memetize/contracts';
 import type { Database } from '@memetize/database';
 import type { AppConfig } from '@memetize/shared';
-import { searchMoments } from './search';
+import { searchFeedbackMoments } from './feedback-search';
+import { embedQuery, type SearchExclusions, searchMomentsByVector } from './search';
 
 /**
  * The minimal shape of a narrative segment the retriever needs (spec section
@@ -16,6 +17,10 @@ export interface SegmentForRetrieval {
 
 export interface RetrieveForSegmentParams {
   limit?: number;
+  /** Active bans (editorial-memory spec): filtered in SQL on every index. */
+  exclude?: SearchExclusions;
+  /** Moments the editor swapped out of this very segment: never offered again. */
+  rejectedMomentIds?: ReadonlySet<string>;
 }
 
 /**
@@ -36,10 +41,11 @@ function buildQueries(segment: SegmentForRetrieval): string[] {
 
 /**
  * Candidate Retriever fan-out for a single narrative segment (spec section
- * 28): runs `searchMoments` once per query derived from the segment, then
- * unions the results by `momentId`, keeping each moment's best score.
- * Multiple `visualIdeas` pointing at the same moment should not count it
- * twice or let a weaker query's score win.
+ * 28, editorial-memory spec): per query, searches the catalog index and the
+ * POSITIVE feedback index, unions by `momentId` keeping each moment's best
+ * score and the index that produced it, drops moments rejected from this
+ * segment, then marks candidates whose NEGATIVE feedback vectors resemble
+ * the query so the ranker can damp them.
  */
 export async function retrieveForSegment(
   db: Database,
@@ -49,11 +55,24 @@ export async function retrieveForSegment(
 ): Promise<RetrievedCandidate[]> {
   const limit = params.limit ?? RETRIEVE_LIMIT;
   const queries = buildQueries(segment);
+  const exclude = params.exclude;
 
   const byMoment = new Map<string, RetrievedCandidate>();
-  for (const query of queries) {
-    const hits = await searchMoments(db, config, { query, type: 'MEME', limit });
-    for (const hit of hits) {
+  const negativeByMoment = new Map<string, number>();
+
+  for (const text of queries) {
+    const query = await embedQuery(config, text);
+    const [catalogHits, positiveHits, negativeHits] = await Promise.all([
+      searchMomentsByVector(db, { query, type: 'MEME', limit, exclude }),
+      searchFeedbackMoments(db, { query, polarity: 'POSITIVE', limit, exclude }),
+      searchFeedbackMoments(db, { query, polarity: 'NEGATIVE', limit, exclude }),
+    ]);
+
+    const merged = [
+      ...catalogHits.map((hit) => ({ ...hit, source: 'CATALOG' as const })),
+      ...positiveHits.map((hit) => ({ ...hit, source: 'FEEDBACK' as const })),
+    ];
+    for (const hit of merged) {
       // Cosine similarity (spec section 28's `score = 1 - distance`) can dip
       // below 0 for unrelated vectors; clamp so every layer of the funnel
       // stays in the same [0, 1] range the contracts declare.
@@ -64,14 +83,24 @@ export async function retrieveForSegment(
           momentId: hit.momentId,
           assetId: hit.assetId,
           semanticScore,
-          source: 'CATALOG',
+          source: hit.source,
           negativeScore: 0,
         });
       }
     }
+    for (const hit of negativeHits) {
+      const current = negativeByMoment.get(hit.momentId) ?? 0;
+      if (hit.score > current) negativeByMoment.set(hit.momentId, hit.score);
+    }
   }
 
+  const rejected = params.rejectedMomentIds;
   return Array.from(byMoment.values())
+    .filter((candidate) => !rejected?.has(candidate.momentId))
+    .map((candidate) => ({
+      ...candidate,
+      negativeScore: negativeByMoment.get(candidate.momentId) ?? 0,
+    }))
     .sort((a, b) => b.semanticScore - a.semanticScore)
     .slice(0, limit);
 }

@@ -199,6 +199,9 @@ importers:
 
   packages/feedback:
     dependencies:
+      '@memetize/clip-ranker':
+        specifier: workspace:*
+        version: link:../clip-ranker
       '@memetize/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -324,6 +327,9 @@ importers:
       '@memetize/database':
         specifier: workspace:*
         version: link:../database
+      '@memetize/feedback':
+        specifier: workspace:*
+        version: link:../feedback
       '@memetize/model-providers':
         specifier: workspace:*
         version: link:../model-providers
@@ -597,6 +603,9 @@ importers:
       '@memetize/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@memetize/feedback':
+        specifier: workspace:*
+        version: link:../../packages/feedback
       '@memetize/job-system':
         specifier: workspace:*
         version: link:../../packages/job-system

@@ -20,6 +20,8 @@ export interface ReplaceSegmentMatchesParams {
   matches: SegmentMatchInput[];
   ranker: string;
   rankerVersion: string;
+  /** Newest feedback event the ranker considered (editorial-memory spec). */
+  feedbackCutoffAt?: Date | null;
 }
 
 /** Pure builder, mirrors `toNarrativeSegmentRows`. */
@@ -33,6 +35,7 @@ export function toSegmentMatchRows(params: ReplaceSegmentMatchesParams): NewSegm
     shortlist: match.shortlist,
     ranker: params.ranker,
     rankerVersion: params.rankerVersion,
+    feedbackCutoffAt: params.feedbackCutoffAt ?? null,
   }));
 }
 

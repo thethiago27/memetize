@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { AUDIO_ANALYZER_DIR } from '@memetize/audio-analyzer';
 import { createTestDatabase, type Database, truncateAll } from '@memetize/database';
+import { listFeedbackEvents, recordFeedbackEvents } from '@memetize/feedback';
 import { ingestAsset } from '@memetize/media-catalog';
 import { Orchestrator, ResourceScheduler } from '@memetize/orchestrator';
 import {
@@ -15,6 +16,7 @@ import {
   listNarrativeSegments,
   listSegmentMatches,
   matchDebugFile,
+  reprocessProject,
 } from '@memetize/projects';
 import { SCENE_DETECTOR_DIR } from '@memetize/scene-detector';
 import type { AppConfig } from '@memetize/shared';
@@ -178,6 +180,13 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('matching pipeline (
       }
     }
 
+    // EFFECTS closed the slate: every clip is now a PLACED event in the
+    // editorial memory (editorial-memory spec).
+    const timeline = await getLatestTimeline(db, project.id);
+    const placed = await listFeedbackEvents(db, { projectId: project.id, kinds: ['PLACED'] });
+    expect(placed).toHaveLength(timeline?.data.clips.length ?? -1);
+    expect(placed.every((event) => event.source === 'SYSTEM' && event.momentId)).toBe(true);
+
     // Re-ingesting the same bytes creates a *different* project (spec section 41 note).
     const again = await ingestProject({ db, config, filePath: songFixture });
     expect(again.project.id).not.toBe(project.id);
@@ -186,6 +195,66 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('matching pipeline (
     const more = await orchestrator.drain({ entityId: project.id });
     expect(more).toHaveLength(0);
     expect(await listSegmentMatches(db, project.id)).toHaveLength(matches.length);
+  }, 90_000);
+
+  it('never offers a moment the editor swapped out of a segment again', async () => {
+    const colors = ['cyan', 'magenta', 'yellow'];
+    for (const [index, color] of colors.entries()) {
+      const clipPath = join(tmp, `clip-reject-${index}-${color}.mp4`);
+      await makeColorClip(clipPath, color);
+      const { asset } = await ingestAsset({ db, config, filePath: clipPath });
+      await orchestrator.drain({ entityId: asset.id });
+    }
+    const { project } = await ingestProject({ db, config, filePath: songFixture });
+    await orchestrator.drain({ entityId: project.id });
+
+    const before = await listSegmentMatches(db, project.id);
+    const target = before.find((match) => match.retrieved.length >= 2);
+    expect(target).toBeTruthy();
+    if (!target) return;
+    const rejected = target.retrieved[0];
+    if (!rejected) throw new Error('unreachable');
+
+    await recordFeedbackEvents(db, [
+      {
+        kind: 'SWAP_OUT',
+        source: 'USER',
+        projectId: project.id,
+        segmentId: target.segmentId,
+        momentId: rejected.momentId,
+        assetId: rejected.assetId,
+        context: { segmentId: target.segmentId },
+      },
+    ]);
+
+    await reprocessProject(db, project.id, 'match');
+    const outcomes = await orchestrator.drain({ entityId: project.id });
+    expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
+
+    const after = await listSegmentMatches(db, project.id);
+    const refreshed = after.find((match) => match.segmentId === target.segmentId);
+    expect(refreshed?.rankerVersion).toBe('2.0.0');
+    expect(refreshed?.feedbackCutoffAt).toBeTruthy();
+    expect(refreshed?.retrieved.map((entry) => entry.momentId)).not.toContain(rejected.momentId);
+    expect(refreshed?.shortlist.map((entry) => entry.momentId)).not.toContain(rejected.momentId);
+    // Other segments may still use it: the rule is per segment.
+    const elsewhere = after.filter((match) => match.segmentId !== target.segmentId);
+    expect(
+      elsewhere.some((match) =>
+        match.retrieved.some((entry) => entry.momentId === rejected.momentId),
+      ),
+    ).toBe(true);
+
+    const debug = JSON.parse(
+      await readFile(matchDebugFile(config, project.id).absolute, 'utf8'),
+    ) as {
+      feedback: { eventCount: number };
+      segments: { segmentId: string; rejectedMomentIds: string[] }[];
+    };
+    expect(debug.feedback.eventCount).toBeGreaterThan(0);
+    expect(
+      debug.segments.find((entry) => entry.segmentId === target.segmentId)?.rejectedMomentIds,
+    ).toEqual([rejected.momentId]);
   }, 90_000);
 
   it('completes MATCH with empty shortlists when the project has no catalog at all', async () => {

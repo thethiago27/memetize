@@ -7,6 +7,7 @@ import {
   scenes,
   truncateAll,
 } from '@memetize/database';
+import { recordFeedbackEvents, upsertFeedbackEmbedding } from '@memetize/feedback';
 import { FixtureEmbeddingProvider } from '@memetize/model-providers';
 import type { AppConfig } from '@memetize/shared';
 import { EMBEDDING_DIMENSIONS } from '@memetize/shared';
@@ -155,6 +156,109 @@ describe.skipIf(!handle)('retrieveForSegment (integration)', () => {
     });
 
     expect(candidates.some((candidate) => candidate.momentId === 'mom_4')).toBe(true);
+  });
+
+  it('excludes banned moments and assets, and moments rejected from this segment', async () => {
+    await seedAsset(db, 'ast_ban');
+    await seedAsset(db, 'ast_ok');
+    await seedMomentWithMemeText(db, {
+      id: 'mom_banned',
+      assetId: 'ast_ok',
+      description: 'banned',
+      memeText: 'false confidence',
+    });
+    await seedMomentWithMemeText(db, {
+      id: 'mom_rejected',
+      assetId: 'ast_ok',
+      description: 'rejected here',
+      memeText: 'false confidence',
+    });
+    await seedMomentWithMemeText(db, {
+      id: 'mom_on_banned_asset',
+      assetId: 'ast_ban',
+      description: 'asset banned',
+      memeText: 'false confidence',
+    });
+    await seedMomentWithMemeText(db, {
+      id: 'mom_kept',
+      assetId: 'ast_ok',
+      description: 'kept',
+      memeText: 'false confidence',
+    });
+
+    const candidates = await retrieveForSegment(
+      db,
+      config,
+      { visualIdeas: ['false confidence'], emotion: 'confidence', narrativeFunction: 'setup' },
+      {
+        exclude: { momentIds: ['mom_banned'], assetIds: ['ast_ban'] },
+        rejectedMomentIds: new Set(['mom_rejected']),
+      },
+    );
+    expect(candidates.map((candidate) => candidate.momentId)).toEqual(['mom_kept']);
+  });
+
+  it('merges POSITIVE feedback vectors as candidates and flags NEGATIVE matches', async () => {
+    await seedAsset(db, 'ast_fb');
+    await seedMomentWithMemeText(db, {
+      id: 'mom_learned',
+      assetId: 'ast_fb',
+      description: 'catalog text says something else',
+      memeText: 'a dog sleeping',
+    });
+    await seedMomentWithMemeText(db, {
+      id: 'mom_rejected_like_this',
+      assetId: 'ast_fb',
+      description: 'catalog match',
+      memeText: 'celebrating too early',
+    });
+    const [positive, negative] = await recordFeedbackEvents(db, [
+      { kind: 'SWAP_IN', source: 'USER', momentId: 'mom_learned', assetId: 'ast_fb' },
+      {
+        kind: 'SWAP_OUT',
+        source: 'USER',
+        momentId: 'mom_rejected_like_this',
+        assetId: 'ast_fb',
+      },
+    ]);
+    if (!positive || !negative) throw new Error('seed failed');
+    const { vectors, model, modelVersion } = await provider.embed(['celebrating too early']);
+    const [vector] = vectors;
+    if (!vector) throw new Error('expected a vector');
+    await upsertFeedbackEmbedding(db, {
+      feedbackEventId: positive.id,
+      momentId: 'mom_learned',
+      assetId: 'ast_fb',
+      polarity: 'POSITIVE',
+      sourceText: 'celebrating too early',
+      vector,
+      model,
+      modelVersion,
+    });
+    await upsertFeedbackEmbedding(db, {
+      feedbackEventId: negative.id,
+      momentId: 'mom_rejected_like_this',
+      assetId: 'ast_fb',
+      polarity: 'NEGATIVE',
+      sourceText: 'celebrating too early',
+      vector,
+      model,
+      modelVersion,
+    });
+
+    const candidates = await retrieveForSegment(db, config, {
+      visualIdeas: ['celebrating too early'],
+      emotion: 'confidence',
+      narrativeFunction: 'setup',
+    });
+    const learned = candidates.find((candidate) => candidate.momentId === 'mom_learned');
+    expect(learned?.source).toBe('FEEDBACK');
+    expect(learned?.semanticScore).toBeCloseTo(1, 5);
+    expect(learned?.negativeScore).toBe(0);
+
+    const flagged = candidates.find((candidate) => candidate.momentId === 'mom_rejected_like_this');
+    expect(flagged?.source).toBe('CATALOG');
+    expect(flagged?.negativeScore).toBeCloseTo(1, 5);
   });
 
   it('returns no candidates when the catalog is empty, without throwing', async () => {

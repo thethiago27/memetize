@@ -5,11 +5,14 @@ import {
   diversifySegment,
   type MomentForDiversity,
   type MomentForRanking,
+  RANKER_NAME,
+  RANKER_VERSION,
   rankCandidates,
   type SegmentRankedInput,
 } from '@memetize/clip-ranker';
 import { MatchInput, type RetrievedCandidate } from '@memetize/contracts';
 import { moments as momentsTable, scenes as scenesTable } from '@memetize/database';
+import { aggregateFeedback, listFeedbackEvents, rejectionKey } from '@memetize/feedback';
 import { JobFailure } from '@memetize/job-system';
 import type { JobHandler } from '@memetize/orchestrator';
 import {
@@ -23,9 +26,6 @@ import { retrieveForSegment } from '@memetize/retriever';
 import { ensureDir } from '@memetize/shared';
 import { inArray } from 'drizzle-orm';
 
-const RANKER_NAME = 'clip-ranker';
-const RANKER_VERSION = '1.0.0';
-
 function toMemeFunctions(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
   const strings = value.filter((entry): entry is string => typeof entry === 'string');
@@ -33,13 +33,14 @@ function toMemeFunctions(value: unknown): string[] | null {
 }
 
 /**
- * MATCH handler (spec sections 28-30): for every narrative segment, in
- * timeline order, retrieves candidates from the catalog, ranks them (spec
- * section 29), and runs them through the Diversity Engine (spec section
- * 30) immediately — interleaved rather than as one bulk pass at the end —
- * so a segment's novelty score correctly reflects only the *already
- * finalized* shortlists of earlier segments, not its own or later ones.
- * Once persisted, chains into `DIRECTOR` (spec section 31).
+ * MATCH handler (spec sections 28-30, editorial-memory spec): for every
+ * narrative segment, in timeline order, retrieves candidates from the
+ * catalog and the feedback index, ranks them with the editorial memory
+ * aggregate (spec section 29), and runs them through the Diversity Engine
+ * (spec section 30) immediately — interleaved rather than as one bulk pass
+ * at the end — so a segment's novelty score correctly reflects only the
+ * *already finalized* shortlists of earlier segments, not its own or later
+ * ones. Once persisted, chains into `DIRECTOR` (spec section 31).
  */
 export function createMatchHandler(): JobHandler {
   return async (ctx) => {
@@ -53,16 +54,26 @@ export function createMatchHandler(): JobHandler {
     // reprocessed on its own (spec section 42's `reprocess --from match`).
     await setProjectStatus(ctx.db, projectId, 'PLANNING');
 
+    // Editorial memory is read once per run and the cutoff persisted, so a
+    // reprocess can be reproduced against the same feedback state.
+    const feedback = aggregateFeedback(await listFeedbackEvents(ctx.db));
+
     const segments = await listNarrativeSegments(ctx.db, projectId);
 
     const retrievedBySegment = new Map<string, RetrievedCandidate[]>();
     const allMomentIds = new Set<string>();
     for (const segment of segments) {
-      const retrieved = await retrieveForSegment(ctx.db, ctx.config, {
-        visualIdeas: segment.visualIdeas,
-        emotion: segment.emotion,
-        narrativeFunction: segment.narrativeFunction,
-      });
+      const rejected = feedback.rejectedBySegment.get(rejectionKey(projectId, segment.id));
+      const retrieved = await retrieveForSegment(
+        ctx.db,
+        ctx.config,
+        {
+          visualIdeas: segment.visualIdeas,
+          emotion: segment.emotion,
+          narrativeFunction: segment.narrativeFunction,
+        },
+        { exclude: feedback.bans, rejectedMomentIds: rejected },
+      );
       retrievedBySegment.set(segment.id, retrieved);
       for (const candidate of retrieved) allMomentIds.add(candidate.momentId);
     }
@@ -102,6 +113,13 @@ export function createMatchHandler(): JobHandler {
     const matches: SegmentMatchInput[] = [];
     const debugSegments: Record<string, unknown>[] = [];
 
+    const usageSummary = (momentId: string) => {
+      const usage = feedback.usage.get(momentId);
+      return usage
+        ? { wins: usage.wins, losses: usage.losses, projects: usage.projects.size }
+        : null;
+    };
+
     for (const segment of segments) {
       const retrieved = retrievedBySegment.get(segment.id) ?? [];
       const ranked = rankCandidates({
@@ -115,6 +133,8 @@ export function createMatchHandler(): JobHandler {
           energy: segment.energy,
         },
         previouslyShortlisted,
+        usage: feedback.usage,
+        projectId,
       });
 
       const rankedInput: SegmentRankedInput = {
@@ -130,10 +150,14 @@ export function createMatchHandler(): JobHandler {
         segmentId: segment.id,
         segmentDurationMs: segment.endMs - segment.startMs,
         queries: segment.visualIdeas,
+        rejectedMomentIds: [
+          ...(feedback.rejectedBySegment.get(rejectionKey(projectId, segment.id)) ?? []),
+        ],
         retrieved,
         ranked: ranked.map((entry) => ({
           ...entry,
           momentDurationMs: rankingMoments.get(entry.momentId)?.durationMs ?? null,
+          usage: usageSummary(entry.momentId),
         })),
         shortlist: shortlist.map((entry) => ({
           ...entry,
@@ -147,6 +171,7 @@ export function createMatchHandler(): JobHandler {
       matches,
       ranker: RANKER_NAME,
       rankerVersion: RANKER_VERSION,
+      feedbackCutoffAt: feedback.cutoffAt,
     });
 
     const debugFile = matchDebugFile(ctx.config, projectId);
@@ -154,7 +179,18 @@ export function createMatchHandler(): JobHandler {
     await writeFile(
       debugFile.absolute,
       JSON.stringify(
-        { projectId, ranker: RANKER_NAME, rankerVersion: RANKER_VERSION, segments: debugSegments },
+        {
+          projectId,
+          ranker: RANKER_NAME,
+          rankerVersion: RANKER_VERSION,
+          feedback: {
+            eventCount: feedback.eventCount,
+            cutoffAt: feedback.cutoffAt?.toISOString() ?? null,
+            bannedMoments: feedback.bans.momentIds.size,
+            bannedAssets: feedback.bans.assetIds.size,
+          },
+          segments: debugSegments,
+        },
         null,
         2,
       ),
@@ -165,6 +201,7 @@ export function createMatchHandler(): JobHandler {
       projectId,
       segmentCount: persisted.length,
       shortlistCount,
+      feedbackEvents: feedback.eventCount,
     });
 
     // The Timeline Director (spec section 31) only needs the shortlists

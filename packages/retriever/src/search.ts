@@ -4,7 +4,13 @@ import type { Database } from '@memetize/database';
 import { mediaAssets, momentEmbeddings, moments } from '@memetize/database';
 import { createProviders } from '@memetize/model-providers';
 import type { AppConfig } from '@memetize/shared';
-import { and, asc, cosineDistance, eq } from 'drizzle-orm';
+import { and, asc, cosineDistance, eq, notInArray, type SQL } from 'drizzle-orm';
+
+/** Moments and assets to leave out of a search (editorial-memory bans). */
+export interface SearchExclusions {
+  momentIds?: Iterable<string>;
+  assetIds?: Iterable<string>;
+}
 
 export interface SearchParams {
   query: string;
@@ -12,33 +18,60 @@ export interface SearchParams {
    * the retrieval type described by the spec (section 28). */
   type?: EmbeddingType;
   limit?: number;
+  exclude?: SearchExclusions;
+}
+
+export interface QueryVector {
+  vector: number[];
+  model: string;
+  modelVersion: string;
 }
 
 const DEFAULT_TYPE: EmbeddingType = 'MEME';
 const DEFAULT_LIMIT = 20;
 
-/**
- * Candidate Retriever (spec section 28): embeds `query` with the same
- * provider/dimension as the index, then ranks moments by cosine distance.
- * Only compares against vectors from the same `(model, modelVersion)` as the
- * query embedding, and only against `READY` assets, since a partially
- * indexed asset may not have every moment embedded yet.
- */
-export async function searchMoments(
-  db: Database,
-  config: AppConfig,
-  params: SearchParams,
-): Promise<SearchHit[]> {
+/** Embeds one query with the configured provider so several indexes can share the vector. */
+export async function embedQuery(config: AppConfig, query: string): Promise<QueryVector> {
   const { embedding: provider } = createProviders(config);
-  const { vectors, model, modelVersion } = await provider.embed([params.query]);
-  const queryVector = vectors[0];
-  if (!queryVector) {
+  const { vectors, model, modelVersion } = await provider.embed([query]);
+  const vector = vectors[0];
+  if (!vector) {
     throw new Error('embedding provider returned no vector for the search query');
   }
+  return { vector, model, modelVersion };
+}
 
+/** WHERE fragments for bans; both indexes join `moments`, so its columns apply to either. */
+export function exclusionConditions(exclude: SearchExclusions | undefined): SQL[] {
+  const conditions: SQL[] = [];
+  const momentIds = [...(exclude?.momentIds ?? [])];
+  const assetIds = [...(exclude?.assetIds ?? [])];
+  if (momentIds.length > 0) conditions.push(notInArray(moments.id, momentIds));
+  if (assetIds.length > 0) conditions.push(notInArray(moments.assetId, assetIds));
+  return conditions;
+}
+
+export interface SearchByVectorParams {
+  query: QueryVector;
+  type?: EmbeddingType;
+  limit?: number;
+  exclude?: SearchExclusions;
+}
+
+/**
+ * Candidate Retriever (spec section 28) against the catalog index: ranks
+ * moments by cosine distance to an already-embedded query. Only compares
+ * against vectors from the same `(model, modelVersion)` as the query
+ * embedding, and only against `READY` assets, since a partially indexed
+ * asset may not have every moment embedded yet.
+ */
+export async function searchMomentsByVector(
+  db: Database,
+  params: SearchByVectorParams,
+): Promise<SearchHit[]> {
   const type = params.type ?? DEFAULT_TYPE;
   const limit = params.limit ?? DEFAULT_LIMIT;
-  const distance = cosineDistance(momentEmbeddings.embedding, queryVector);
+  const distance = cosineDistance(momentEmbeddings.embedding, params.query.vector);
 
   const rows = await db
     .select({
@@ -55,9 +88,10 @@ export async function searchMoments(
     .where(
       and(
         eq(momentEmbeddings.embeddingType, type),
-        eq(momentEmbeddings.model, model),
-        eq(momentEmbeddings.modelVersion, modelVersion),
+        eq(momentEmbeddings.model, params.query.model),
+        eq(momentEmbeddings.modelVersion, params.query.modelVersion),
         eq(mediaAssets.status, 'READY'),
+        ...exclusionConditions(params.exclude),
       ),
     )
     .orderBy(asc(distance))
@@ -73,4 +107,19 @@ export async function searchMoments(
       score: 1 - Number(row.distance),
     }),
   );
+}
+
+/** Embeds `query` then searches the catalog index; the `search` CLI/API entry point. */
+export async function searchMoments(
+  db: Database,
+  config: AppConfig,
+  params: SearchParams,
+): Promise<SearchHit[]> {
+  const query = await embedQuery(config, params.query);
+  return searchMomentsByVector(db, {
+    query,
+    type: params.type,
+    limit: params.limit,
+    exclude: params.exclude,
+  });
 }

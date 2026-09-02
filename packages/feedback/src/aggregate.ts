@@ -1,5 +1,7 @@
 import type { FeedbackEventLike } from './types';
 
+export { smoothedRate } from '@memetize/clip-ranker';
+
 export interface FunctionStats {
   wins: number;
   losses: number;
@@ -34,11 +36,6 @@ export const RATING_LOSS_MAX = 2;
 
 export function rejectionKey(projectId: string, segmentId: string): string {
   return `${projectId}:${segmentId}`;
-}
-
-/** Laplace-smoothed win rate: 0.5 with no data, never exactly 0 or 1. */
-export function smoothedRate(wins: number, losses: number): number {
-  return (wins + 1) / (wins + losses + 2);
 }
 
 export function emptyUsage(): MomentUsageStats {

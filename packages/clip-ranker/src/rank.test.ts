@@ -1,8 +1,46 @@
 import type { RetrievedCandidate } from '@memetize/contracts';
 import { describe, expect, it } from 'vitest';
-import { RANK_WEIGHTS, rank, rankCandidates, type SegmentForRanking } from './rank';
+import {
+  NEGATIVE_MATCH_THRESHOLD,
+  RANK_WEIGHTS,
+  RANKER_VERSION,
+  rank,
+  rankCandidates,
+  type SegmentForRanking,
+} from './rank';
 
-const candidate: RetrievedCandidate = { momentId: 'mom_1', assetId: 'ast_1', semanticScore: 0.9 };
+function retrieved(
+  momentId: string,
+  assetId: string,
+  semanticScore: number,
+  extra: Partial<RetrievedCandidate> = {},
+): RetrievedCandidate {
+  return { momentId, assetId, semanticScore, source: 'CATALOG', negativeScore: 0, ...extra };
+}
+
+const candidate = retrieved('mom_1', 'ast_1', 0.9);
+
+const neutralMoment = {
+  durationMs: 2000,
+  primaryEmotion: null,
+  visualEnergy: null,
+  qualityScore: null,
+  metadata: {},
+};
+
+function usageOf(
+  wins: number,
+  losses: number,
+  byFunction: Record<string, { wins: number; losses: number }> = {},
+  projects: string[] = [],
+) {
+  return {
+    wins,
+    losses,
+    byFunction: new Map(Object.entries(byFunction)),
+    projects: new Set(projects),
+  };
+}
 
 const segment: SegmentForRanking = {
   startMs: 0,
@@ -134,12 +172,130 @@ describe('rank', () => {
   });
 });
 
+describe('rank with editorial memory', () => {
+  it('identifies as ranker 2.0.0', () => {
+    expect(RANKER_VERSION).toBe('2.0.0');
+  });
+
+  it('is neutral (usage 0.5, novelty 1) without feedback', () => {
+    const result = rank({
+      candidate,
+      moment: neutralMoment,
+      segment,
+      previouslyShortlisted: noPriorShortlist,
+    });
+    expect(result.usageScore).toBe(0.5);
+    expect(result.noveltyScore).toBe(1);
+  });
+
+  it('raises usage on wins and lowers it on losses', () => {
+    const winner = rank({
+      candidate,
+      moment: neutralMoment,
+      segment,
+      previouslyShortlisted: noPriorShortlist,
+      usage: usageOf(3, 0),
+    });
+    const loser = rank({
+      candidate,
+      moment: neutralMoment,
+      segment,
+      previouslyShortlisted: noPriorShortlist,
+      usage: usageOf(0, 3),
+    });
+    expect(winner.usageScore).toBeGreaterThan(0.5);
+    expect(loser.usageScore).toBeLessThan(0.5);
+    expect(winner.finalScore).toBeGreaterThan(loser.finalScore);
+  });
+
+  it('weighs the segment narrative role separately from the global record', () => {
+    // 2 wins overall, but both losses came as "setup" — the current role.
+    const asSetup = rank({
+      candidate,
+      moment: neutralMoment,
+      segment,
+      previouslyShortlisted: noPriorShortlist,
+      usage: usageOf(2, 2, { setup: { wins: 0, losses: 2 }, payoff: { wins: 2, losses: 0 } }),
+    });
+    const asPayoff = rank({
+      candidate,
+      moment: neutralMoment,
+      segment: { ...segment, narrativeFunction: 'payoff' },
+      previouslyShortlisted: noPriorShortlist,
+      usage: usageOf(2, 2, { setup: { wins: 0, losses: 2 }, payoff: { wins: 2, losses: 0 } }),
+    });
+    expect(asPayoff.usageScore).toBeGreaterThan(asSetup.usageScore);
+    expect(asSetup.usageScore).toBeCloseTo(0.5 * 0.5 + 0.5 * (1 / 4), 10);
+  });
+
+  it('damps usage only when a NEGATIVE feedback vector crosses the threshold', () => {
+    const below = rank({
+      candidate: retrieved('mom_1', 'ast_1', 0.9, {
+        negativeScore: NEGATIVE_MATCH_THRESHOLD - 0.01,
+      }),
+      moment: neutralMoment,
+      segment,
+      previouslyShortlisted: noPriorShortlist,
+    });
+    const above = rank({
+      candidate: retrieved('mom_1', 'ast_1', 0.9, { negativeScore: 1 }),
+      moment: neutralMoment,
+      segment,
+      previouslyShortlisted: noPriorShortlist,
+    });
+    expect(below.usageScore).toBe(0.5);
+    expect(above.usageScore).toBe(0.25);
+  });
+
+  it('lowers novelty for cross-project reuse down to a floor of 0.5', () => {
+    const once = rank({
+      candidate,
+      moment: neutralMoment,
+      segment,
+      previouslyShortlisted: noPriorShortlist,
+      usage: usageOf(0, 0, {}, ['prj_other']),
+      projectId: 'prj_me',
+    });
+    const own = rank({
+      candidate,
+      moment: neutralMoment,
+      segment,
+      previouslyShortlisted: noPriorShortlist,
+      usage: usageOf(0, 0, {}, ['prj_me']),
+      projectId: 'prj_me',
+    });
+    const many = rank({
+      candidate,
+      moment: neutralMoment,
+      segment,
+      previouslyShortlisted: noPriorShortlist,
+      usage: usageOf(0, 0, {}, ['p1', 'p2', 'p3', 'p4', 'p5']),
+      projectId: 'prj_me',
+    });
+    expect(own.noveltyScore).toBe(1);
+    expect(once.noveltyScore).toBeCloseTo(1 - 0.5 / 3, 10);
+    expect(many.noveltyScore).toBe(0.5);
+  });
+
+  it('keeps the in-project shortlist penalty ahead of cross-project reuse', () => {
+    const reused = rank({
+      candidate,
+      moment: neutralMoment,
+      segment,
+      previouslyShortlisted: new Set(['mom_1']),
+      usage: usageOf(0, 0, {}, ['p1', 'p2', 'p3']),
+      projectId: 'prj_me',
+    });
+    expect(reused.noveltyScore).toBe(0.2);
+  });
+});
+
 describe('rankCandidates', () => {
   it('sorts by finalScore descending and caps at the given limit', () => {
     const candidates: RetrievedCandidate[] = [
-      { momentId: 'mom_low', assetId: 'ast_1', semanticScore: 0.1 },
-      { momentId: 'mom_high', assetId: 'ast_2', semanticScore: 0.95 },
-      { momentId: 'mom_mid', assetId: 'ast_3', semanticScore: 0.5 },
+      retrieved('mom_low', 'ast_1', 0.1),
+      retrieved('mom_high', 'ast_2', 0.95),
+      retrieved('mom_mid', 'ast_3', 0.5),
     ];
     const moments = new Map(
       candidates.map((candidate) => [
@@ -159,6 +315,8 @@ describe('rankCandidates', () => {
       moments,
       segment,
       previouslyShortlisted: noPriorShortlist,
+      usage: new Map([['mom_mid', usageOf(5, 0)]]),
+      projectId: 'prj_me',
       limit: 2,
     });
 
@@ -169,7 +327,7 @@ describe('rankCandidates', () => {
 
   it('drops candidates with no matching moment instead of throwing', () => {
     const ranked = rankCandidates({
-      candidates: [{ momentId: 'mom_missing', assetId: 'ast_1', semanticScore: 0.9 }],
+      candidates: [retrieved('mom_missing', 'ast_1', 0.9)],
       moments: new Map(),
       segment,
       previouslyShortlisted: noPriorShortlist,

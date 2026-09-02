@@ -15,6 +15,7 @@
     "@memetize/clip-ranker": "workspace:*",
     "@memetize/contracts": "workspace:*",
     "@memetize/database": "workspace:*",
+    "@memetize/feedback": "workspace:*",
     "@memetize/job-system": "workspace:*",
     "@memetize/orchestrator": "workspace:*",
     "@memetize/projects": "workspace:*",
