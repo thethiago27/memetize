@@ -22,6 +22,7 @@ function clip(overrides: Partial<TimelineClip> & { id: string }): TimelineClip {
     transform: overrides.transform ?? DEFAULT_TRANSFORM,
     effects: overrides.effects ?? [],
     direction: overrides.direction ?? DEFAULT_DIRECTION,
+    ...(overrides.transitionOut ? { transitionOut: overrides.transitionOut } : {}),
     reason: overrides.reason ?? { segmentId: 'nar_1', semanticScore: 0.5, finalScore: 0.5 },
   };
 }

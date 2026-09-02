@@ -8,6 +8,7 @@ import { JobFailure } from '@memetize/job-system';
 import { getAsset, probeVideo } from '@memetize/media-catalog';
 import type { JobHandler } from '@memetize/orchestrator';
 import {
+  getLatestEditWindow,
   getLatestRender,
   getLatestTimeline,
   getProjectAudio,
@@ -54,6 +55,22 @@ export function createRenderHandler(): JobHandler {
     }
     const timeline = timelineVersion.data;
 
+    // Validate before touching any media: a stale or broken timeline must
+    // fail here, not as a missing-asset error further down.
+    const validationStarted = performance.now();
+    const editWindow = await getLatestEditWindow(ctx.db, projectId);
+    const timelineValidation = validateTimeline(timeline, {
+      expectedDurationMs: editWindow?.durationMs,
+    });
+    const validationMs = performance.now() - validationStarted;
+    if (!timelineValidation.ok) {
+      throw new JobFailure(
+        'RENDER_INVALID_TIMELINE',
+        timelineValidation.errors.map((error) => error.message).join('; '),
+        false,
+      );
+    }
+
     const projectAudio = await getProjectAudio(ctx.db, projectId);
     if (!projectAudio) {
       throw new JobFailure('RENDER_MISSING_ASSET', `project ${projectId} has no audio file`, false);
@@ -89,16 +106,6 @@ export function createRenderHandler(): JobHandler {
       resolvedClips.push({ clipId: clip.id, videoPath });
     }
 
-    const validationStarted = performance.now();
-    const timelineValidation = validateTimeline(timeline);
-    const validationMs = performance.now() - validationStarted;
-    if (!timelineValidation.ok) {
-      throw new JobFailure(
-        'RENDER_INVALID_TIMELINE',
-        timelineValidation.errors.map((error) => error.message).join('; '),
-        false,
-      );
-    }
 
     const graphStarted = performance.now();
     const graph = buildFfmpegGraph(timeline, {

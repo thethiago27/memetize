@@ -199,6 +199,9 @@ importers:
 
   packages/effects:
     dependencies:
+      '@memetize/renderer':
+        specifier: workspace:*
+        version: link:../renderer
       '@memetize/timeline':
         specifier: workspace:*
         version: link:../timeline

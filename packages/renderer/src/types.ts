@@ -13,7 +13,11 @@ export interface TimelineIssue {
     | 'INVALID_RANGE'
     | 'EMPTY_TIMELINE'
     | 'TIMELINE_GAP'
-    | 'SOURCE_SHORTER_THAN_SLOT';
+    | 'SOURCE_SHORTER_THAN_SLOT'
+    | 'TIMELINE_DURATION_MISMATCH'
+    | 'TRANSITION_TOO_LONG'
+    | 'TRANSITION_HANDLE_OUT_OF_BOUNDS'
+    | 'OVERLAPPING_TRANSITIONS';
   message: string;
   clipId?: string;
 }

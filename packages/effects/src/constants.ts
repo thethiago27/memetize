@@ -38,8 +38,8 @@ export const TRANSITION_CLAMP_MS = {
   flash: { min: 80, max: 160 },
 } as const;
 
-/** A transition may never take more than this fraction of the smaller neighboring slot. */
-export const MAX_TRANSITION_SLOT_FRACTION = 1 / 3;
+/** The renderer's cap on a transition versus the smaller neighboring slot. */
+export { MAX_TRANSITION_SLOT_FRACTION } from '@memetize/renderer';
 
 export const HOLD_BEAT_FRACTION = 1;
 export const HOLD_CLAMP_MS = { min: 200, max: 600 } as const;

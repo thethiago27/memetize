@@ -1,18 +1,42 @@
 import type { RenderWarning } from '@memetize/contracts';
-import type { Timeline, TimelineClip } from '@memetize/timeline';
-import { MIN_CLIP_MS } from './constants';
+import type { Timeline, TimelineClip, TimelineEffect } from '@memetize/timeline';
+import { MAX_TRANSITION_SLOT_FRACTION, MIN_CLIP_MS } from './constants';
+import { isOverlapStyle, parseHoldEffect, parseSpeedEffect, transitionOutOf } from './cuts';
 import type { TimelineIssue, TimelineValidation } from './types';
 import { isRenderableZoom } from './zoom';
 
+export interface ValidateTimelineOptions {
+  /**
+   * The selected edit window's duration. A timeline assembled for an older
+   * window must never render (renderer selected-window guard).
+   */
+  expectedDurationMs?: number;
+}
+
 /**
  * Validates a `Timeline` before any FFmpeg spawn. Overlaps, out-of-range
- * clips, empty coverage, any positive gap, and source-short slots are hard
- * failures — the Renderer must never hand a broken graph to FFmpeg.
- * Short slots and unsupported effects remain warnings.
+ * clips, empty coverage, any positive gap, source-short slots, a duration
+ * that disagrees with the selected window, and transitions the cut-style
+ * time model cannot honor are hard failures — the Renderer must never hand
+ * a broken graph to FFmpeg. Short slots and unsupported effects remain
+ * warnings.
  */
-export function validateTimeline(timeline: Timeline): TimelineValidation {
+export function validateTimeline(
+  timeline: Timeline,
+  options: ValidateTimelineOptions = {},
+): TimelineValidation {
   const errors: TimelineIssue[] = [];
   const warnings: RenderWarning[] = [];
+
+  if (
+    options.expectedDurationMs !== undefined &&
+    timeline.durationMs !== options.expectedDurationMs
+  ) {
+    errors.push({
+      code: 'TIMELINE_DURATION_MISMATCH',
+      message: `timeline durationMs (${timeline.durationMs}ms) differs from the selected edit-window duration (${options.expectedDurationMs}ms); regenerate the timeline`,
+    });
+  }
 
   if (timeline.clips.length === 0) {
     errors.push({
@@ -70,7 +94,7 @@ export function validateTimeline(timeline: Timeline): TimelineValidation {
       });
     }
 
-    if (clip.effects.some((effect) => !isRenderableZoom(effect, clip))) {
+    if (clip.effects.some((effect) => !isRenderableEffect(effect, clip))) {
       warnings.push({
         code: 'UNKNOWN_EFFECT',
         clipId: clip.id,
@@ -78,6 +102,8 @@ export function validateTimeline(timeline: Timeline): TimelineValidation {
       });
     }
   }
+
+  validateTransitions(sorted, errors);
 
   let cursorMs = 0;
   for (const clip of sorted) {
@@ -99,6 +125,64 @@ export function validateTimeline(timeline: Timeline): TimelineValidation {
   }
 
   return { ok: errors.length === 0, errors, warnings };
+}
+
+function isRenderableEffect(effect: TimelineEffect, clip: TimelineClip): boolean {
+  return (
+    isRenderableZoom(effect, clip) ||
+    parseHoldEffect(effect, clip) !== null ||
+    parseSpeedEffect(effect, clip) !== null
+  );
+}
+
+/**
+ * Cut-styles time model: a transition is capped at a third of the smaller
+ * neighboring slot, an overlapping one needs its `D/2` head handle to exist
+ * in source time, and a clip's incoming plus outgoing transitions must fit
+ * inside its slot.
+ */
+function validateTransitions(sorted: readonly TimelineClip[], errors: TimelineIssue[]): void {
+  for (let index = 0; index < sorted.length; index += 1) {
+    const clip = sorted[index];
+    if (!clip) continue;
+    const previous = sorted[index - 1] ?? null;
+    const next = sorted[index + 1] ?? null;
+    const incoming = previous ? transitionOutOf(previous, false) : null;
+    const outgoing = transitionOutOf(clip, next === null);
+    const slotMs = clip.timeline.endMs - clip.timeline.startMs;
+
+    if (next && outgoing.durationMs > 0) {
+      const nextSlotMs = next.timeline.endMs - next.timeline.startMs;
+      const maxMs = Math.floor(Math.min(slotMs, nextSlotMs) * MAX_TRANSITION_SLOT_FRACTION);
+      if (outgoing.durationMs > maxMs) {
+        errors.push({
+          code: 'TRANSITION_TOO_LONG',
+          clipId: clip.id,
+          message: `clip "${clip.id}" ${outgoing.style} of ${outgoing.durationMs}ms exceeds a third of the smaller neighboring slot (${maxMs}ms)`,
+        });
+      }
+    }
+
+    if (incoming && isOverlapStyle(incoming.style)) {
+      const headMs = incoming.durationMs / 2;
+      if (clip.source.startMs - headMs < 0) {
+        errors.push({
+          code: 'TRANSITION_HANDLE_OUT_OF_BOUNDS',
+          clipId: clip.id,
+          message: `clip "${clip.id}" needs a ${headMs}ms head handle but its source starts at ${clip.source.startMs}ms`,
+        });
+      }
+    }
+
+    const incomingMs = incoming?.durationMs ?? 0;
+    if (incomingMs + outgoing.durationMs > slotMs) {
+      errors.push({
+        code: 'OVERLAPPING_TRANSITIONS',
+        clipId: clip.id,
+        message: `clip "${clip.id}" incoming (${incomingMs}ms) plus outgoing (${outgoing.durationMs}ms) transitions exceed its ${slotMs}ms slot`,
+      });
+    }
+  }
 }
 
 function sortByStart(clips: readonly TimelineClip[]): TimelineClip[] {

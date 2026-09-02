@@ -21,6 +21,7 @@ function clip(overrides: Partial<TimelineClip> & { id: string }): TimelineClip {
     transform: overrides.transform ?? DEFAULT_TRANSFORM,
     effects: overrides.effects ?? [],
     direction: overrides.direction ?? DEFAULT_DIRECTION,
+    ...(overrides.transitionOut ? { transitionOut: overrides.transitionOut } : {}),
     reason: overrides.reason ?? { segmentId: 'nar_1', semanticScore: 0.5, finalScore: 0.5 },
   };
 }
@@ -142,10 +143,63 @@ describe('validateTimeline', () => {
     expect(result.warnings.some((warning) => warning.code === 'UNKNOWN_EFFECT')).toBe(false);
   });
 
-  it('warns about an unsupported effect type such as fade', () => {
+  it('accepts well-formed hold and speed effects without a warning', () => {
+    const tl = timeline({
+      durationMs: 2000,
+      clips: [
+        clip({
+          id: 'clp_1',
+          timeline: { startMs: 0, endMs: 2000 },
+          effects: [
+            { type: 'speed', startMs: 0, endMs: 2000, factor: 1.25, requested: 'speed_up' },
+            { type: 'hold', startMs: 1500, endMs: 2000, requested: 'hold' },
+          ],
+        }),
+      ],
+    });
+    const result = validateTimeline(tl);
+    expect(result.ok).toBe(true);
+    expect(result.warnings.some((warning) => warning.code === 'UNKNOWN_EFFECT')).toBe(false);
+  });
+
+  it('warns about a hold outside its slot or a speed with a bad factor', () => {
+    const badHold = validateTimeline(
+      timeline({
+        durationMs: 2000,
+        clips: [
+          clip({
+            id: 'clp_1',
+            timeline: { startMs: 0, endMs: 2000 },
+            effects: [{ type: 'hold', startMs: 1500, endMs: 2500 }],
+          }),
+        ],
+      }),
+    );
+    expect(badHold.warnings).toContainEqual(
+      expect.objectContaining({ code: 'UNKNOWN_EFFECT', clipId: 'clp_1' }),
+    );
+
+    const badSpeed = validateTimeline(
+      timeline({
+        durationMs: 2000,
+        clips: [
+          clip({
+            id: 'clp_1',
+            timeline: { startMs: 0, endMs: 2000 },
+            effects: [{ type: 'speed', startMs: 0, endMs: 2000, factor: 0 }],
+          }),
+        ],
+      }),
+    );
+    expect(badSpeed.warnings).toContainEqual(
+      expect.objectContaining({ code: 'UNKNOWN_EFFECT', clipId: 'clp_1' }),
+    );
+  });
+
+  it('warns about an effect type outside the vocabulary', () => {
     const tl = timeline({
       durationMs: 1000,
-      clips: [clip({ id: 'clp_1', effects: [{ type: 'fade', startMs: 0, endMs: 200 }] })],
+      clips: [clip({ id: 'clp_1', effects: [{ type: 'glitch', startMs: 0, endMs: 200 }] })],
     });
     const result = validateTimeline(tl);
     expect(result.ok).toBe(true);
@@ -157,6 +211,101 @@ describe('validateTimeline', () => {
   it('fails when the source is shorter than the timeline slot', () => {
     expect(validateTimeline(sourceShortTimeline()).errors).toContainEqual(
       expect.objectContaining({ code: 'SOURCE_SHORTER_THAN_SLOT', clipId: 'clp_1' }),
+    );
+  });
+
+  it('rejects a transition longer than a third of the smaller neighboring slot', () => {
+    const result = validateTimeline(
+      timeline({
+        durationMs: 3000,
+        clips: [
+          clip({
+            id: 'clp_1',
+            timeline: { startMs: 0, endMs: 2000 },
+            source: { assetId: 'ast_1', startMs: 1000, endMs: 3000 },
+            transitionOut: { style: 'crossfade', durationMs: 400, requested: 'crossfade' },
+          }),
+          clip({
+            id: 'clp_2',
+            timeline: { startMs: 2000, endMs: 3000 },
+            source: { assetId: 'ast_1', startMs: 1000, endMs: 2000 },
+          }),
+        ],
+      }),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({ code: 'TRANSITION_TOO_LONG', clipId: 'clp_1' }),
+    );
+  });
+
+  it('rejects an overlapping transition whose head handle would start before source time zero', () => {
+    const result = validateTimeline(
+      timeline({
+        durationMs: 4000,
+        clips: [
+          clip({
+            id: 'clp_1',
+            timeline: { startMs: 0, endMs: 2000 },
+            source: { assetId: 'ast_1', startMs: 1000, endMs: 3000 },
+            transitionOut: { style: 'whip', durationMs: 200, requested: 'whip' },
+          }),
+          clip({
+            id: 'clp_2',
+            timeline: { startMs: 2000, endMs: 4000 },
+            source: { assetId: 'ast_1', startMs: 50, endMs: 2050 },
+          }),
+        ],
+      }),
+    );
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({ code: 'TRANSITION_HANDLE_OUT_OF_BOUNDS', clipId: 'clp_2' }),
+    );
+  });
+
+  it('accepts a dip to black without any source handle', () => {
+    const result = validateTimeline(
+      timeline({
+        durationMs: 4000,
+        clips: [
+          clip({
+            id: 'clp_1',
+            timeline: { startMs: 0, endMs: 2000 },
+            transitionOut: { style: 'dip_black', durationMs: 300, requested: 'dip_black' },
+          }),
+          clip({ id: 'clp_2', timeline: { startMs: 2000, endMs: 4000 } }),
+        ],
+      }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects incoming plus outgoing transitions that exceed a clip', () => {
+    // 600 ms middle slot; 200 ms in each direction is within the third cap
+    // (200 ≤ 666 from the 2000 ms neighbors... but the cap uses the smaller
+    // slot: 600 / 3 = 200), and 200 + 200 ≤ 600 — so force the overlap with
+    // a hand-edited 300 ms pair, which the cap alone would also reject; the
+    // dedicated code must still be reported.
+    const result = validateTimeline(
+      timeline({
+        durationMs: 4600,
+        clips: [
+          clip({
+            id: 'clp_1',
+            timeline: { startMs: 0, endMs: 2000 },
+            transitionOut: { style: 'dip_black', durationMs: 400, requested: 'dip_black' },
+          }),
+          clip({
+            id: 'clp_2',
+            timeline: { startMs: 2000, endMs: 2600 },
+            transitionOut: { style: 'flash', durationMs: 400, requested: 'flash' },
+          }),
+          clip({ id: 'clp_3', timeline: { startMs: 2600, endMs: 4600 } }),
+        ],
+      }),
+    );
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({ code: 'OVERLAPPING_TRANSITIONS', clipId: 'clp_2' }),
     );
   });
 
