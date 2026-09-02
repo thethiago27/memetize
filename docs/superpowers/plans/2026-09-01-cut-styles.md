@@ -128,9 +128,9 @@
 
 ## Phase 5: Studio
 
-- [ ] **Task 15: Client types and labels.** Add the fields to `TimelineClip` in `apps/web/src/lib/api.ts`. Add `TRANSITION_STYLE_LABELS`, `CLIP_STYLE_LABELS`, and `CUT_DOWNGRADE_LABELS` in Portuguese to `lib/labels.ts` ("corte seco", "dip to black", "flash", "crossfade", "whip"; "hold", "acelerado", "câmera lenta"; the four reason strings from the spec). Commit `feat: add cut style labels to the studio`.
+- [x] **Task 15: Client types and labels.** Add the fields to `TimelineClip` in `apps/web/src/lib/api.ts`. Add `TRANSITION_STYLE_LABELS`, `CLIP_STYLE_LABELS`, and `CUT_DOWNGRADE_LABELS` in Portuguese to `lib/labels.ts` ("corte seco", "dip to black", "flash", "crossfade", "whip"; "hold", "acelerado", "câmera lenta"; the four reason strings from the spec). Commit `feat: add cut style labels to the studio`.
 
-- [ ] **Task 16: Strip and inspector.** `TimelineStrip`: thin marker between clips whose `transitionOut.style !== 'hard'`, with a `title` naming the style and duration; small icon on clips with any effect. `Inspector`: "Corte" line as specified, with the downgrade sentence when `downgradeReason` is set. Run `pnpm --filter web typecheck` and lint. Commit `feat: show cut styles in the studio editor`.
+- [x] **Task 16: Strip and inspector.** `TimelineStrip`: thin marker between clips whose `transitionOut.style !== 'hard'`, with a `title` naming the style and duration; small icon on clips with any effect. `Inspector`: "Corte" line as specified, with the downgrade sentence when `downgradeReason` is set. Run `pnpm --filter web typecheck` and lint. Commit `feat: show cut styles in the studio editor`.
 
 ## Phase 6: Verification and docs
 
