@@ -144,7 +144,7 @@ Feasibility and downgrade rules:
 `packages/renderer/src/graph.ts` replaces the single terminal `concat` with a left-to-right accumulator:
 
 - Boundary `hard`, `dip_black`, or `flash`: `concat` the accumulator with the next segment.
-- Boundary `crossfade` or `whip`: `xfade` the accumulator with the next segment, `transition=fade` or `slideleft`, `duration=D`, `offset` = accumulated length − `D/2`.
+- Boundary `crossfade` or `whip`: `xfade` the accumulator with the next segment, `transition=fade` or `slideleft`, `duration=D`, `offset` = accumulated length − `D` (the accumulated video already carries its `D/2` tail handle, so the transition starts `D/2` before the slot boundary).
 
 Each clip segment is trimmed with its handles applied: A's `trim` ends at `source.endMs + D/2` when it exits through an overlapping transition; B's starts at `source.startMs − D/2` when it enters through one. `fps` is pinned on every segment before any `xfade`, since `xfade` requires matching rate and format on both inputs.
 

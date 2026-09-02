@@ -198,6 +198,171 @@ describe('buildFfmpegGraph', () => {
   });
 });
 
+describe('buildFfmpegGraph: cut styles', () => {
+  it('crossfades two clips with xfade, extending each side by half the duration', () => {
+    const clips = [
+      clip({
+        id: 'clp_1',
+        timeline: { startMs: 0, endMs: 2000 },
+        source: { assetId: 'ast_1', startMs: 1000, endMs: 3000 },
+        transitionOut: { style: 'crossfade', durationMs: 300, requested: 'crossfade' },
+      }),
+      clip({
+        id: 'clp_2',
+        timeline: { startMs: 2000, endMs: 4000 },
+        source: { assetId: 'ast_2', startMs: 1000, endMs: 3000 },
+      }),
+    ];
+    const graph = buildFfmpegGraph(timeline({ durationMs: 4000, clips }), assetsFor(clips));
+
+    expect(graph.filterComplex).toMatch(/\[1:v\]trim=start=1\.000:end=3\.150,/);
+    expect(graph.filterComplex).toMatch(/\[2:v\]trim=start=0\.850:end=3\.000,/);
+    expect(graph.filterComplex).toContain(
+      '[v0][v1]xfade=transition=fade:duration=0.300:offset=1.850[vout]',
+    );
+    expect(graph.filterComplex).not.toContain('concat=');
+    expect(graph.durationMs).toBe(4000);
+  });
+
+  it('pins fps on every segment when any boundary uses xfade', () => {
+    const clips = [
+      clip({
+        id: 'clp_1',
+        timeline: { startMs: 0, endMs: 2000 },
+        source: { assetId: 'ast_1', startMs: 1000, endMs: 3000 },
+        transitionOut: { style: 'whip', durationMs: 200, requested: 'whip' },
+      }),
+      clip({
+        id: 'clp_2',
+        timeline: { startMs: 2000, endMs: 4000 },
+        source: { assetId: 'ast_2', startMs: 1000, endMs: 3000 },
+      }),
+    ];
+    const graph = buildFfmpegGraph(timeline({ durationMs: 4000, clips }), assetsFor(clips));
+    expect(graph.filterComplex.match(/fps=30/g)).toHaveLength(2);
+    expect(graph.filterComplex).toContain('xfade=transition=slideleft:duration=0.200:offset=1.900');
+  });
+
+  it('chains concat and xfade left to right with offsets from the accumulated length', () => {
+    const clips = [
+      clip({ id: 'clp_1', timeline: { startMs: 0, endMs: 1000 } }),
+      clip({
+        id: 'clp_2',
+        timeline: { startMs: 1000, endMs: 3000 },
+        source: { assetId: 'ast_2', startMs: 1000, endMs: 3000 },
+        transitionOut: { style: 'whip', durationMs: 200, requested: 'whip' },
+      }),
+      clip({
+        id: 'clp_3',
+        timeline: { startMs: 3000, endMs: 5000 },
+        source: { assetId: 'ast_3', startMs: 1000, endMs: 3000 },
+      }),
+    ];
+    const graph = buildFfmpegGraph(timeline({ durationMs: 5000, clips }), assetsFor(clips));
+
+    expect(graph.filterComplex).toContain('[v0][v1]concat=n=2:v=1:a=0[acc1]');
+    // Accumulated 1000 + 2000 + 100 handle = 3100 ms; offset = 3100 - 200.
+    expect(graph.filterComplex).toContain(
+      '[acc1][v2]xfade=transition=slideleft:duration=0.200:offset=2.900[vout]',
+    );
+  });
+
+  it('fades through black or white on each side and keeps concat', () => {
+    const clips = [
+      clip({
+        id: 'clp_1',
+        timeline: { startMs: 0, endMs: 2000 },
+        transitionOut: { style: 'dip_black', durationMs: 300, requested: 'dip_black' },
+      }),
+      clip({
+        id: 'clp_2',
+        timeline: { startMs: 2000, endMs: 4000 },
+        transitionOut: { style: 'flash', durationMs: 100, requested: 'flash' },
+      }),
+      clip({ id: 'clp_3', timeline: { startMs: 4000, endMs: 6000 } }),
+    ];
+    const graph = buildFfmpegGraph(timeline({ durationMs: 6000, clips }), assetsFor(clips));
+
+    expect(graph.filterComplex).toContain('fade=t=out:st=1.850:d=0.150:color=black');
+    expect(graph.filterComplex).toContain('fade=t=in:st=0:d=0.150:color=black');
+    expect(graph.filterComplex).toContain('fade=t=out:st=1.950:d=0.050:color=white');
+    expect(graph.filterComplex).toContain('fade=t=in:st=0:d=0.050:color=white');
+    expect(graph.filterComplex).toContain('concat=n=3:v=1:a=0[vout]');
+    expect(graph.filterComplex).not.toContain('xfade');
+  });
+
+  it('freezes a held tail and stretches the freeze through an outgoing crossfade', () => {
+    const clips = [
+      clip({
+        id: 'clp_1',
+        timeline: { startMs: 0, endMs: 2000 },
+        source: { assetId: 'ast_1', startMs: 0, endMs: 2000 },
+        effects: [{ type: 'hold', startMs: 1500, endMs: 2000, requested: 'hold' }],
+        transitionOut: { style: 'crossfade', durationMs: 300, requested: 'crossfade' },
+      }),
+      clip({
+        id: 'clp_2',
+        timeline: { startMs: 2000, endMs: 4000 },
+        source: { assetId: 'ast_2', startMs: 1000, endMs: 3000 },
+      }),
+    ];
+    const graph = buildFfmpegGraph(timeline({ durationMs: 4000, clips }), assetsFor(clips));
+
+    // Motion part only, then the frozen frame for 500 + 150 ms.
+    expect(graph.filterComplex).toMatch(/\[1:v\]trim=start=0\.000:end=1\.500,/);
+    expect(graph.filterComplex).toContain('tpad=stop_mode=clone:stop_duration=0.650');
+    expect(graph.filterComplex).toContain('xfade=transition=fade:duration=0.300:offset=1.850');
+  });
+
+  it('applies speed before zoom and hold, trimming less source for a slow-down', () => {
+    const clips = [
+      clip({
+        id: 'clp_1',
+        timeline: { startMs: 0, endMs: 2000 },
+        source: { assetId: 'ast_1', startMs: 0, endMs: 2000 },
+        effects: [
+          { type: 'speed', startMs: 0, endMs: 2000, factor: 0.8, requested: 'slow_down' },
+          { type: 'zoom', startMs: 1350, endMs: 2000, from: 1, to: 1.12 },
+        ],
+      }),
+      clip({
+        id: 'clp_2',
+        timeline: { startMs: 2000, endMs: 4000 },
+        source: { assetId: 'ast_2', startMs: 0, endMs: 2500 },
+        effects: [
+          { type: 'speed', startMs: 2000, endMs: 4000, factor: 1.25, requested: 'speed_up' },
+          { type: 'hold', startMs: 3500, endMs: 4000, requested: 'hold' },
+        ],
+      }),
+    ];
+    const graph = buildFfmpegGraph(timeline({ durationMs: 4000, clips }), assetsFor(clips));
+    const [first, second] = graph.filterComplex.split(';');
+
+    expect(first).toMatch(/trim=start=0\.000:end=1\.600,/);
+    expect(first?.indexOf('setpts=PTS/0.8')).toBeLessThan(first?.indexOf('eval=frame') ?? -1);
+
+    // Sped-up: motion part is (2000 - 500) * 1.25 = 1875 ms of source.
+    expect(second).toMatch(/trim=start=0\.000:end=1\.875,/);
+    expect(second?.indexOf('setpts=PTS/1.25')).toBeLessThan(
+      second?.indexOf('tpad=stop_mode=clone') ?? -1,
+    );
+    expect(second).toContain('tpad=stop_mode=clone:stop_duration=0.500');
+  });
+
+  it('ignores a transition on the last clip', () => {
+    const clips = [
+      clip({
+        id: 'clp_1',
+        timeline: { startMs: 0, endMs: 2000 },
+        transitionOut: { style: 'crossfade', durationMs: 300, requested: 'crossfade' },
+      }),
+    ];
+    const graph = buildFfmpegGraph(timeline({ durationMs: 2000, clips }), assetsFor(clips));
+    expect(graph.filterComplex).not.toContain('xfade');
+    expect(graph.filterComplex).toMatch(/trim=start=0\.000:end=2\.000,/);
+  });
+});
+
 describe('toFfmpegArgs', () => {
   it('starts with the quiet flags, includes the codec/output flags, and ends with the output path', () => {
     const clips = [clip({ id: 'clp_1', timeline: { startMs: 0, endMs: 1000 } })];

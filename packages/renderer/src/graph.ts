@@ -1,12 +1,43 @@
-import type { Timeline, TimelineCanvas, TimelineTransform } from '@memetize/timeline';
+import type {
+  Timeline,
+  TimelineCanvas,
+  TimelineClip,
+  TimelineTransform,
+  TimelineTransitionOut,
+} from '@memetize/timeline';
 import { AUDIO_FADE_IN_MS, AUDIO_FADE_OUT_MS } from './constants';
+import {
+  buildBoundaryFadeFilters,
+  buildHoldFilter,
+  buildSpeedFilter,
+  handlesFor,
+  isOverlapStyle,
+  parseHoldEffect,
+  parseSpeedEffect,
+  toSeconds,
+  transitionOutOf,
+  xfadeTransitionName,
+} from './cuts';
 import type { FfmpegGraph, FfmpegInput, ResolvedAssets } from './types';
 import { buildZoomFilter, parseZoomEffect } from './zoom';
+
+/** One clip rendered as a labelled segment, with the output ms it lasts. */
+interface Segment {
+  label: string;
+  lengthMs: number;
+}
 
 /**
  * Builds the single `-filter_complex` graph for a fully covered `Timeline`.
  * Gaps, empty clips, and source-short slots throw instead of inserting
  * black or clone-pad fallbacks. Audio is trimmed and timestamp-rebased.
+ *
+ * Cut styles (cut-styles spec): each clip becomes one segment that already
+ * carries its speed change, zoom, frozen tail, fades, and the `D/2` source
+ * handles an overlapping transition needs. Segments are then joined left
+ * to right — runs of hard cuts and fades with `concat`, crossfades and
+ * whips with `xfade` at `offset = accumulated − D` — so the output is
+ * exactly `durationMs` long.
  */
 export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): FfmpegGraph {
   const { fps } = timeline.canvas;
@@ -17,9 +48,12 @@ export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): Ff
     throw new Error('buildFfmpegGraph: empty timeline');
   }
 
+  const transitions = clips.map((clip, index) => transitionOutOf(clip, index === clips.length - 1));
+  const usesXfade = transitions.some((transition) => isOverlapStyle(transition.style));
+
   const inputs: FfmpegInput[] = [{ path: assets.audioPath, kind: 'audio' }];
   const filterParts: string[] = [];
-  const segmentLabels: string[] = [];
+  const segments: Segment[] = [];
   let cursorMs = 0;
 
   clips.forEach((clip, index) => {
@@ -41,22 +75,18 @@ export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): Ff
       throw new Error('buildFfmpegGraph: source shorter than slot');
     }
 
-    const transformFilter = buildTransformFilter(clip.transform, timeline.canvas);
-
-    let chain =
-      `[${inputIndex}:v]trim=start=${toSeconds(clip.source.startMs)}:end=${toSeconds(clip.source.endMs)},` +
-      `setpts=PTS-STARTPTS,${transformFilter}`;
-    const zooms = clip.effects
-      .map((effect) => parseZoomEffect(effect, clip))
-      .filter((zoom): zoom is NonNullable<typeof zoom> => zoom !== null)
-      .sort((a, b) => a.startMs - b.startMs);
-    for (const zoom of zooms) {
-      chain += `,${buildZoomFilter(zoom, clip, timeline.canvas)}`;
-    }
-    chain += ',setsar=1';
-    const label = `v${index}`;
-    filterParts.push(`${chain}[${label}]`);
-    segmentLabels.push(`[${label}]`);
+    const incoming = index > 0 ? (transitions[index - 1] ?? null) : null;
+    const outgoing = transitions[index] ?? { style: 'hard', durationMs: 0, requested: 'hard' };
+    const segment = buildSegment({
+      clip,
+      inputIndex,
+      incoming,
+      outgoing,
+      canvas: timeline.canvas,
+      pinFps: usesXfade,
+    });
+    filterParts.push(`${segment.chain}[v${index}]`);
+    segments.push({ label: `[v${index}]`, lengthMs: segment.lengthMs });
 
     cursorMs = clip.timeline.endMs;
   });
@@ -65,7 +95,7 @@ export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): Ff
     throw new Error('buildFfmpegGraph: timeline gap');
   }
 
-  filterParts.push(`${segmentLabels.join('')}concat=n=${segmentLabels.length}:v=1:a=0[vout]`);
+  filterParts.push(...joinSegments(segments, transitions));
   filterParts.push(buildAudioFilter(timeline, assets));
 
   const outputArgs = [
@@ -99,6 +129,150 @@ export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): Ff
     outputArgs,
     durationMs: timeline.durationMs,
   };
+}
+
+/**
+ * One clip's filter chain. In output time the segment lasts
+ * `head + slot + tail` (the handles of its overlapping transitions); the
+ * motion part is that minus a frozen tail, and the source consumed is the
+ * motion part times the playback factor.
+ */
+function buildSegment(params: {
+  clip: TimelineClip;
+  inputIndex: number;
+  incoming: TimelineTransitionOut | null;
+  outgoing: TimelineTransitionOut;
+  canvas: TimelineCanvas;
+  pinFps: boolean;
+}): { chain: string; lengthMs: number } {
+  const { clip, canvas } = params;
+  const slotMs = clip.timeline.endMs - clip.timeline.startMs;
+  const { headMs, tailMs } = handlesFor(params.incoming, params.outgoing);
+  const lengthMs = headMs + slotMs + tailMs;
+
+  const speed = firstParsed(clip, parseSpeedEffect);
+  const factor = speed?.factor ?? 1;
+  const hold = firstParsed(clip, parseHoldEffect);
+  const holdMs = hold ? hold.endMs - hold.startMs : 0;
+  // A frozen tail covers the hold and any outgoing handle; nothing after it moves.
+  const motionMs = hold ? headMs + slotMs - holdMs : lengthMs;
+
+  const trimStartMs = clip.source.startMs - headMs * factor;
+  const trimEndMs = trimStartMs + motionMs * factor;
+
+  const filters: string[] = [
+    `trim=start=${toSeconds(trimStartMs)}:end=${toSeconds(trimEndMs)}`,
+    'setpts=PTS-STARTPTS',
+  ];
+  const speedFilter = buildSpeedFilter(factor);
+  if (speedFilter) filters.push(speedFilter);
+  filters.push(buildTransformFilter(clip.transform, canvas));
+
+  const zooms = clip.effects
+    .map((effect) => parseZoomEffect(effect, clip))
+    .filter((zoom): zoom is NonNullable<typeof zoom> => zoom !== null)
+    .sort((a, b) => a.startMs - b.startMs);
+  for (const zoom of zooms) {
+    // `t` is zero at the segment start, which sits `headMs` before the slot.
+    const shifted = { ...zoom, startMs: zoom.startMs + headMs, endMs: zoom.endMs + headMs };
+    filters.push(buildZoomFilter(shifted, clip, canvas));
+  }
+
+  if (hold) filters.push(buildHoldFilter(holdMs, tailMs));
+  filters.push(
+    ...buildBoundaryFadeFilters({
+      incoming: params.incoming,
+      outgoing: params.outgoing,
+      segmentMs: lengthMs,
+    }),
+  );
+  if (params.pinFps) filters.push(`fps=${canvas.fps}`);
+  filters.push('setsar=1');
+
+  return { chain: `[${params.inputIndex}:v]${filters.join(',')}`, lengthMs };
+}
+
+function firstParsed<T>(
+  clip: TimelineClip,
+  parse: (effect: TimelineClip['effects'][number], clip: TimelineClip) => T | null,
+): T | null {
+  for (const effect of clip.effects) {
+    const parsed = parse(effect, clip);
+    if (parsed !== null) return parsed;
+  }
+  return null;
+}
+
+/**
+ * Joins segments left to right. Consecutive segments separated by hard
+ * cuts or fades are concatenated in one `concat`; an overlapping
+ * transition closes the pending run into the accumulator and `xfade`s
+ * the next segment onto it. The final operation always writes `[vout]`.
+ */
+function joinSegments(
+  segments: readonly Segment[],
+  transitions: readonly TimelineTransitionOut[],
+): string[] {
+  const ops: { inputs: string; filter: string }[] = [];
+  const state: { acc: Segment | null; run: Segment[]; labels: number } = {
+    acc: null,
+    run: [],
+    labels: 0,
+  };
+  const nextLabel = (): string => {
+    state.labels += 1;
+    return `[acc${state.labels}]`;
+  };
+
+  const flushRun = (): void => {
+    if (state.run.length === 0) return;
+    const parts = state.acc ? [state.acc, ...state.run] : state.run;
+    state.run = [];
+    const [only] = parts;
+    if (parts.length === 1 && only) {
+      // A lone segment needs no concat; it becomes the accumulator as is.
+      state.acc = only;
+      return;
+    }
+    const label = nextLabel();
+    ops.push({
+      inputs: parts.map((part) => part.label).join(''),
+      filter: `concat=n=${parts.length}:v=1:a=0`,
+    });
+    state.acc = { label, lengthMs: parts.reduce((sum, part) => sum + part.lengthMs, 0) };
+  };
+
+  segments.forEach((segment, index) => {
+    const incoming = index > 0 ? transitions[index - 1] : undefined;
+    if (incoming && isOverlapStyle(incoming.style)) {
+      flushRun();
+      const left = state.acc;
+      if (!left) throw new Error('buildFfmpegGraph: xfade with nothing on the left');
+      const durationMs = incoming.durationMs;
+      // The transition occupies the last D ms of the accumulated video: it
+      // starts D/2 before the slot boundary, which sits D/2 before the end.
+      const offsetMs = left.lengthMs - durationMs;
+      const label = nextLabel();
+      ops.push({
+        inputs: `${left.label}${segment.label}`,
+        filter: `xfade=transition=${xfadeTransitionName(incoming.style)}:duration=${toSeconds(durationMs)}:offset=${toSeconds(offsetMs)}`,
+      });
+      state.acc = { label, lengthMs: left.lengthMs + segment.lengthMs - durationMs };
+      return;
+    }
+    state.run.push(segment);
+  });
+  flushRun();
+
+  if (ops.length === 0) {
+    // A single clip with nothing to join still has to produce `[vout]`.
+    return [`${state.acc?.label ?? ''}concat=n=1:v=1:a=0[vout]`];
+  }
+
+  return ops.map((op, index) => {
+    const out = index === ops.length - 1 ? '[vout]' : `[acc${index + 1}]`;
+    return `${op.inputs}${op.filter}${out}`;
+  });
 }
 
 /**
@@ -137,10 +311,6 @@ function buildAudioFilter(timeline: Timeline, assets: ResolvedAssets): string {
   }
   parts.push(`volume=${timeline.audio.volume}`);
   return `[0:a]${parts.join(',')}[aout]`;
-}
-
-function toSeconds(ms: number): string {
-  return (ms / 1000).toFixed(3);
 }
 
 /**
