@@ -120,17 +120,18 @@ The fixture provider emits `none` / `hard` everywhere by default (pipeline tests
 | `speed_up` | factor 1.25, whole clip | |
 | `slow_down` | factor 0.8, whole clip | |
 
-**Resolution order per clip:** clip style first, then transition out, because `hold` and `speed_up` change how much source is left for the handle. Clips are visited in timeline order so a clip's incoming transition is known before its outgoing one is decided.
+**Resolution order:** two passes. First every clip style, because `hold` and `speed_up` change how much source is left for a handle and the transition out of clip A needs clip B's playback factor too. Then every transition, in timeline order, so a clip's incoming transition is known before its outgoing one is decided.
 
 Feasibility and downgrade rules:
 
-- `crossfade` and `whip` need a handle of `D/2` on both sides inside the moment bounds, and `D` may not exceed one third of the smaller neighboring slot. If not feasible, shrink `D` down to the clamp minimum; if still not feasible, `crossfade` becomes `dip_black` and `whip` becomes `hard`, with `no_source_handle` or `slot_too_short`.
-- `dip_black` and `flash` always fit unless a neighboring slot is shorter than `2 × D`; then shrink to the minimum or become `hard` with `slot_too_short`.
+- Every transition, overlapping or not, is capped at one third of the smaller neighboring slot (`MAX_TRANSITION_SLOT_FRACTION`); this subsumes the looser "slot at least `2 × D`" bound for fades.
+- `crossfade` and `whip` need a handle of `D/2` of output time on both sides inside the moment bounds, scaled by each side's playback factor (a sped-up clip needs `1.25 ×` as much source). A clip whose tail is frozen by `hold` needs no tail handle: the freeze extends into the transition. If not feasible, shrink `D` down to the clamp minimum; if still not feasible, `crossfade` becomes `dip_black` and `whip` becomes `hard`, with `no_source_handle` or `slot_too_short`.
+- `dip_black` and `flash` need no handles; if the tempo-derived `D` exceeds the cap, shrink to the minimum or become `hard` with `slot_too_short`.
 - `hold` needs `slot − N ≥ MIN_ZOOM_MS` (300 ms); otherwise shrink to the minimum or become `none` with `slot_too_short`.
 - `speed_up` needs `slot × 0.25` of source after `source.endMs` inside the moment bounds; otherwise `none` with `no_source_handle`.
 - `slow_down` always fits.
 - The last clip of the timeline always resolves to `hard` with `last_clip`.
-- Incoming plus outgoing transition on one clip may not exceed the slot; the outgoing one loses with `overlapping_transitions`.
+- Incoming plus outgoing transition on one clip may not exceed the slot. Under the one-third cap the resolver can never produce this, so `overlapping_transitions` is a validator defense for hand-edited timelines (increment 2), not a resolver outcome.
 
 **Punchline zoom** stays automatic and independent, with two interactions: when the clip has `hold`, the zoom window ends where the hold starts; a clip with `slow_down` gets no zoom.
 
@@ -151,7 +152,7 @@ Per-clip filter order after `trim`, `setpts`, and the transform:
 
 1. `speed`: `setpts=PTS/1.25` or `setpts=PTS/0.8` (for `slow_down` the `trim` consumes `slot × 0.8` of source).
 2. `zoom`: as today.
-3. `hold`: `trim` to `slot − N`, then `tpad=stop_mode=clone:stop_duration=N`.
+3. `hold`: `trim` to `slot − N`, then `tpad=stop_mode=clone:stop_duration=N + H`, where `H` is the outgoing overlap handle (`D/2` for `crossfade` / `whip`, else 0), so the frozen frame carries the clip through the transition.
 4. Outgoing `dip_black` or `flash`: `fade=t=out:st=slot−D/2:d=D/2:color=black|white`. Incoming: `fade=t=in:st=0:d=D/2` with the same color.
 5. `setsar=1`.
 

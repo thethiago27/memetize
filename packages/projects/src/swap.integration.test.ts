@@ -64,6 +64,17 @@ async function seedSwapFixture(db: Database, projectId: string): Promise<void> {
       extractorVersion: '1.0.0',
     },
     {
+      id: 'mom_swap_wide',
+      sceneId: 'scn_swap_1',
+      assetId: 'ast_swap_1',
+      startMs: 0,
+      endMs: 4000,
+      durationMs: 4000,
+      description: 'whole take',
+      extractor: 'fixture',
+      extractorVersion: '1.0.0',
+    },
+    {
       id: 'mom_swap_short',
       sceneId: 'scn_swap_1',
       assetId: 'ast_swap_1',
@@ -101,6 +112,7 @@ async function seedSwapFixture(db: Database, projectId: string): Promise<void> {
       { momentId: 'mom_swap_a', assetId: 'ast_swap_1', finalScore: 0.9, penalties: [] },
       { momentId: 'mom_swap_b', assetId: 'ast_swap_1', finalScore: 0.7, penalties: [] },
       { momentId: 'mom_swap_short', assetId: 'ast_swap_1', finalScore: 0.6, penalties: [] },
+      { momentId: 'mom_swap_wide', assetId: 'ast_swap_1', finalScore: 0.5, penalties: [] },
     ],
     ranker: 'fixture',
     rankerVersion: '1.0.0',
@@ -125,6 +137,44 @@ function timelineWithClip(projectId: string) {
         transform: { scale: 1, positionX: 0.5, positionY: 0.5, cropMode: 'cover' },
         effects: [{ type: 'zoom', startMs: 1350, endMs: 2000, from: 1, to: 1.12 }],
         reason: { segmentId: 'nar_swap_1', semanticScore: 0.8, finalScore: 0.9 },
+      },
+    ],
+  });
+}
+
+/**
+ * Two clips out of the same wide moment, joined by a resolved 500 ms
+ * crossfade: clip 1 has 1,500 ms of tail handle and clip 2 has 1,000 ms of
+ * head handle inside `mom_swap_wide`.
+ */
+function timelineWithCrossfade(projectId: string) {
+  return Timeline.parse({
+    projectId,
+    durationMs: 4000,
+    audio: {
+      path: `storage/audio/${projectId}/original.mp3`,
+      timelineStartMs: 0,
+      sourceStartMs: 0,
+    },
+    clips: [
+      {
+        id: 'clp_swap_1',
+        momentId: 'mom_swap_wide',
+        timeline: { startMs: 0, endMs: 2000 },
+        source: { assetId: 'ast_swap_1', startMs: 500, endMs: 2500 },
+        effects: [],
+        direction: { clipStyle: 'none', transitionOut: 'crossfade' },
+        transitionOut: { style: 'crossfade', durationMs: 500, requested: 'crossfade' },
+        reason: { segmentId: 'nar_swap_1', semanticScore: 0.8, finalScore: 0.5 },
+      },
+      {
+        id: 'clp_swap_2',
+        momentId: 'mom_swap_wide',
+        timeline: { startMs: 2000, endMs: 4000 },
+        source: { assetId: 'ast_swap_1', startMs: 1000, endMs: 3000 },
+        effects: [],
+        transitionOut: { style: 'hard', durationMs: 0, requested: 'hard' },
+        reason: { segmentId: 'nar_swap_1', semanticScore: 0.8, finalScore: 0.5 },
       },
     ],
   });
@@ -201,6 +251,44 @@ describe.skipIf(!handle)('swapClip (integration)', () => {
     expect(persisted).toHaveLength(2);
     const jobs = await Promise.all(events.map((event) => listJobsForEntity(db, event.id)));
     expect(jobs.flat().map((job) => job.type)).toEqual(['FEEDBACK_EMBED', 'FEEDBACK_EMBED']);
+  });
+
+  it('re-resolves cut styles so a swap never leaves a crossfade without a handle', async () => {
+    const projectId = 'prj_swap_cuts';
+    await seedSwapFixture(db, projectId);
+    await insertTimelineVersion(db, {
+      projectId,
+      data: timelineWithCrossfade(projectId),
+      director: 'fixture',
+      directorVersion: '1.2.0',
+      promptVersion: 'v4',
+      timingOptimizer: 'heuristic',
+      timingOptimizerVersion: '1.0.0',
+      effectsPlanner: 'heuristic',
+      effectsPlannerVersion: '1.2.0',
+    });
+
+    // mom_swap_a spans exactly [0, 2000]: once clip 1 uses it there is no
+    // tail handle left, so the crossfade must fall back to a dip to black.
+    const { timeline: next } = await swapClip(db, {
+      projectId,
+      clipId: 'clp_swap_1',
+      momentId: 'mom_swap_a',
+    });
+
+    const [first, second] = next.data.clips;
+    expect(first?.momentId).toBe('mom_swap_a');
+    expect(first?.source).toEqual({ assetId: 'ast_swap_1', startMs: 0, endMs: 2000 });
+    expect(first?.direction).toEqual({ clipStyle: 'none', transitionOut: 'crossfade' });
+    expect(first?.transitionOut).toEqual({
+      style: 'dip_black',
+      durationMs: 250,
+      requested: 'crossfade',
+      downgradeReason: 'no_source_handle',
+    });
+    expect(second?.transitionOut).toEqual({ style: 'hard', durationMs: 0, requested: 'hard' });
+    expect(first?.timeline).toEqual({ startMs: 0, endMs: 2000 });
+    expect(second?.timeline).toEqual({ startMs: 2000, endMs: 4000 });
   });
 
   it('rejects a banned moment before touching the timeline', async () => {

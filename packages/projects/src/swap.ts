@@ -4,6 +4,7 @@ import {
   moments as momentsTable,
   type TimelineVersionRow,
 } from '@memetize/database';
+import { beatMsFromBpm, resolveCutStyles } from '@memetize/effects';
 import {
   buildSegmentContext,
   type FeedbackEventInput,
@@ -11,7 +12,8 @@ import {
   recordFeedbackEvents,
 } from '@memetize/feedback';
 import { enqueueJob } from '@memetize/job-system';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
+import { getAudioAnalysis } from './audio';
 import { listSegmentMatches } from './match';
 import { listNarrativeSegments } from './narrative';
 import { getLatestTimeline, insertTimelineVersion } from './timeline';
@@ -121,9 +123,27 @@ export async function swapClip(db: Database, params: SwapClipParams): Promise<Sw
     };
   });
 
+  // Cut-styles spec: the new moment may not have the source handles the
+  // old one had, so every transition and clip style is re-resolved against
+  // the moments now on the timeline. Zooms are left as they are.
+  const audio = await getAudioAnalysis(db, params.projectId);
+  const momentIds = [...new Set(nextClips.map((entry) => entry.momentId))];
+  const momentRows = await db.query.moments.findMany({
+    where: inArray(momentsTable.id, momentIds),
+  });
+  const resolved = resolveCutStyles(
+    { ...source.data, clips: nextClips },
+    {
+      beatMs: beatMsFromBpm(audio?.bpm),
+      sourceBoundsByMomentId: new Map(
+        momentRows.map((row) => [row.id, { startMs: row.startMs, endMs: row.endMs }]),
+      ),
+    },
+  );
+
   const timeline = await insertTimelineVersion(db, {
     projectId: params.projectId,
-    data: { ...source.data, clips: nextClips },
+    data: resolved.timeline,
     director: 'user',
     directorVersion: '1.0.0',
     promptVersion: source.promptVersion,

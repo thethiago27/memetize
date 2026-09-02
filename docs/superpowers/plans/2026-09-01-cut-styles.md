@@ -84,9 +84,9 @@
 
 ## Phase 3: Resolver
 
-- [ ] **Task 6: Constants and types.** Add duration bases, clamps, speed factors, and `MAX_TRANSITION_SLOT_FRACTION` to `packages/effects/src/constants.ts`. Extend `EffectsContext` with `beatMs` and `sourceBoundsByMomentId`; add `CutDecision` and `EffectsResult.cuts`. No commit alone; folds into Task 7.
+- [x] **Task 6: Constants and types.** Add duration bases, clamps, speed factors, and `MAX_TRANSITION_SLOT_FRACTION` to `packages/effects/src/constants.ts`. Extend `EffectsContext` with `beatMs` and `sourceBoundsByMomentId`; add `CutDecision` and `EffectsResult.cuts`. No commit alone; folds into Task 7.
 
-- [ ] **Task 7: `resolveCutStyles`.** Test table in `cut-styles.test.ts`, one row per case, each asserting resolved style, duration, and reason:
+- [x] **Task 7: `resolveCutStyles`.** Test table in `cut-styles.test.ts`, one row per case, each asserting resolved style, duration, and reason:
   - `crossfade` with handles on both sides → `crossfade`, duration = clamp(beat).
   - `crossfade` with a handle only on one side → shrinks to the minimum if that fits, else `dip_black` / `no_source_handle`.
   - `crossfade` where a neighbor slot is under `3 × D_min` → `dip_black` / `slot_too_short`.
@@ -96,16 +96,16 @@
   - `speed_up` with 25 % extra source in the moment → `speed` effect with `factor 1.25` and `source.endMs` extended; without → `none` / `no_source_handle`.
   - `slow_down` → always `speed` with `factor 0.8`.
   - Last clip requests `crossfade` → `hard` / `last_clip`.
-  - Incoming `crossfade` plus outgoing `crossfade` on a slot shorter than their sum → outgoing `hard` / `overlapping_transitions`.
+  - (`overlapping_transitions` cannot occur under the one-third cap; it is tested on the validator in Task 11.)
   - Determinism: two runs give deep-equal output.
   - Slots never move; only `source.endMs` for `speed_up`.
   Implement the resolver visiting clips in timeline order, clip style before transition. Commit `feat: resolve director cut styles against source handles`.
 
-- [ ] **Task 8: `planEffects` integration.** Tests in `plan.test.ts`: zoom window ends where `hold` starts; `slow_down` suppresses zoom; a re-run does not accumulate `hold` / `speed` entries; `EffectsResult.cuts` lists every decision. Call `resolveCutStyles` first, then the zoom. Commit `feat: plan cut styles before the punchline zoom`.
+- [x] **Task 8: `planEffects` integration.** Tests in `plan.test.ts`: zoom window ends where `hold` starts; `slow_down` suppresses zoom; a re-run does not accumulate `hold` / `speed` entries; `EffectsResult.cuts` lists every decision. Call `resolveCutStyles` first, then the zoom. Commit `feat: plan cut styles before the punchline zoom`.
 
-- [ ] **Task 9: Effects worker.** Load audio analysis (`beatMs` from the project's tempo, fallback 500 ms when absent) and moment rows for bounds, mirroring the Timing worker; write `cuts` to the effects debug file; set `effectsPlannerVersion` from the registry. Extend the existing worker integration test if one exists, else add a focused one around the context builder. Commit `feat: resolve cut styles in the effects worker`.
+- [x] **Task 9: Effects worker.** Load audio analysis (`beatMs` from the project's tempo, fallback 500 ms when absent) and moment rows for bounds, mirroring the Timing worker; write `cuts` to the effects debug file; set `effectsPlannerVersion` from the registry. Extend the existing worker integration test if one exists, else add a focused one around the context builder. Commit `feat: resolve cut styles in the effects worker`.
 
-- [ ] **Task 10: Swap re-resolution.** Integration test in `swap.integration.test.ts`: a clip with `transitionOut: crossfade` swapped to a moment with no tail handle persists as `dip_black` with `no_source_handle`, and its neighbors are re-resolved. Load audio analysis and the three moments' bounds inside `swapClip`, call `resolveCutStyles` on a three-clip window, and merge the result back. Commit `fix: revalidate cut styles when a clip is swapped`.
+- [x] **Task 10: Swap re-resolution.** Integration test in `swap.integration.test.ts`: a clip with `transitionOut: crossfade` swapped to a moment with no tail handle persists as `dip_black` with `no_source_handle`, and its neighbors are re-resolved. Load audio analysis and the three moments' bounds inside `swapClip`, call `resolveCutStyles` on a three-clip window, and merge the result back. Commit `fix: revalidate cut styles when a clip is swapped`.
 
 ## Phase 4: Renderer
 

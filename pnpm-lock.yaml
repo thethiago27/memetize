@@ -319,6 +319,9 @@ importers:
       '@memetize/database':
         specifier: workspace:*
         version: link:../database
+      '@memetize/effects':
+        specifier: workspace:*
+        version: link:../effects
       '@memetize/feedback':
         specifier: workspace:*
         version: link:../feedback
