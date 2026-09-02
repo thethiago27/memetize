@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix a spurious `INSUFFICIENT_CATALOG`: the coverage resolver now tries every duration-compatible candidate in preference order instead of giving up when the Director's pick would leave an unabsorbable tail.
+
 - Redesign the Studio in Portuguese: projects home with cards and a new-project dialog, an editor with pipeline stepper, 9:16 preview, horizontal timeline strip with thumbnails and seek, a clip inspector with segment, current moment, and candidates, tabs for narrative, renders, editorial memory, and jobs, a library grid with drag-and-drop upload, an asset page with scene frames, and toasts for every action.
 - `GET /v1/projects/:id` returns `moments`: descriptions, asset names, and nearest frames for every referenced moment.
 

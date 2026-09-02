@@ -111,6 +111,27 @@ describe('resolveCoverage', () => {
     });
   });
 
+  it('skips a primary that would leave an unabsorbable tail and uses a full-cover candidate', () => {
+    // Real case: a 1898 ms segment, Director pick of 1867 ms, and a 1933 ms
+    // candidate further down the ranking. The pick alone leaves 31 ms.
+    const result = resolveCoverage({
+      window: { sourceStartMs: 89_002, sourceEndMs: 149_002 },
+      segments: [{ id: 'nar_1', startMs: 108_042, endMs: 109_940 }],
+      picks: [{ segmentId: 'nar_1', momentId: 'mom_pick' }],
+      matches: matchMap('nar_1', ['mom_pick', 'mom_also_short', 'mom_cover']),
+      moments: new Map([
+        ['mom_pick', { assetId: 'ast_a', startMs: 0, endMs: 1_867, durationMs: 1_867 }],
+        ['mom_also_short', { assetId: 'ast_b', startMs: 0, endMs: 1_867, durationMs: 1_867 }],
+        ['mom_cover', { assetId: 'ast_a', startMs: 0, endMs: 1_933, durationMs: 1_933 }],
+      ]),
+      beats: [108_042, 108_500, 109_940],
+    });
+    expect(result.clips.map((clip) => [clip.momentId, clip.timeline])).toEqual([
+      ['mom_cover', { startMs: 19_040, endMs: 20_938 }],
+    ]);
+    expect(result.decisions[0]).toMatchObject({ momentId: 'mom_cover', role: 'fallback' });
+  });
+
   it('throws when no moment can cover the minimum slot', () => {
     expect(() => resolveCoverage(insufficientFixture())).toThrow(InsufficientCatalogError);
   });

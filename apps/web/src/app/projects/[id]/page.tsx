@@ -58,6 +58,9 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
   useInterval(load, detail !== null && hasActiveJobs(detail.jobs));
 
   const clips = detail?.timeline?.data.clips ?? [];
+  // Older API processes answer without these fields; never let a missing map crash the editor.
+  const moments = detail?.moments ?? {};
+  const feedback = detail?.feedback ?? [];
   const selected = useMemo(
     () => clips.find((clip) => clip.id === selectedId) ?? null,
     [clips, selectedId],
@@ -74,8 +77,8 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
     );
   }, [detail, selected]);
   const latestRating = useMemo(
-    () => detail?.feedback.find((event) => event.kind === 'VIDEO_RATING')?.value ?? null,
-    [detail],
+    () => feedback.find((event) => event.kind === 'VIDEO_RATING')?.value ?? null,
+    [feedback],
   );
   const failedJobs = useMemo(() => {
     if (!detail) return [];
@@ -100,7 +103,7 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
     detail.timeline != null &&
     detail.render != null &&
     detail.timeline.version !== detail.render.timelineVersion;
-  const momentName = (momentId: string) => detail.moments[momentId]?.description ?? momentId;
+  const momentName = (momentId: string) => moments[momentId]?.description ?? momentId;
 
   const run = async (label: string, action: () => Promise<unknown>, success?: string) => {
     setBusy(label);
@@ -257,7 +260,7 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
               clips={clips}
               durationMs={durationMs}
               segments={detail.narrative}
-              moments={detail.moments}
+              moments={moments}
               selectedId={selectedId}
               playheadMs={playheadMs}
               onSelect={selectClip}
@@ -268,7 +271,7 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
         <Inspector
           clip={selected}
           segment={segment}
-          moments={detail.moments}
+          moments={moments}
           shortlist={shortlist}
           busy={busy}
           onThumb={(kind) =>
@@ -411,12 +414,12 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
                 {busy === 'note' ? 'Salvando…' : 'Adicionar nota'}
               </button>
             </form>
-            {detail.feedback.length === 0 ? (
+            {feedback.length === 0 ? (
               <p className="mute">
                 Nada aprendido ainda. Troque, avalie ou anote para ensinar o motor.
               </p>
             ) : (
-              detail.feedback.map((event) => (
+              feedback.map((event) => (
                 <div key={event.id} className="row">
                   <span className="small">
                     {describeFeedback(event, momentName)}

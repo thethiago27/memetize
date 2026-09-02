@@ -177,80 +177,92 @@ function placeNextClip(params: {
     return moment !== undefined && momentDuration(moment) >= params.minSlotMs;
   });
 
-  const eligiblePrimary =
+  // Try every duration-compatible candidate in preference order instead of
+  // committing to the first one: a pick that is long enough for the minimum
+  // slot can still leave an unabsorbable tail (e.g. a 1867 ms moment on a
+  // 1898 ms segment), and the next candidate may cover the span outright.
+  const attempts: { momentId: string; reason: string }[] = [];
+  const seen = new Set<string>();
+  const push = (entry: { momentId: string; reason: string } | null) => {
+    if (!entry || seen.has(entry.momentId)) return;
+    seen.add(entry.momentId);
+    attempts.push(entry);
+  };
+  if (
     params.usedMomentIds.size === 0 &&
     params.pickMomentId !== undefined &&
     longEnough.includes(params.pickMomentId)
-      ? chooseCandidate([params.pickMomentId], null, params.moments)
-      : null;
-  const pick =
-    eligiblePrimary ??
-    chooseCandidate(fullCover, params.lastAssetId, params.moments) ??
-    chooseCandidate(longEnough, params.lastAssetId, params.moments);
-  if (!pick) return null;
+  ) {
+    push({ momentId: params.pickMomentId, reason: 'director primary' });
+  }
+  for (const entry of orderCandidates(fullCover, params.lastAssetId, params.moments)) push(entry);
+  for (const entry of orderCandidates(longEnough, params.lastAssetId, params.moments)) push(entry);
 
-  const moment = params.moments.get(pick.momentId);
-  if (!moment) return null;
-  const available = momentDuration(moment);
-  const takeMs = pickTakeMs(
-    params.cursor,
-    params.remainder,
-    available,
-    params.beats,
-    params.minSlotMs,
-  );
-  if (takeMs === null) return null;
-  if (takeMs < params.minSlotMs && takeMs !== params.remainder) return null;
+  for (const pick of attempts) {
+    const moment = params.moments.get(pick.momentId);
+    if (!moment) continue;
+    const available = momentDuration(moment);
+    const takeMs = pickTakeMs(
+      params.cursor,
+      params.remainder,
+      available,
+      params.beats,
+      params.minSlotMs,
+    );
+    if (takeMs === null) continue;
+    if (takeMs < params.minSlotMs && takeMs !== params.remainder) continue;
 
-  const timelineStart = params.cursor - params.windowStartMs;
-  const clip: ResolvedCoverageClip = {
-    id: clipId(),
-    momentId: pick.momentId,
-    segmentId: params.segment.id,
-    timeline: { startMs: timelineStart, endMs: timelineStart + takeMs },
-    source: {
-      assetId: moment.assetId,
-      startMs: moment.startMs,
-      endMs: moment.startMs + takeMs,
-    },
-  };
-
-  const role: CoverageDecision['role'] =
-    params.usedMomentIds.size === 0
-      ? params.pickMomentId === pick.momentId
-        ? 'primary'
-        : 'fallback'
-      : 'tile';
-
-  return {
-    clip,
-    decision: {
-      segmentId: params.segment.id,
+    const timelineStart = params.cursor - params.windowStartMs;
+    const clip: ResolvedCoverageClip = {
+      id: clipId(),
       momentId: pick.momentId,
-      role,
-      reason: pick.reason,
-    },
-  };
+      segmentId: params.segment.id,
+      timeline: { startMs: timelineStart, endMs: timelineStart + takeMs },
+      source: {
+        assetId: moment.assetId,
+        startMs: moment.startMs,
+        endMs: moment.startMs + takeMs,
+      },
+    };
+    const role: CoverageDecision['role'] =
+      params.usedMomentIds.size === 0
+        ? params.pickMomentId === pick.momentId
+          ? 'primary'
+          : 'fallback'
+        : 'tile';
+    return {
+      clip,
+      decision: {
+        segmentId: params.segment.id,
+        momentId: pick.momentId,
+        role,
+        reason: pick.reason,
+      },
+    };
+  }
+  return null;
 }
 
-function chooseCandidate(
+/** Candidates that avoid repeating the previous clip's asset first, then the rest, in rank order. */
+function orderCandidates(
   momentIds: readonly string[],
   lastAssetId: string | null,
   moments: ReadonlyMap<string, AssembleMoment>,
-): { momentId: string; reason: string } | null {
-  if (momentIds.length === 0) return null;
+): { momentId: string; reason: string }[] {
   const avoided = lastAssetId
     ? momentIds.filter((momentId) => moments.get(momentId)?.assetId !== lastAssetId)
-    : momentIds;
-  const chosen = avoided[0] ?? momentIds[0];
-  if (!chosen) return null;
-  return {
-    momentId: chosen,
-    reason:
-      avoided[0] && avoided[0] !== momentIds[0]
-        ? 'avoided adjacent asset reuse'
-        : 'duration-compatible candidate',
-  };
+    : [...momentIds];
+  const rest = momentIds.filter((momentId) => !avoided.includes(momentId));
+  return [
+    ...avoided.map((momentId, index) => ({
+      momentId,
+      reason:
+        index === 0 && momentId !== momentIds[0]
+          ? 'avoided adjacent asset reuse'
+          : 'duration-compatible candidate',
+    })),
+    ...rest.map((momentId) => ({ momentId, reason: 'duration-compatible candidate' })),
+  ];
 }
 
 function pickTakeMs(
