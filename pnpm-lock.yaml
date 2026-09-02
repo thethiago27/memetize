@@ -98,6 +98,9 @@ importers:
       '@memetize/projects':
         specifier: workspace:*
         version: link:../../packages/projects
+      '@memetize/renderer':
+        specifier: workspace:*
+        version: link:../../packages/renderer
       '@memetize/retriever':
         specifier: workspace:*
         version: link:../../packages/retriever

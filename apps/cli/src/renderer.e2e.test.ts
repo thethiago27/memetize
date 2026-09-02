@@ -9,6 +9,7 @@ import { createTestDatabase, type Database, truncateAll } from '@memetize/databa
 import { ingestAsset, probeVideo } from '@memetize/media-catalog';
 import { Orchestrator, ResourceScheduler } from '@memetize/orchestrator';
 import {
+  effectsDebugFile,
   getLatestRender,
   getLatestTimeline,
   getProject,
@@ -18,6 +19,7 @@ import {
   renderProject,
   resolveStorage,
 } from '@memetize/projects';
+import { isFadeStyle, isOverlapStyle, transitionOutOf } from '@memetize/renderer';
 import { SCENE_DETECTOR_DIR } from '@memetize/scene-detector';
 import type { AppConfig } from '@memetize/shared';
 import type { Timeline } from '@memetize/timeline';
@@ -73,6 +75,30 @@ async function makeMovingClip(path: string, durationSeconds: number): Promise<vo
   ]);
 }
 
+/** `black_start:X black_end:Y` pairs from `blackdetect`, in ms. */
+function parseBlackIntervals(stderr: string): { startMs: number; endMs: number }[] {
+  const intervals: { startMs: number; endMs: number }[] = [];
+  const pattern = /black_start:([\d.]+) black_end:([\d.]+)/g;
+  for (const match of stderr.matchAll(pattern)) {
+    intervals.push({
+      startMs: Math.round(Number(match[1]) * 1000),
+      endMs: Math.round(Number(match[2]) * 1000),
+    });
+  }
+  return intervals;
+}
+
+/** Output-time windows where a `dip_black` boundary may legitimately be black. */
+function dipBlackWindows(timeline: Timeline): { startMs: number; endMs: number }[] {
+  const sorted = [...timeline.clips].sort((a, b) => a.timeline.startMs - b.timeline.startMs);
+  return sorted.flatMap((clip, index) => {
+    const transition = transitionOutOf(clip, index === sorted.length - 1);
+    if (transition.style !== 'dip_black') return [];
+    const half = transition.durationMs / 2;
+    return [{ startMs: clip.timeline.endMs - half, endMs: clip.timeline.endMs + half }];
+  });
+}
+
 function assertContinuous(timeline: Timeline): void {
   expect(timeline.clips.length).toBeGreaterThan(0);
   expect(timeline.clips[0]?.timeline.startMs).toBe(0);
@@ -81,7 +107,8 @@ function assertContinuous(timeline: Timeline): void {
   }
   expect(timeline.clips.at(-1)?.timeline.endMs).toBe(timeline.durationMs);
   for (const clip of timeline.clips) {
-    expect(clip.source.endMs - clip.source.startMs).toBe(
+    // A sped-up clip legitimately carries more source than its slot; none may carry less.
+    expect(clip.source.endMs - clip.source.startMs).toBeGreaterThanOrEqual(
       clip.timeline.endMs - clip.timeline.startMs,
     );
   }
@@ -270,4 +297,82 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('renderer pipeline (
     expect(outcomes.some((outcome) => outcome.job.type === 'RENDER')).toBe(false);
     expect(await getLatestRender(db, project.id)).toBeUndefined();
   }, 60_000);
+
+  it('renders every cut style the styled fixture proposes and keeps black inside dip_black windows', async () => {
+    await truncateAll(db);
+    const styledConfig: AppConfig = {
+      ...config,
+      providers: { ...config.providers, llm: { kind: 'fixture', model: 'styled' } },
+    };
+    const styled = new Orchestrator({
+      db,
+      config: styledConfig,
+      registry: buildRegistry(),
+      scheduler: new ResourceScheduler(styledConfig.resources),
+    });
+
+    for (const index of [0, 1, 2]) {
+      const clipPath = join(tmp, `styled-clip-${index}.mp4`);
+      await makeMovingClip(clipPath, 8);
+      const { asset } = await ingestAsset({ db, config: styledConfig, filePath: clipPath });
+      const outcomes = await styled.drain({ entityId: asset.id });
+      expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
+    }
+
+    const { project } = await ingestProject({ db, config: styledConfig, filePath: songFixture });
+    const createOutcomes = await styled.drain({ entityId: project.id });
+    expect(createOutcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
+
+    const timelineVersion = await getLatestTimeline(db, project.id);
+    expect(timelineVersion).toBeDefined();
+    const timeline = timelineVersion?.data as Timeline;
+    assertContinuous(timeline);
+
+    // The Director proposed styles, and every clip carries a resolution.
+    expect(timeline.clips.some((clip) => clip.direction.transitionOut !== 'hard')).toBe(true);
+    expect(timeline.clips.every((clip) => clip.transitionOut !== undefined)).toBe(true);
+    const effectsDebug = JSON.parse(
+      await readFile(effectsDebugFile(config, project.id).absolute, 'utf8'),
+    );
+    expect(Array.isArray(effectsDebug.cuts)).toBe(true);
+    expect(effectsDebug.cuts.length).toBeGreaterThan(0);
+
+    await renderProject(db, project.id);
+    const renderOutcomes = await styled.drain({ entityId: project.id });
+    expect(renderOutcomes.map((outcome) => outcome.status)).toEqual(['COMPLETED']);
+
+    const render = await getLatestRender(db, project.id);
+    const renderPath = resolveStorage(config, render?.path ?? '');
+    const probe = await probeVideo(renderPath);
+    expect(probe.width).toBe(1080);
+    expect(probe.height).toBe(1920);
+    expect(probe.fpsMilli).toBe(30000);
+    expect(Math.abs(probe.durationMs - 6000)).toBeLessThanOrEqual(200);
+
+    // The graph agrees with the resolved timeline.
+    const sorted = [...timeline.clips].sort((a, b) => a.timeline.startMs - b.timeline.startMs);
+    const resolved = sorted.map((clip, index) =>
+      transitionOutOf(clip, index === sorted.length - 1),
+    );
+    const debug = JSON.parse(await readFile(renderDebugFile(config, project.id).absolute, 'utf8'));
+    const filter = String(debug.graph.filterComplex);
+    expect(filter.includes('xfade=')).toBe(resolved.some((t) => isOverlapStyle(t.style)));
+    expect(filter.includes('fade=t=out')).toBe(resolved.some((t) => isFadeStyle(t.style)));
+    expect(filter.includes('tpad=stop_mode=clone')).toBe(
+      timeline.clips.some((clip) => clip.effects.some((effect) => effect.type === 'hold')),
+    );
+
+    // Black frames only where a dip to black was declared.
+    const windows = dipBlackWindows(timeline);
+    const black = parseBlackIntervals(await detectBlack(renderPath));
+    for (const interval of black) {
+      const inside = windows.some(
+        (window) => interval.startMs >= window.startMs - 50 && interval.endMs <= window.endMs + 50,
+      );
+      expect(
+        inside,
+        `black ${interval.startMs}-${interval.endMs}ms outside dip_black windows`,
+      ).toBe(true);
+    }
+  }, 180_000);
 });
