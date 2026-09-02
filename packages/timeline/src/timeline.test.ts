@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CLIP_STYLES,
   DEFAULT_CANVAS,
   TIMELINE_SCHEMA_VERSION,
   Timeline,
+  TRANSITION_STYLES,
   toTimelineJsonSchema,
 } from './timeline';
 
@@ -72,6 +74,82 @@ describe('Timeline', () => {
       ],
     };
     expect(Timeline.safeParse(invalid).success).toBe(false);
+  });
+
+  it('defaults direction and transitionOut on a clip persisted before cut styles', () => {
+    const result = Timeline.safeParse(specExample);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const clip = result.data.clips[0];
+    expect(clip?.direction).toEqual({ clipStyle: 'none', transitionOut: 'hard' });
+    expect(clip?.transitionOut).toBeUndefined();
+  });
+
+  it('parses a resolved transition with its requested style and downgrade reason', () => {
+    const result = Timeline.safeParse({
+      ...specExample,
+      clips: [
+        {
+          ...specExample.clips[0],
+          direction: { clipStyle: 'hold', transitionOut: 'crossfade' },
+          transitionOut: {
+            style: 'dip_black',
+            durationMs: 200,
+            requested: 'crossfade',
+            downgradeReason: 'no_source_handle',
+          },
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.clips[0]?.transitionOut?.style).toBe('dip_black');
+  });
+
+  it('rejects a transition or clip style outside the closed vocabulary', () => {
+    const glitch = {
+      ...specExample,
+      clips: [
+        { ...specExample.clips[0], direction: { clipStyle: 'none', transitionOut: 'glitch' } },
+      ],
+    };
+    expect(Timeline.safeParse(glitch).success).toBe(false);
+
+    const freeze = {
+      ...specExample,
+      clips: [
+        { ...specExample.clips[0], direction: { clipStyle: 'freeze', transitionOut: 'hard' } },
+      ],
+    };
+    expect(Timeline.safeParse(freeze).success).toBe(false);
+  });
+
+  it('requires an even, non-negative transition duration so each handle is an integer', () => {
+    const odd = {
+      ...specExample,
+      clips: [
+        {
+          ...specExample.clips[0],
+          transitionOut: { style: 'crossfade', durationMs: 301, requested: 'crossfade' },
+        },
+      ],
+    };
+    expect(Timeline.safeParse(odd).success).toBe(false);
+
+    const negative = {
+      ...specExample,
+      clips: [
+        {
+          ...specExample.clips[0],
+          transitionOut: { style: 'hard', durationMs: -2, requested: 'hard' },
+        },
+      ],
+    };
+    expect(Timeline.safeParse(negative).success).toBe(false);
+  });
+
+  it('exports the closed vocabularies for consumers that render labels', () => {
+    expect(TRANSITION_STYLES).toEqual(['hard', 'dip_black', 'flash', 'crossfade', 'whip']);
+    expect(CLIP_STYLES).toEqual(['none', 'hold', 'speed_up', 'slow_down']);
   });
 
   it('exports a JSON Schema with $schema and properties (spec section 34)', () => {

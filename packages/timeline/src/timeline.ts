@@ -71,6 +71,54 @@ export const TimelineEffect = z
   .catchall(z.unknown());
 export type TimelineEffect = z.infer<typeof TimelineEffect>;
 
+/**
+ * Cut styles (cut-styles spec): a closed vocabulary the Director proposes
+ * from and the Effects resolver validates against real source handles.
+ * Both enums are exported as arrays too so label maps can iterate them.
+ */
+export const TRANSITION_STYLES = ['hard', 'dip_black', 'flash', 'crossfade', 'whip'] as const;
+export const TransitionStyle = z.enum(TRANSITION_STYLES);
+export type TransitionStyle = z.infer<typeof TransitionStyle>;
+
+export const CLIP_STYLES = ['none', 'hold', 'speed_up', 'slow_down'] as const;
+export const ClipStyle = z.enum(CLIP_STYLES);
+export type ClipStyle = z.infer<typeof ClipStyle>;
+
+export const CUT_DOWNGRADE_REASONS = [
+  'no_source_handle',
+  'slot_too_short',
+  'overlapping_transitions',
+  'last_clip',
+] as const;
+export const CutDowngradeReason = z.enum(CUT_DOWNGRADE_REASONS);
+export type CutDowngradeReason = z.infer<typeof CutDowngradeReason>;
+
+/** What the Director asked for. Immutable through Timing; resolved by Effects. */
+export const TimelineDirection = z.object({
+  clipStyle: ClipStyle.default('none'),
+  transitionOut: TransitionStyle.default('hard'),
+});
+export type TimelineDirection = z.infer<typeof TimelineDirection>;
+
+export const DEFAULT_DIRECTION: TimelineDirection = { clipStyle: 'none', transitionOut: 'hard' };
+
+/**
+ * The resolved transition out of this clip into the next one. Centered on
+ * the boundary; each side contributes `durationMs / 2` as a source handle,
+ * so the duration must be even for both handles to be integer ms.
+ */
+export const TimelineTransitionOut = z.object({
+  style: TransitionStyle,
+  durationMs: z
+    .number()
+    .int()
+    .nonnegative()
+    .refine((ms) => ms % 2 === 0, { message: 'transition durationMs must be even' }),
+  requested: TransitionStyle,
+  downgradeReason: CutDowngradeReason.optional(),
+});
+export type TimelineTransitionOut = z.infer<typeof TimelineTransitionOut>;
+
 /** Why this particular moment was picked, kept for debugging/inspection (spec section 64). */
 export const TimelineClipReason = z.object({
   segmentId: z.string(),
@@ -86,6 +134,8 @@ export const TimelineClip = z.object({
   source: TimelineClipSource,
   transform: TimelineTransform.default(DEFAULT_TRANSFORM),
   effects: z.array(TimelineEffect).default([]),
+  direction: TimelineDirection.default(DEFAULT_DIRECTION),
+  transitionOut: TimelineTransitionOut.optional(),
   reason: TimelineClipReason,
 });
 export type TimelineClip = z.infer<typeof TimelineClip>;
