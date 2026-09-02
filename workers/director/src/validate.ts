@@ -11,7 +11,7 @@ export class DirectorInvalidPickError extends Error {}
  * empty shortlist is always a bug.
  */
 export function validatePicks(
-  picks: readonly DirectorPick[],
+  picks: readonly Pick<DirectorPick, 'segmentId' | 'momentId'>[],
   shortlistBySegment: ReadonlyMap<string, ReadonlySet<string>>,
 ): void {
   const pickedSegments = new Set<string>();

@@ -34,3 +34,5 @@ export const DirectorPick = z.object({
   transitionOut: TransitionStyle.default('hard'),
 });
 export type DirectorPick = z.infer<typeof DirectorPick>;
+/** What callers may hand in before defaults apply (cut styles optional). */
+export type DirectorPickInput = z.input<typeof DirectorPick>;

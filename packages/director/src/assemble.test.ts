@@ -210,6 +210,56 @@ describe('assembleTimeline', () => {
     expect(timeline.audio.sourceStartMs).toBe(30_000);
   });
 
+  it('places the pick clip style on the primary clip and the transition on the segment tail', () => {
+    const moments = new Map<string, AssembleMoment>([
+      ['mom_primary', moment('ast_1', 0, 1_000)],
+      ['mom_fill_a', moment('ast_2', 0, 1_000)],
+      ['mom_fill_b', moment('ast_3', 0, 1_000)],
+    ]);
+    const shortlist = [
+      { momentId: 'mom_primary', assetId: 'ast_1', finalScore: 0.9, penalties: [] },
+      { momentId: 'mom_fill_a', assetId: 'ast_2', finalScore: 0.8, penalties: [] },
+      { momentId: 'mom_fill_b', assetId: 'ast_3', finalScore: 0.7, penalties: [] },
+    ];
+    const timeline = assembleTimeline({
+      ...baseParams,
+      window: { sourceStartMs: 0, sourceEndMs: 4_000, durationMs: 4_000 },
+      beats: [0, 1_000, 2_000, 3_000, 4_000],
+      picks: [
+        {
+          segmentId: 'nar_1',
+          momentId: 'mom_primary',
+          clipStyle: 'hold',
+          transitionOut: 'crossfade',
+        },
+        { segmentId: 'nar_2', momentId: 'mom_fill_b' },
+      ],
+      segments: [
+        { id: 'nar_1', startMs: 0, endMs: 3_000 },
+        { id: 'nar_2', startMs: 3_000, endMs: 4_000 },
+      ],
+      moments,
+      matches: new Map([
+        ['nar_1', match({ shortlist })],
+        ['nar_2', match({ shortlist: [shortlist[2] as (typeof shortlist)[number]] })],
+      ]),
+    });
+
+    expect(timeline.clips.map((clip) => clip.momentId)).toEqual([
+      'mom_primary',
+      'mom_fill_a',
+      'mom_fill_b',
+      'mom_fill_b',
+    ]);
+    expect(timeline.clips.map((clip) => clip.direction)).toEqual([
+      { clipStyle: 'hold', transitionOut: 'hard' },
+      { clipStyle: 'none', transitionOut: 'hard' },
+      { clipStyle: 'none', transitionOut: 'crossfade' },
+      { clipStyle: 'none', transitionOut: 'hard' },
+    ]);
+    expect(timeline.clips.every((clip) => clip.transitionOut === undefined)).toBe(true);
+  });
+
   it('throws when the catalog cannot cover a minimum slot', () => {
     expect(() =>
       assembleTimeline({

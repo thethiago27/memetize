@@ -1,4 +1,4 @@
-import type { DirectorPick } from '@memetize/contracts';
+import type { DirectorPickInput } from '@memetize/contracts';
 import { MIN_VISUAL_SLOT_MS } from '@memetize/edit-planner';
 import { clipId } from '@memetize/shared';
 import type { AssembleMoment, AssembleSegment, AssembleSegmentMatch } from './assemble';
@@ -15,7 +15,7 @@ export class InsufficientCatalogError extends Error {
 export interface ResolveCoverageInput {
   window: { sourceStartMs: number; sourceEndMs: number };
   segments: readonly AssembleSegment[];
-  picks: readonly DirectorPick[];
+  picks: readonly DirectorPickInput[];
   matches: ReadonlyMap<string, AssembleSegmentMatch>;
   moments: ReadonlyMap<string, AssembleMoment>;
   beats: readonly number[];
@@ -25,6 +25,9 @@ export interface ResolvedCoverageClip {
   id: string;
   momentId: string;
   segmentId: string;
+  /** Mirrors the matching `CoverageDecision.role` so Assemble can tell the
+   * Director's primary clip from tiles without re-deriving it. */
+  role: CoverageDecision['role'];
   timeline: { startMs: number; endMs: number };
   source: { assetId: string; startMs: number; endMs: number };
 }
@@ -122,7 +125,7 @@ function resolveSegment(
       );
     }
 
-    clips.push(placed.clip);
+    clips.push({ ...placed.clip, role: placed.decision.role });
     decisions.push(placed.decision);
     usedMomentIds.add(placed.clip.momentId);
     lastAssetId = placed.clip.source.assetId;
@@ -166,7 +169,7 @@ function placeNextClip(params: {
   beats: readonly number[];
   minSlotMs: number;
   windowStartMs: number;
-}): { clip: ResolvedCoverageClip; decision: CoverageDecision } | null {
+}): { clip: Omit<ResolvedCoverageClip, 'role'>; decision: CoverageDecision } | null {
   const unused = params.candidates.filter((momentId) => !params.usedMomentIds.has(momentId));
   const fullCover = unused.filter((momentId) => {
     const moment = params.moments.get(momentId);
@@ -213,7 +216,7 @@ function placeNextClip(params: {
     if (takeMs < params.minSlotMs && takeMs !== params.remainder) continue;
 
     const timelineStart = params.cursor - params.windowStartMs;
-    const clip: ResolvedCoverageClip = {
+    const clip: Omit<ResolvedCoverageClip, 'role'> = {
       id: clipId(),
       momentId: pick.momentId,
       segmentId: params.segment.id,

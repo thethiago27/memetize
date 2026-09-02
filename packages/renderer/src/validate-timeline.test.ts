@@ -1,4 +1,9 @@
-import { DEFAULT_TRANSFORM, Timeline, type TimelineClip } from '@memetize/timeline';
+import {
+  DEFAULT_DIRECTION,
+  DEFAULT_TRANSFORM,
+  Timeline,
+  type TimelineClip,
+} from '@memetize/timeline';
 import { describe, expect, it } from 'vitest';
 import { validateTimeline } from './validate-timeline';
 
@@ -15,6 +20,7 @@ function clip(overrides: Partial<TimelineClip> & { id: string }): TimelineClip {
     },
     transform: overrides.transform ?? DEFAULT_TRANSFORM,
     effects: overrides.effects ?? [],
+    direction: overrides.direction ?? DEFAULT_DIRECTION,
     reason: overrides.reason ?? { segmentId: 'nar_1', semanticScore: 0.5, finalScore: 0.5 },
   };
 }

@@ -1,5 +1,5 @@
 import type { Timeline, TimelineClip, TimelineRange } from '@memetize/timeline';
-import { Timeline as TimelineSchema } from '@memetize/timeline';
+import { DEFAULT_DIRECTION, Timeline as TimelineSchema } from '@memetize/timeline';
 import { describe, expect, it } from 'vitest';
 import { MIN_ZOOM_MS, ZOOM_FROM, ZOOM_TAIL_MS, ZOOM_TO, ZOOM_TO_HIGH } from './constants';
 import { planEffects } from './plan';
@@ -23,6 +23,7 @@ function buildClip(
       cropMode: 'cover',
     },
     effects: overrides.effects ?? [],
+    direction: overrides.direction ?? DEFAULT_DIRECTION,
     reason: overrides.reason ?? { segmentId: `seg_${id}`, semanticScore: 0.5, finalScore: 0.5 },
   };
 }
