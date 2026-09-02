@@ -109,11 +109,11 @@
 
 ## Phase 4: Renderer
 
-- [ ] **Task 11: Validation.** Tests in `validate-timeline.test.ts`: `hold` and `speed` produce no `UNKNOWN_EFFECT`; an unknown style is still rejected (rename the `fade` test); `TRANSITION_TOO_LONG` when `durationMs > min(slotA, slotB) / 3`; `TRANSITION_HANDLE_OUT_OF_BOUNDS` when `source.startMs − D/2 < 0`; `OVERLAPPING_TRANSITIONS` when incoming plus outgoing exceed the slot. Add the codes to `TimelineIssue` and the checks. Commit `feat: validate transitions and clip styles in the timeline`.
+- [x] **Task 11: Validation.** Tests in `validate-timeline.test.ts`: `hold` and `speed` produce no `UNKNOWN_EFFECT`; an unknown style is still rejected (rename the `fade` test); `TRANSITION_TOO_LONG` when `durationMs > min(slotA, slotB) / 3`; `TRANSITION_HANDLE_OUT_OF_BOUNDS` when `source.startMs − D/2 < 0`; `OVERLAPPING_TRANSITIONS` when incoming plus outgoing exceed the slot. Add the codes to `TimelineIssue` and the checks. Commit `feat: validate transitions and clip styles in the timeline`.
 
-- [ ] **Task 12: Cut helpers.** Tests in `cuts.test.ts` for `handlesFor` (incoming and outgoing halves, zero for `hard` and non-overlapping styles), `buildBoundaryFadeFilters` (black and white, in and out, `st` and `d` values), `buildHoldFilter`, `buildSpeedFilter` (`setpts` and trimmed source length for `slow_down`), and the parsers' rejection of malformed entries. Commit `feat: add renderer helpers for cut styles`.
+- [x] **Task 12: Cut helpers.** Tests in `cuts.test.ts` for `handlesFor` (incoming and outgoing halves, zero for `hard` and non-overlapping styles), `buildBoundaryFadeFilters` (black and white, in and out, `st` and `d` values), `buildHoldFilter`, `buildSpeedFilter` (`setpts` and trimmed source length for `slow_down`), and the parsers' rejection of malformed entries. Commit `feat: add renderer helpers for cut styles`.
 
-- [ ] **Task 13: Graph.** Tests in `graph.test.ts`:
+- [x] **Task 13: Graph.** Tests in `graph.test.ts`:
   - No styles → graph identical to today (existing tests keep passing).
   - Two clips with `crossfade` 300 ms → `[v0][v1]xfade=transition=fade:duration=0.300:offset=<slotA−0.150>[x1]`, A trimmed to `source.endMs + 150`, B from `source.startMs − 150`.
   - Three clips, hard then whip → `concat` of the first two, then `xfade=transition=slideleft` with offset = `slotA + slotB − D/2`.
@@ -124,7 +124,7 @@
   - Sum of segment lengths minus every `xfade` duration equals `durationMs`.
   Replace the terminal `concat` with the accumulator. Commit `feat: render transitions and clip styles in the ffmpeg graph`.
 
-- [ ] **Task 14: End to end.** Extend the existing CLI e2e render test (or add `cut-styles.e2e.test.ts` next to it) to run the fixture in `styled` mode: assert output duration, resolution, fps, at least one `xfade` and one `fade` in the generated graph, and `blackdetect` finds black only inside declared `dip_black` windows. Commit `test: render a styled timeline end to end`.
+- [x] **Task 14: End to end.** Extend the existing CLI e2e render test (or add `cut-styles.e2e.test.ts` next to it) to run the fixture in `styled` mode: assert output duration, resolution, fps, at least one `xfade` and one `fade` in the generated graph, and `blackdetect` finds black only inside declared `dip_black` windows. Commit `test: render a styled timeline end to end`.
 
 ## Phase 5: Studio
 
