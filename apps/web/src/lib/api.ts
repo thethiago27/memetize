@@ -67,7 +67,46 @@ export const api = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ momentId }),
     }),
+  feedback: (projectId: string, body: ProjectFeedbackBody) =>
+    request<{ event: FeedbackEventRow }>(`/v1/projects/${projectId}/feedback`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  addGlobalNote: (note: string) =>
+    request<{ event: FeedbackEventRow }>('/v1/feedback/notes', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ note }),
+    }),
+  banMoment: (momentId: string) =>
+    request<{ event: FeedbackEventRow }>(`/v1/moments/${momentId}/ban`, { method: 'POST' }),
+  unbanMoment: (momentId: string) =>
+    request<{ event: FeedbackEventRow }>(`/v1/moments/${momentId}/ban`, { method: 'DELETE' }),
+  banAsset: (assetId: string) =>
+    request<{ event: FeedbackEventRow }>(`/v1/assets/${assetId}/ban`, { method: 'POST' }),
+  unbanAsset: (assetId: string) =>
+    request<{ event: FeedbackEventRow }>(`/v1/assets/${assetId}/ban`, { method: 'DELETE' }),
 };
+
+export type ProjectFeedbackBody =
+  | { kind: 'VIDEO_RATING'; value: number }
+  | { kind: 'CLIP_UP' | 'CLIP_DOWN'; clipId: string }
+  | { kind: 'NOTE'; note: string };
+
+export interface FeedbackEventRow {
+  id: string;
+  projectId: string | null;
+  timelineVersion: number | null;
+  clipId: string | null;
+  momentId: string | null;
+  kind: string;
+  value: number | null;
+  note: string | null;
+  context: { narrativeFunction?: string; emotion?: string };
+  source: string;
+  createdAt: string;
+}
 
 export interface AssetRow {
   id: string;
@@ -82,7 +121,8 @@ export interface AssetRow {
 export interface AssetDetail {
   asset: AssetRow;
   scenes: { id: string; startMs: number; endMs: number }[];
-  moments: { id: string; startMs: number; endMs: number; description: string }[];
+  moments: { id: string; startMs: number; endMs: number; description: string; banned: boolean }[];
+  banned: boolean;
 }
 
 export interface ProjectRow {
@@ -170,6 +210,7 @@ export interface ProjectDetail {
   render: RenderRow | null;
   renders: RenderRow[];
   jobs: ProjectJob[];
+  feedback: FeedbackEventRow[];
 }
 
 export interface RenderRow {

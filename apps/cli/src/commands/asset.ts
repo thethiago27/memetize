@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { banAsset, unbanAsset } from '@memetize/feedback';
 import {
   getAsset,
   ingestAsset,
@@ -129,6 +130,43 @@ export function registerAssetCommands(program: Command): void {
         } else {
           process.stdout.write("Run 'memetize worker run' to process.\n");
         }
+      } finally {
+        await ctx.close();
+      }
+    });
+
+  asset
+    .command('ban')
+    .description('Exclude every moment of an asset from future retrieval (editorial memory)')
+    .argument('<assetId>', 'asset id (ast_...)')
+    .option('--note <text>', 'why')
+    .action(async (assetId: string, options: { note?: string }) => {
+      const ctx = await buildContext();
+      try {
+        if (!(await getAsset(ctx.db, assetId))) {
+          process.stdout.write(`Asset not found: ${assetId}\n`);
+          return;
+        }
+        const event = await banAsset(ctx.db, { assetId, note: options.note });
+        process.stdout.write(`Banned ${assetId} (${event.id})\n`);
+      } finally {
+        await ctx.close();
+      }
+    });
+
+  asset
+    .command('unban')
+    .description('Re-admit a banned asset')
+    .argument('<assetId>', 'asset id (ast_...)')
+    .action(async (assetId: string) => {
+      const ctx = await buildContext();
+      try {
+        if (!(await getAsset(ctx.db, assetId))) {
+          process.stdout.write(`Asset not found: ${assetId}\n`);
+          return;
+        }
+        const event = await unbanAsset(ctx.db, { assetId });
+        process.stdout.write(`Unbanned ${assetId} (${event.id})\n`);
       } finally {
         await ctx.close();
       }

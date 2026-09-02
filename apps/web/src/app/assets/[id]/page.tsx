@@ -10,6 +10,7 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
   const { id } = use(params);
   const [detail, setDetail] = useState<AssetDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
     api
@@ -24,6 +25,19 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
   if (error) return <p className="err">{error}</p>;
   if (!detail) return <p className="mute">Loading slate…</p>;
 
+  const toggleBan = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await (detail.banned ? api.unbanAsset(id) : api.banAsset(id));
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <>
       <p className="kicker">{detail.asset.id}</p>
@@ -34,7 +48,18 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
         {detail.asset.width && detail.asset.height
           ? `  ${detail.asset.width}×${detail.asset.height}`
           : ''}
+        {detail.banned ? '  BANNED' : ''}
       </p>
+      <div className="actions">
+        <button className="btn" type="button" disabled={busy} onClick={() => void toggleBan()}>
+          {busy ? 'Saving…' : detail.banned ? 'Unban asset' : 'Ban asset'}
+        </button>
+        <span className="mute">
+          {detail.banned
+            ? 'Excluded from every retrieval until unbanned.'
+            : 'Banning keeps every moment of this asset out of new timelines.'}
+        </span>
+      </div>
 
       <section className="panel">
         <p className="kicker">Scenes</p>
@@ -59,7 +84,10 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
         ) : (
           detail.moments.map((moment) => (
             <div key={moment.id} className="row">
-              <span>{moment.description}</span>
+              <span>
+                {moment.description}
+                {moment.banned ? <span className="mute"> · banned</span> : null}
+              </span>
               <span className="mono mute">
                 {formatTimecode(moment.startMs)}–{formatTimecode(moment.endMs)}
               </span>

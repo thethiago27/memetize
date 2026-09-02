@@ -3,6 +3,7 @@
 import { use, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   api,
+  type FeedbackEventRow,
   formatTimecode,
   hasActiveJobs,
   mediaUrl,
@@ -11,12 +12,37 @@ import {
 } from '../../../lib/api';
 import { useInterval } from '../../../lib/use-interval';
 
+const RATINGS = [1, 2, 3, 4, 5] as const;
+
+function describeFeedback(event: FeedbackEventRow): string {
+  const role = event.context.narrativeFunction ? ` as ${event.context.narrativeFunction}` : '';
+  switch (event.kind) {
+    case 'VIDEO_RATING':
+      return `Rated timeline v${event.timelineVersion ?? '?'} ${event.value ?? '?'}/5`;
+    case 'SWAP_OUT':
+      return `Swapped out ${event.momentId}${role}`;
+    case 'SWAP_IN':
+      return `Swapped in ${event.momentId}${role}`;
+    case 'CLIP_UP':
+      return `Kept ${event.momentId}${role}`;
+    case 'CLIP_DOWN':
+      return `Missed ${event.momentId}${role}`;
+    case 'NOTE':
+      return `Note: ${event.note ?? ''}`;
+    case 'PLACED':
+      return `Placed ${event.momentId}${role}`;
+    default:
+      return `${event.kind} ${event.momentId ?? ''}`.trim();
+  }
+}
+
 export default function ProjectStudioPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState('');
 
   const load = useCallback(() => {
     api
@@ -42,6 +68,11 @@ export default function ProjectStudioPage({ params }: { params: Promise<{ id: st
       detail.matches.find((match) => match.segmentId === selected.reason.segmentId)?.shortlist ?? []
     );
   }, [detail, selected]);
+
+  const latestRating = useMemo(
+    () => detail?.feedback.find((event) => event.kind === 'VIDEO_RATING')?.value ?? null,
+    [detail],
+  );
 
   const durationMs = detail?.timeline?.data.durationMs ?? detail?.audio?.durationMs ?? 1;
   const preview = mediaUrl(detail?.render?.path);
@@ -127,6 +158,30 @@ export default function ProjectStudioPage({ params }: { params: Promise<{ id: st
         <p className="note">Slate is ahead of the print. Render to see the latest swap.</p>
       ) : null}
 
+      {detail.timeline ? (
+        <section className="panel">
+          <p className="kicker">Rate this cut</p>
+          <div className="actions">
+            {RATINGS.map((value) => (
+              <button
+                key={value}
+                className={value === latestRating ? 'btn btn-cut' : 'btn'}
+                type="button"
+                disabled={busy !== null}
+                onClick={() =>
+                  run(`rate-${value}`, () => api.feedback(id, { kind: 'VIDEO_RATING', value }))
+                }
+              >
+                {value}
+              </button>
+            ))}
+            <span className="mute">
+              {latestRating ? `rated ${latestRating}/5` : 'teaches the ranker what worked'}
+            </span>
+          </div>
+        </section>
+      ) : null}
+
       <div className="studio">
         <section className="panel">
           <p className="kicker">Timeline</p>
@@ -187,6 +242,31 @@ export default function ProjectStudioPage({ params }: { params: Promise<{ id: st
               {busy === 'render' ? 'Rendering…' : 'Render'}
             </button>
           </div>
+          {selected ? (
+            <div className="actions">
+              <button
+                className="btn"
+                type="button"
+                disabled={busy !== null}
+                onClick={() =>
+                  run('keep', () => api.feedback(id, { kind: 'CLIP_UP', clipId: selected.id }))
+                }
+              >
+                {busy === 'keep' ? 'Saving…' : 'Keep'}
+              </button>
+              <button
+                className="btn"
+                type="button"
+                disabled={busy !== null}
+                onClick={() =>
+                  run('miss', () => api.feedback(id, { kind: 'CLIP_DOWN', clipId: selected.id }))
+                }
+              >
+                {busy === 'miss' ? 'Saving…' : 'Miss'}
+              </button>
+              <span className="mono mute">{selected.momentId}</span>
+            </div>
+          ) : null}
           {!selected ? (
             <p className="mute">Select a clip on the reel.</p>
           ) : shortlist.length === 0 ? (
@@ -198,14 +278,24 @@ export default function ProjectStudioPage({ params }: { params: Promise<{ id: st
                   <div className="mono">{entry.momentId}</div>
                   <div className="mute">final {entry.finalScore.toFixed(2)}</div>
                 </div>
-                <button
-                  className="btn"
-                  type="button"
-                  disabled={busy !== null || entry.momentId === selected.momentId}
-                  onClick={() => run('swap', () => api.swapClip(id, selected.id, entry.momentId))}
-                >
-                  {entry.momentId === selected.momentId ? 'On slate' : 'Swap in'}
-                </button>
+                <div className="actions">
+                  <button
+                    className="btn"
+                    type="button"
+                    disabled={busy !== null || entry.momentId === selected.momentId}
+                    onClick={() => run('swap', () => api.swapClip(id, selected.id, entry.momentId))}
+                  >
+                    {entry.momentId === selected.momentId ? 'On slate' : 'Swap in'}
+                  </button>
+                  <button
+                    className="btn"
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => run('ban', () => api.banMoment(entry.momentId))}
+                  >
+                    Ban
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -225,6 +315,46 @@ export default function ProjectStudioPage({ params }: { params: Promise<{ id: st
               <span className="mono mute">
                 {formatTimecode(segment.startMs)}–{formatTimecode(segment.endMs)}
               </span>
+            </div>
+          ))
+        )}
+      </section>
+
+      <section className="panel">
+        <p className="kicker">Editorial memory</p>
+        <form
+          className="actions"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const text = note.trim();
+            if (!text) return;
+            void run('note', async () => {
+              await api.feedback(id, { kind: 'NOTE', note: text });
+              setNote('');
+            });
+          }}
+        >
+          <input
+            className="mono"
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="A note the Director should remember for this project"
+            maxLength={2000}
+          />
+          <button className="btn" type="submit" disabled={busy !== null || !note.trim()}>
+            {busy === 'note' ? 'Saving…' : 'Add note'}
+          </button>
+        </form>
+        {detail.feedback.length === 0 ? (
+          <p className="mute">Nothing learned yet. Swap, rate, or note to teach the motor.</p>
+        ) : (
+          detail.feedback.map((event) => (
+            <div key={event.id} className="row">
+              <span>
+                {describeFeedback(event)}
+                {event.projectId === null ? <span className="mute"> · global</span> : null}
+              </span>
+              <span className="mono mute">{new Date(event.createdAt).toLocaleString()}</span>
             </div>
           ))
         )}

@@ -13,6 +13,7 @@
     "@memetize/audio-analyzer": "workspace:*",
     "@memetize/contracts": "workspace:*",
     "@memetize/database": "workspace:*",
+    "@memetize/feedback": "workspace:*",
     "@memetize/job-system": "workspace:*",
     "@memetize/media-catalog": "workspace:*",
     "@memetize/orchestrator": "workspace:*",
