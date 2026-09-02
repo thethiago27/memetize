@@ -204,6 +204,9 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
     expect(directorDebug.projectId).toBe(project.id);
     expect(Array.isArray(directorDebug.picks)).toBe(true);
     expect(directorDebug.picks).toHaveLength(segmentsWithShortlist.length);
+    // Editorial memory is always handed to the Director, empty on a fresh install.
+    expect(directorDebug.promptVersion).toBe('v3');
+    expect(directorDebug.memory).toEqual({ lessons: [], examples: [] });
 
     const punchlineSegmentIds = new Set(
       narrative

@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { registerAssetCommands } from './commands/asset';
+import { registerEvalCommands } from './commands/eval';
 import { registerFeedbackCommands } from './commands/feedback';
 import { registerJobCommands } from './commands/job';
 import { registerMomentCommands } from './commands/moment';
@@ -15,6 +16,7 @@ program
   .version('0.0.0');
 
 registerAssetCommands(program);
+registerEvalCommands(program);
 registerFeedbackCommands(program);
 registerJobCommands(program);
 registerMomentCommands(program);

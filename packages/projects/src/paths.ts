@@ -62,6 +62,14 @@ export function matchDebugFile(config: AppConfig, projectId: string): StoragePat
   };
 }
 
+/** Evaluation report (editorial-memory spec): `pnpm cli eval ranker` output. */
+export function evalReportFile(config: AppConfig, name: string): StoragePath {
+  return {
+    absolute: join(config.storageDir, 'cache', 'eval', `${name}.json`),
+    relative: `${config.storageDirRelative}/cache/eval/${name}.json`,
+  };
+}
+
 /** Debug cache file for the Director's raw picks + prompt version (spec section 64). */
 export function directorDebugFile(config: AppConfig, projectId: string): StoragePath {
   return {

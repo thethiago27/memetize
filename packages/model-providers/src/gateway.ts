@@ -1,5 +1,5 @@
 import { DirectorPick } from '@memetize/contracts';
-import { DIRECTOR_PROMPT_V2, DIRECTOR_PROMPT_VERSION } from '@memetize/prompts';
+import { DIRECTOR_PROMPT_V3, DIRECTOR_PROMPT_VERSION } from '@memetize/prompts';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import { FixtureLLMProvider } from './fixture';
@@ -43,11 +43,12 @@ export class GatewayLLMProvider implements LLMProvider {
     const { object } = await generateObject({
       model: this.options.model,
       schema: DirectorPicksSchema,
-      system: DIRECTOR_PROMPT_V2,
+      system: DIRECTOR_PROMPT_V3,
       prompt: JSON.stringify({
         durationMs: input.durationMs,
         sections: input.sections,
         segments: input.segments,
+        memory: input.memory ?? { lessons: [], examples: [] },
       }),
     });
 

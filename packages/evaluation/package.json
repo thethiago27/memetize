@@ -1,5 +1,5 @@
 {
-  "name": "@memetize/director-worker",
+  "name": "@memetize/evaluation",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,15 +12,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@memetize/clip-ranker": "workspace:*",
     "@memetize/contracts": "workspace:*",
     "@memetize/database": "workspace:*",
-    "@memetize/director": "workspace:*",
     "@memetize/feedback": "workspace:*",
-    "@memetize/job-system": "workspace:*",
-    "@memetize/model-providers": "workspace:*",
-    "@memetize/orchestrator": "workspace:*",
-    "@memetize/projects": "workspace:*",
-    "@memetize/shared": "workspace:*",
     "drizzle-orm": "^0.45.2"
   }
 }

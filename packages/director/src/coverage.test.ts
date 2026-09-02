@@ -94,22 +94,13 @@ describe('resolveCoverage', () => {
       picks: [{ segmentId: 'nar_1', momentId: 'mom_primary' }],
       matches: matchMap('nar_1', ['mom_primary', 'mom_fallback']),
       moments: new Map([
-        [
-          'mom_primary',
-          { assetId: 'ast_primary', startMs: 0, endMs: 1_500, durationMs: 1_500 },
-        ],
-        [
-          'mom_fallback',
-          { assetId: 'ast_fallback', startMs: 0, endMs: 2_500, durationMs: 2_500 },
-        ],
+        ['mom_primary', { assetId: 'ast_primary', startMs: 0, endMs: 1_500, durationMs: 1_500 }],
+        ['mom_fallback', { assetId: 'ast_fallback', startMs: 0, endMs: 2_500, durationMs: 2_500 }],
       ]),
       beats: [0, 1_500, 2_500],
     });
 
-    expect(result.clips.map((clip) => clip.momentId)).toEqual([
-      'mom_primary',
-      'mom_fallback',
-    ]);
+    expect(result.clips.map((clip) => clip.momentId)).toEqual(['mom_primary', 'mom_fallback']);
     expect(result.clips.map((clip) => clip.timeline)).toEqual([
       { startMs: 0, endMs: 1_500 },
       { startMs: 1_500, endMs: 2_500 },
@@ -132,10 +123,7 @@ describe('resolveCoverage', () => {
         picks: [],
         matches: matchMap('nar_1', ['mom_one_second', 'mom_tail']),
         moments: new Map([
-          [
-            'mom_one_second',
-            { assetId: 'ast_one', startMs: 0, endMs: 1_000, durationMs: 1_000 },
-          ],
+          ['mom_one_second', { assetId: 'ast_one', startMs: 0, endMs: 1_000, durationMs: 1_000 }],
           ['mom_tail', { assetId: 'ast_tail', startMs: 0, endMs: 500, durationMs: 500 }],
         ]),
         beats: [0, 1_000, 1_500],

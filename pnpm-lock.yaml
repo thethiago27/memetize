@@ -80,6 +80,9 @@ importers:
       '@memetize/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@memetize/evaluation':
+        specifier: workspace:*
+        version: link:../../packages/evaluation
       '@memetize/feedback':
         specifier: workspace:*
         version: link:../../packages/feedback
@@ -196,6 +199,24 @@ importers:
       '@memetize/timeline':
         specifier: workspace:*
         version: link:../timeline
+
+  packages/evaluation:
+    dependencies:
+      '@memetize/clip-ranker':
+        specifier: workspace:*
+        version: link:../clip-ranker
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@memetize/database':
+        specifier: workspace:*
+        version: link:../database
+      '@memetize/feedback':
+        specifier: workspace:*
+        version: link:../feedback
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
 
   packages/feedback:
     dependencies:
@@ -462,6 +483,9 @@ importers:
       '@memetize/director':
         specifier: workspace:*
         version: link:../../packages/director
+      '@memetize/feedback':
+        specifier: workspace:*
+        version: link:../../packages/feedback
       '@memetize/job-system':
         specifier: workspace:*
         version: link:../../packages/job-system

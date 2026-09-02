@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  FeedbackContext,
-  FeedbackKind,
-  NoteInput,
-  ProjectFeedbackInput,
-} from './feedback';
+import { FeedbackContext, FeedbackKind, NoteInput, ProjectFeedbackInput } from './feedback';
 import { RetrievedCandidate } from './match';
 import { JOB_RESOURCE_CLASS, WORKER_VERSION } from './registry';
 

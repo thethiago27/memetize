@@ -4,8 +4,14 @@ import { DirectorInput } from '@memetize/contracts';
 import { moments as momentsTable } from '@memetize/database';
 import type { AssembleMoment, AssembleSegmentMatch } from '@memetize/director';
 import { assembleDirectedTimeline, InsufficientCatalogError } from '@memetize/director';
+import {
+  aggregateFeedback,
+  buildExamples,
+  buildLessons,
+  listFeedbackEvents,
+} from '@memetize/feedback';
 import { JobFailure } from '@memetize/job-system';
-import type { DirectorSegmentInput } from '@memetize/model-providers';
+import type { DirectorMemory, DirectorSegmentInput } from '@memetize/model-providers';
 import { createProviders } from '@memetize/model-providers';
 import type { JobHandler } from '@memetize/orchestrator';
 import {
@@ -102,6 +108,28 @@ export function createDirectorHandler(): JobHandler {
       };
     });
 
+    // Editorial memory (editorial-memory spec): bounded, deterministic
+    // lessons about the moments on these shortlists plus a few examples of
+    // what the editor chose for segments like these.
+    const feedbackEvents = await listFeedbackEvents(ctx.db);
+    const describeMoment = (id: string) => momentById.get(id)?.description;
+    const memory: DirectorMemory = {
+      lessons: buildLessons({
+        aggregate: aggregateFeedback(feedbackEvents),
+        events: feedbackEvents,
+        projectId,
+        momentIds: directorSegments.flatMap((segment) =>
+          segment.shortlist.map((entry) => entry.momentId),
+        ),
+        describe: describeMoment,
+      }),
+      examples: buildExamples({
+        events: feedbackEvents,
+        segments: directorSegments,
+        describe: describeMoment,
+      }),
+    };
+
     const { llm } = createProviders(ctx.config);
     let suggestion: Awaited<ReturnType<typeof llm.directTimeline>>;
     try {
@@ -111,6 +139,7 @@ export function createDirectorHandler(): JobHandler {
           (section) => section.endMs > window.sourceStartMs && section.startMs < window.sourceEndMs,
         ),
         segments: directorSegments,
+        memory,
       });
     } catch (error) {
       throw new JobFailure(
@@ -207,6 +236,7 @@ export function createDirectorHandler(): JobHandler {
           picks: suggestion.picks,
           promptVersion: suggestion.promptVersion,
           windowVersion: window.version,
+          memory,
           decisions,
         },
         null,

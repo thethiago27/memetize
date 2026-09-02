@@ -1,4 +1,4 @@
-import { DIRECTOR_PROMPT_V2, DIRECTOR_PROMPT_VERSION } from '@memetize/prompts';
+import { DIRECTOR_PROMPT_V3, DIRECTOR_PROMPT_VERSION } from '@memetize/prompts';
 import { generateObject } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GatewayLLMProvider } from './gateway';
@@ -48,7 +48,20 @@ describe('GatewayLLMProvider.directTimeline', () => {
     const picks = [{ segmentId: 'nar_1', momentId: 'mom_a' }];
     generateObjectMock.mockResolvedValue({ object: { picks } } as never);
 
-    const input = directorInput();
+    const memory = {
+      lessons: ['Editor note: shorter cuts on the drop'],
+      examples: [
+        {
+          narrativeFunction: 'payoff',
+          emotion: 'joy',
+          meaning: 'release',
+          lyrics: 'la',
+          chosenMomentId: 'mom_b',
+          chosenDescription: 'cat stares',
+        },
+      ],
+    };
+    const input = { ...directorInput(), memory };
     const provider = new GatewayLLMProvider({ model: 'anthropic/claude-sonnet-4.5' });
     const result = await provider.directTimeline(input);
 
@@ -56,19 +69,28 @@ describe('GatewayLLMProvider.directTimeline', () => {
     const call = generateObjectMock.mock.calls[0]?.[0];
     expect(call).toMatchObject({
       model: 'anthropic/claude-sonnet-4.5',
-      system: DIRECTOR_PROMPT_V2,
+      system: DIRECTOR_PROMPT_V3,
     });
     expect(call?.prompt).toBe(
       JSON.stringify({
         durationMs: input.durationMs,
         sections: input.sections,
         segments: input.segments,
+        memory,
       }),
     );
     expect(result.picks).toEqual(picks);
     expect(result.director).toBe('gateway');
     expect(result.directorVersion).toBe('1.0.0');
     expect(result.promptVersion).toBe(DIRECTOR_PROMPT_VERSION);
+  });
+
+  it('sends an empty memory when the caller offers none', async () => {
+    generateObjectMock.mockResolvedValue({ object: { picks: [] } } as never);
+    const provider = new GatewayLLMProvider({ model: 'anthropic/claude-sonnet-4.5' });
+    await provider.directTimeline(directorInput());
+    const call = generateObjectMock.mock.calls[0]?.[0];
+    expect(JSON.parse(String(call?.prompt)).memory).toEqual({ lessons: [], examples: [] });
   });
 
   it('lets SDK errors propagate', async () => {

@@ -134,10 +134,28 @@ export interface DirectorSegmentInput {
   shortlist: DirectorShortlistEntry[];
 }
 
+/** One past editorial choice for a segment like one of the current ones. */
+export interface DirectorExample {
+  narrativeFunction: string;
+  emotion: string;
+  meaning: string;
+  lyrics: string;
+  chosenMomentId: string;
+  chosenDescription: string;
+}
+
+/** Editorial memory handed to the Director (editorial-memory spec). */
+export interface DirectorMemory {
+  lessons: string[];
+  examples: DirectorExample[];
+}
+
 export interface DirectTimelineInput {
   durationMs: number;
   sections: AudioSectionRef[];
   segments: DirectorSegmentInput[];
+  /** Omitted by callers that have no memory to offer (tests, older flows). */
+  memory?: DirectorMemory;
 }
 
 export interface DirectorPickSuggestion {

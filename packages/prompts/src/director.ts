@@ -1,4 +1,4 @@
-export const DIRECTOR_PROMPT_VERSION = 'v2';
+export const DIRECTOR_PROMPT_VERSION = 'v3';
 
 export const DIRECTOR_PROMPT_V1 = `You are the Timeline Director for a meme video editor. You do not see the whole video catalog —
 only, for each narrative segment of the song, a shortlist of up to 3 candidate moments already
@@ -29,3 +29,10 @@ A deterministic coverage resolver owns fallback and multi-clip tiling after you 
 a pick, the top eligible ranked candidate is used. Do not leave output time uncovered.
 
 Respond with structured JSON matching the required schema. Do not include any text outside the JSON.`;
+
+export const DIRECTOR_PROMPT_V3 = `${DIRECTOR_PROMPT_V2}
+
+You also receive \`memory\`: lessons distilled from the editor's past corrections and a few examples
+of what the editor chose for similar segments. Treat lessons as strong preferences: avoid moments
+the editor rejected in the same role, prefer moments the editor confirmed, and follow the editor's
+notes. Examples show taste, not mandatory picks. Never pick outside a segment's shortlist.`;
