@@ -5,7 +5,7 @@ import {
   type ShortlistEntry,
   type TimelineClip,
 } from '../lib/api';
-import { functionColor, functionLabel } from '../lib/labels';
+import { describeCut, functionColor, functionLabel } from '../lib/labels';
 import { Thumb } from './Thumb';
 
 export function Inspector({
@@ -38,6 +38,7 @@ export function Inspector({
     );
   }
   const current = moments[clip.momentId];
+  const cut = describeCut(clip);
   return (
     <section className="panel">
       <div className="stack">
@@ -93,6 +94,16 @@ export function Inspector({
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="stack">
+        <h2 className="section-title">Corte</h2>
+        <div className="small">{cut.transition}</div>
+        {cut.downgrade ? <div className="mute small">{cut.downgrade}</div> : null}
+        <div className="small">
+          Estilo do clipe: {cut.effects.length > 0 ? cut.effects.join(' · ') : 'nenhum'}
+        </div>
+        {cut.droppedStyle ? <div className="mute small">{cut.droppedStyle}</div> : null}
       </div>
 
       <div className="stack">

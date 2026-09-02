@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import {
   formatTimecode,
   type MomentSummary,
@@ -5,7 +6,13 @@ import {
   type NarrativeSegmentRow,
   type TimelineClip,
 } from '../lib/api';
-import { FUNCTION_LABEL, functionColor, functionLabel } from '../lib/labels';
+import {
+  effectBadge,
+  FUNCTION_LABEL,
+  functionColor,
+  functionLabel,
+  TRANSITION_STYLE_LABEL,
+} from '../lib/labels';
 
 export function TimelineStrip({
   clips,
@@ -28,7 +35,7 @@ export function TimelineStrip({
   return (
     <div className="stack">
       <div className="strip">
-        {clips.map((clip) => {
+        {clips.map((clip, index) => {
           const segment = segmentById.get(clip.reason.segmentId);
           const moment = moments[clip.momentId];
           const slot = clip.timeline.endMs - clip.timeline.startMs;
@@ -37,23 +44,42 @@ export function TimelineStrip({
             playheadMs !== null &&
             playheadMs >= clip.timeline.startMs &&
             playheadMs < clip.timeline.endMs;
+          const badge = effectBadge(clip);
+          // Cut-styles spec: a non-hard transition out of this clip shows as
+          // a thin marker on the boundary with the next one.
+          const transition = clip.transitionOut;
+          const marker =
+            index < clips.length - 1 && transition && transition.style !== 'hard'
+              ? transition
+              : null;
           return (
-            <button
-              key={clip.id}
-              type="button"
-              className="clip"
-              data-selected={clip.id === selectedId ? 'true' : 'false'}
-              data-playing={playing ? 'true' : 'false'}
-              style={{
-                flexGrow: Math.max(slot, 1),
-                ['--fn-color' as string]: functionColor(segment?.narrativeFunction),
-                backgroundImage: thumb ? `url(${thumb})` : undefined,
-              }}
-              title={`${formatTimecode(clip.timeline.startMs)}–${formatTimecode(clip.timeline.endMs)} · ${functionLabel(segment?.narrativeFunction)}${moment ? ` · ${moment.description}` : ''}`}
-              onClick={() => onSelect(clip)}
-            >
-              <span className="clip-label">{formatTimecode(clip.timeline.startMs)}</span>
-            </button>
+            <Fragment key={clip.id}>
+              <button
+                type="button"
+                className="clip"
+                data-selected={clip.id === selectedId ? 'true' : 'false'}
+                data-playing={playing ? 'true' : 'false'}
+                style={{
+                  flexGrow: Math.max(slot, 1),
+                  ['--fn-color' as string]: functionColor(segment?.narrativeFunction),
+                  backgroundImage: thumb ? `url(${thumb})` : undefined,
+                }}
+                title={`${formatTimecode(clip.timeline.startMs)}–${formatTimecode(clip.timeline.endMs)} · ${functionLabel(segment?.narrativeFunction)}${moment ? ` · ${moment.description}` : ''}`}
+                onClick={() => onSelect(clip)}
+              >
+                {badge ? <span className="clip-fx">{badge}</span> : null}
+                <span className="clip-label">{formatTimecode(clip.timeline.startMs)}</span>
+              </button>
+              {marker ? (
+                <span
+                  role="img"
+                  className="cut-marker"
+                  data-style={marker.style}
+                  title={`${TRANSITION_STYLE_LABEL[marker.style]}, ${marker.durationMs} ms`}
+                  aria-label={`Transição: ${TRANSITION_STYLE_LABEL[marker.style]}`}
+                />
+              ) : null}
+            </Fragment>
           );
         })}
       </div>

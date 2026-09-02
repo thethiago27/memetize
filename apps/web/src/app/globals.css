@@ -676,6 +676,44 @@ p {
   text-overflow: ellipsis;
 }
 
+/* Cut styles: a thin marker on a boundary whose transition is not a hard cut. */
+.cut-marker {
+  flex: 0 0 6px;
+  align-self: stretch;
+  border-radius: 3px;
+  background: var(--mute);
+}
+
+.cut-marker[data-style="dip_black"] {
+  background: linear-gradient(to right, var(--mute), #000 40%, #000 60%, var(--mute));
+}
+
+.cut-marker[data-style="flash"] {
+  background: linear-gradient(to right, var(--mute), #fff 40%, #fff 60%, var(--mute));
+}
+
+.cut-marker[data-style="crossfade"] {
+  background: linear-gradient(to right, var(--fn-setup), var(--fn-payoff));
+}
+
+.cut-marker[data-style="whip"] {
+  background: repeating-linear-gradient(135deg, var(--amber) 0 3px, transparent 3px 6px);
+}
+
+.clip-fx {
+  position: absolute;
+  top: 8px;
+  right: 5px;
+  z-index: 1;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.65);
+  color: var(--amber);
+  font-family: var(--font-mono), "IBM Plex Mono", monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.02em;
+}
+
 .ruler {
   display: flex;
   justify-content: space-between;
