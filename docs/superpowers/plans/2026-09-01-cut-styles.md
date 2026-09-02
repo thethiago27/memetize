@@ -134,6 +134,6 @@
 
 ## Phase 6: Verification and docs
 
-- [ ] **Task 17: Full verification.** `rtk pnpm test`, `rtk pnpm typecheck`, `rtk pnpm lint`, affected E2E suites. Fix anything that surfaces.
+- [x] **Task 17: Full verification.** `rtk pnpm test`, `rtk pnpm typecheck`, `rtk pnpm lint`, affected E2E suites. Fix anything that surfaces.
 
-- [ ] **Task 18: Docs.** README: replace the "hard cuts only" sentence with the vocabulary, the handle model, and the downgrade table. CHANGELOG entry. Note in the sixty-second spec's non-goals pointing to the cut-styles spec. Short pointer in `project.md` §33 and §57. Commit `docs: document cut styles`.
+- [x] **Task 18: Docs.** README: replace the "hard cuts only" sentence with the vocabulary, the handle model, and the downgrade table. CHANGELOG entry. Note in the sixty-second spec's non-goals pointing to the cut-styles spec. Short pointer in `project.md` §33 and §57. Commit `docs: document cut styles`.
