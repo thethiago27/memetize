@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { NarrativeInput, NarrativeSegment } from '@memetize/contracts';
-import { planNarrativeCoverage, selectEditWindow } from '@memetize/edit-planner';
+import { planNarrativeCoverage } from '@memetize/edit-planner';
 import { JobFailure } from '@memetize/job-system';
 import { createProviders } from '@memetize/model-providers';
 import type { JobHandler } from '@memetize/orchestrator';
@@ -9,8 +9,10 @@ import {
   getAudioAnalysis,
   getLyrics,
   insertEditWindow,
+  ManualWindowError,
   narrativeDebugFile,
   replaceNarrativeSegments,
+  resolveEditWindow,
   setProjectStatus,
 } from '@memetize/projects';
 import { ensureDir } from '@memetize/shared';
@@ -40,9 +42,9 @@ export function createNarrativeHandler(): JobHandler {
       throw new JobFailure('NARRATIVE_NO_LYRICS', `project ${projectId} has no lyrics yet`, false);
     }
 
-    let selection: ReturnType<typeof selectEditWindow>;
+    let selection: Awaited<ReturnType<typeof resolveEditWindow>>;
     try {
-      selection = selectEditWindow({
+      selection = await resolveEditWindow(ctx.db, projectId, {
         trackDurationMs: audio.durationMs,
         sections: audio.sections,
         beats: audio.beats,
@@ -51,6 +53,9 @@ export function createNarrativeHandler(): JobHandler {
         lyrics: lyricsRow.lines,
       });
     } catch (error) {
+      if (error instanceof ManualWindowError) {
+        throw new JobFailure('MANUAL_WINDOW_INVALID', error.message, false);
+      }
       throw new JobFailure(
         'HIGHLIGHT_INVALID_ANALYSIS',
         error instanceof Error ? error.message : String(error),

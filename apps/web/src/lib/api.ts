@@ -60,6 +60,14 @@ export const api = {
   },
   deleteProject: (id: string) =>
     request<{ ok: boolean }>(`/v1/projects/${id}`, { method: 'DELETE' }),
+  setWindow: (id: string, window: ManualWindow) =>
+    request<{ ok: boolean; manualWindow: ManualWindow }>(`/v1/projects/${id}/window`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(window),
+    }),
+  clearWindow: (id: string) =>
+    request<{ ok: boolean }>(`/v1/projects/${id}/window`, { method: 'DELETE' }),
   generate: (id: string) =>
     request<{ ok: boolean }>(`/v1/projects/${id}/generate`, { method: 'POST' }),
   render: (id: string) => request<{ ok: boolean }>(`/v1/projects/${id}/render`, { method: 'POST' }),
@@ -266,9 +274,16 @@ export interface ProjectJob {
   createdAt: string;
 }
 
+export interface ManualWindow {
+  sourceStartMs: number;
+  sourceEndMs: number;
+}
+
 export interface ProjectDetail {
   project: ProjectRow;
   editWindow: EditWindowRow | null;
+  /** The editor's own pick, honored by NARRATIVE until cleared. Absent on older API processes. */
+  manualWindow?: ManualWindow | null;
   audio: AudioAnalysisRow | null;
   lyrics: LyricsRow | null;
   narrative: NarrativeSegmentRow[];

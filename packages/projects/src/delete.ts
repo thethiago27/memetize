@@ -2,17 +2,10 @@ import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { type Database, jobs, projects } from '@memetize/database';
 import type { AppConfig } from '@memetize/shared';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import { assertProjectIdle } from './busy';
 import { audioDir, renderDir } from './paths';
 import { getProject } from './projects';
-
-export class ProjectBusyError extends Error {
-  readonly code = 'PROJECT_BUSY';
-  constructor(projectId: string) {
-    super(`project ${projectId} has a job running; wait for it to finish before deleting`);
-    this.name = 'ProjectBusyError';
-  }
-}
 
 export interface DeleteProjectArgs {
   db: Database;
@@ -42,12 +35,7 @@ export async function deleteProject({
   const project = await getProject(db, projectId);
   if (!project) return false;
 
-  const running = await db
-    .select({ id: jobs.id })
-    .from(jobs)
-    .where(and(eq(jobs.entityId, projectId), eq(jobs.status, 'RUNNING')))
-    .limit(1);
-  if (running.length > 0) throw new ProjectBusyError(projectId);
+  await assertProjectIdle(db, projectId);
 
   await db.transaction(async (tx) => {
     await tx.delete(jobs).where(eq(jobs.entityId, projectId));

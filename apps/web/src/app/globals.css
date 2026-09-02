@@ -1090,3 +1090,69 @@ p {
   background: var(--amber);
   pointer-events: none;
 }
+
+/* Análise: manual window selection */
+.analysis .chart[data-mode="select"] {
+  cursor: crosshair;
+}
+
+.analysis .window.draft {
+  background: color-mix(in srgb, var(--amber) 18%, transparent);
+  border-left: 2px solid var(--amber);
+  border-right: 2px solid var(--amber);
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+.analysis .window.draft[data-invalid="true"] {
+  background: color-mix(in srgb, var(--cut) 18%, transparent);
+  border-color: var(--cut);
+}
+
+.analysis .handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.analysis .handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 4px;
+  height: 28px;
+  margin-top: -14px;
+  border-radius: 2px;
+  background: var(--amber);
+}
+
+.analysis .handle[data-edge="start"] {
+  left: -6px;
+}
+
+.analysis .handle[data-edge="start"]::after {
+  left: 3px;
+}
+
+.analysis .handle[data-edge="end"] {
+  right: -6px;
+}
+
+.analysis .handle[data-edge="end"]::after {
+  right: 3px;
+}
+
+.analysis .window-editor .field-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.analysis .window-editor .input {
+  width: 96px;
+  padding: 4px 8px;
+}

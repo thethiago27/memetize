@@ -247,6 +247,10 @@ export const projects = pgTable(
     id: text('id').primaryKey(),
     filename: text('filename').notNull(),
     status: text('status').$type<ProjectStatus>().notNull().default('CREATED'),
+    // Editor-chosen source window (manual-window spec). Both null means the
+    // highlight selector picks; NARRATIVE honors them until they are cleared.
+    manualWindowStartMs: integer('manual_window_start_ms'),
+    manualWindowEndMs: integer('manual_window_end_ms'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { lineAt, thin, toOutput, toPercent, toSource } from './analysis-time';
+import {
+  clampWindow,
+  formatField,
+  lineAt,
+  linesWithin,
+  parseTimecode,
+  snapToDownbeat,
+  thin,
+  toOutput,
+  toPercent,
+  toSource,
+  windowProblem,
+} from './analysis-time';
 
 const window = { sourceStartMs: 30_000, sourceEndMs: 90_000 };
 
@@ -63,5 +75,86 @@ describe('thin', () => {
     expect(out.length).toBeLessThanOrEqual(2000);
     expect(out[0]).toBe(0);
     expect(out[out.length - 1]).toBe(10_000);
+  });
+});
+
+describe('snapToDownbeat', () => {
+  const downbeats = [0, 2000, 4000, 6000];
+
+  it('snaps to the nearest downbeat within tolerance', () => {
+    expect(snapToDownbeat(2300, downbeats, 500)).toBe(2000);
+    expect(snapToDownbeat(3800, downbeats, 500)).toBe(4000);
+  });
+
+  it('leaves the value alone outside tolerance', () => {
+    expect(snapToDownbeat(3000, downbeats, 500)).toBe(3000);
+  });
+});
+
+describe('parseTimecode / formatField', () => {
+  it('parses mm:ss and mm:ss.mmm', () => {
+    expect(parseTimecode('01:30')).toBe(90_000);
+    expect(parseTimecode('1:05.5')).toBe(65_500);
+    expect(parseTimecode(' 00:00.250 ')).toBe(250);
+  });
+
+  it('rejects malformed values and seconds over 59', () => {
+    expect(parseTimecode('90')).toBeNull();
+    expect(parseTimecode('01:75')).toBeNull();
+    expect(parseTimecode('a:b')).toBeNull();
+  });
+
+  it('formats whole seconds plainly and adds millis otherwise', () => {
+    expect(formatField(90_000)).toBe('01:30');
+    expect(formatField(65_500)).toBe('01:05.500');
+  });
+
+  it('round-trips through formatField', () => {
+    for (const ms of [0, 250, 59_999, 65_500, 600_000]) {
+      expect(parseTimecode(formatField(ms))).toBe(ms);
+    }
+  });
+});
+
+describe('clampWindow', () => {
+  it('slides a band back into the track without changing its length', () => {
+    expect(clampWindow({ startMs: -5000, endMs: 25_000 }, 100_000)).toEqual({
+      startMs: 0,
+      endMs: 30_000,
+    });
+    expect(clampWindow({ startMs: 90_000, endMs: 120_000 }, 100_000)).toEqual({
+      startMs: 70_000,
+      endMs: 100_000,
+    });
+  });
+
+  it('caps a band longer than the track to the whole track', () => {
+    expect(clampWindow({ startMs: -10, endMs: 200_000 }, 100_000)).toEqual({
+      startMs: 0,
+      endMs: 100_000,
+    });
+  });
+});
+
+describe('linesWithin / windowProblem', () => {
+  const lines = [
+    { startMs: 0, endMs: 1000 },
+    { startMs: 1500, endMs: 2500 },
+    { startMs: 5000, endMs: 6000 },
+  ];
+
+  it('counts lines overlapping the range', () => {
+    expect(linesWithin(lines, 900, 5000)).toHaveLength(2);
+    expect(linesWithin(lines, 1000, 1500)).toHaveLength(0);
+  });
+
+  it('names the rule a draft breaks', () => {
+    expect(windowProblem({ startMs: 0, endMs: 4999 }, 100_000)).toBe('Mínimo de 5 segundos');
+    expect(windowProblem({ startMs: 0, endMs: 60_001 }, 100_000)).toBe('Máximo de 60 segundos');
+    expect(windowProblem({ startMs: 10, endMs: 10 }, 100_000)).toBe(
+      'O fim precisa vir depois do início',
+    );
+    expect(windowProblem({ startMs: 0, endMs: 100_001 }, 100_000)).toBe('Fora da música');
+    expect(windowProblem({ startMs: 0, endMs: 30_000 }, 100_000)).toBeNull();
   });
 });

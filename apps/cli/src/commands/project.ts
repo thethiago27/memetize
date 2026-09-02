@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import type { RenderWarning } from '@memetize/contracts';
 import {
+  clearManualWindow,
   deleteProject,
   generateTimeline,
   getAudioAnalysis,
@@ -14,11 +15,13 @@ import {
   listNarrativeSegments,
   listProjects,
   listSegmentMatches,
+  ManualWindowError,
   ProjectBusyError,
   REPROCESS_STAGES,
   type ReprocessStage,
   renderProject,
   reprocessProject,
+  setManualWindow,
 } from '@memetize/projects';
 import type { TimelineEffect } from '@memetize/timeline';
 import type { Command } from 'commander';
@@ -196,6 +199,63 @@ export function registerProjectCommands(program: Command): void {
     });
 
   project
+    .command('window')
+    .description('Choose the stretch of the song the video covers, or return to the automatic pick')
+    .argument('<projectId>', 'project id (prj_...)')
+    .option('--start <time>', 'window start (mm:ss, mm:ss.mmm, or ms)')
+    .option('--end <time>', 'window end (mm:ss, mm:ss.mmm, or ms)')
+    .option('--auto', 'clear the manual window and let the selector choose')
+    .option('--no-wait', 'enqueue only; do not drain the pipeline')
+    .action(
+      async (
+        projectId: string,
+        options: { start?: string; end?: string; auto?: boolean; wait: boolean },
+      ) => {
+        const ctx = await buildContext();
+        try {
+          if (options.auto) {
+            await clearManualWindow(ctx.db, projectId);
+            process.stdout.write(
+              `Cleared the manual window for ${projectId}; reprocessing from narrative...\n`,
+            );
+          } else {
+            const sourceStartMs = options.start !== undefined ? parseTime(options.start) : null;
+            const sourceEndMs = options.end !== undefined ? parseTime(options.end) : null;
+            if (sourceStartMs === null || sourceEndMs === null) {
+              process.stdout.write('Pass both --start and --end (mm:ss or ms), or --auto.\n');
+              return;
+            }
+            const window = await setManualWindow(ctx.db, projectId, { sourceStartMs, sourceEndMs });
+            process.stdout.write(
+              `Window set to ${window.sourceStartMs}–${window.sourceEndMs} ms for ${projectId}; reprocessing from narrative...\n`,
+            );
+          }
+
+          if (options.wait) {
+            const outcomes = await ctx.orchestrator.drain({ entityId: projectId });
+            const failed = outcomes.find((outcome) => outcome.status === 'FAILED');
+            if (failed) {
+              process.stdout.write(
+                `Pipeline failed at ${failed.job.type}: ${failed.error?.code ?? ''} ${failed.error?.message ?? ''}\n`,
+              );
+            }
+            await printProjectDetails(ctx, projectId);
+          } else {
+            process.stdout.write("Run 'memetize worker run' to process.\n");
+          }
+        } catch (error) {
+          if (error instanceof ManualWindowError || error instanceof ProjectBusyError) {
+            process.stdout.write(`${error.message}\n`);
+            return;
+          }
+          throw error;
+        } finally {
+          await ctx.close();
+        }
+      },
+    );
+
+  project
     .command('reprocess')
     .description('Re-run the music pipeline for a project from a given stage onward')
     .argument('<projectId>', 'project id (prj_...)')
@@ -359,4 +419,17 @@ function formatRenderWarning(warning: RenderWarning): string {
   if (warning.durationMs !== undefined) parts.push(`${warning.durationMs}ms`);
   if (warning.message) parts.push(warning.message);
   return parts.join('  ');
+}
+
+/** Parses `mm:ss`, `mm:ss.mmm`, or plain milliseconds into ms; `null` when unreadable. */
+function parseTime(value: string): number | null {
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  const match = /^(\d+):(\d{1,2})(?:\.(\d{1,3}))?$/.exec(trimmed);
+  if (!match) return null;
+  const minutes = Number(match[1]);
+  const seconds = Number(match[2]);
+  const millis = match[3] ? Number(match[3].padEnd(3, '0')) : 0;
+  if (seconds >= 60) return null;
+  return minutes * 60_000 + seconds * 1000 + millis;
 }

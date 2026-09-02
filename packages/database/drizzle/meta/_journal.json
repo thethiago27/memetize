@@ -92,6 +92,13 @@
       "when": 1788310860250,
       "tag": "0012_range_exclusions",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788385774291,
+      "tag": "0013_manual_window",
+      "breakpoints": true
     }
   ]
 }

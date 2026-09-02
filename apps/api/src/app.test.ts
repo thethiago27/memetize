@@ -7,7 +7,7 @@ import {
   scenes,
   truncateAll,
 } from '@memetize/database';
-import { insertEditWindow, insertTimelineVersion } from '@memetize/projects';
+import { insertEditWindow, insertTimelineVersion, replaceAudioAnalysis } from '@memetize/projects';
 import { createAppRuntime } from '@memetize/runtime';
 import { loadConfig } from '@memetize/shared';
 import { Timeline } from '@memetize/timeline';
@@ -99,6 +99,57 @@ describe.skipIf(!handle)('studio API (inject)', () => {
     });
     expect(response.statusCode).toBe(204);
     expect(response.headers['access-control-allow-methods']).toContain('DELETE');
+  });
+
+  it('sets and clears a manual window, reporting it on project detail', async () => {
+    const app = await appPromise;
+    const projectId = 'prj_api_window_manual';
+    await db.insert(projects).values({ id: projectId, filename: 'song.mp3', status: 'PLANNING' });
+    await replaceAudioAnalysis(db, {
+      projectId,
+      durationMs: 120_000,
+      bpm: 120,
+      beats: [],
+      downbeats: [],
+      sections: [],
+      energyCurve: [],
+      analyzer: 'fixture',
+      analyzerVersion: '1.0.0',
+    });
+
+    const put = await app.inject({
+      method: 'PUT',
+      url: `/v1/projects/${projectId}/window`,
+      payload: { sourceStartMs: 30_000, sourceEndMs: 80_000 },
+    });
+    expect(put.statusCode).toBe(200);
+    expect(put.json()).toEqual({
+      ok: true,
+      manualWindow: { sourceStartMs: 30_000, sourceEndMs: 80_000 },
+    });
+
+    const detail = await app.inject({ method: 'GET', url: `/v1/projects/${projectId}` });
+    expect(detail.json().manualWindow).toEqual({ sourceStartMs: 30_000, sourceEndMs: 80_000 });
+
+    const bad = await app.inject({
+      method: 'PUT',
+      url: `/v1/projects/${projectId}/window`,
+      payload: { sourceStartMs: 100_000, sourceEndMs: 130_000 },
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().error.code).toBe('INVALID_INPUT');
+
+    const missing = await app.inject({
+      method: 'PUT',
+      url: '/v1/projects/prj_nope/window',
+      payload: { sourceStartMs: 0, sourceEndMs: 10_000 },
+    });
+    expect(missing.statusCode).toBe(404);
+
+    const cleared = await app.inject({ method: 'DELETE', url: `/v1/projects/${projectId}/window` });
+    expect(cleared.statusCode).toBe(200);
+    const after = await app.inject({ method: 'GET', url: `/v1/projects/${projectId}` });
+    expect(after.json().manualWindow).toBeNull();
   });
 
   it('lists an empty project catalog', async () => {

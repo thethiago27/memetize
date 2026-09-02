@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Choose the stretch of the song by hand: `PUT`/`DELETE /v1/projects/:id/window`, `pnpm cli project window --start --end | --auto`, and "Escolher trecho" on the Studio's Análise tab (drag the band or its edges with downbeat snapping, refine in mm:ss, 5 to 60 seconds). The pick lives on the project (`manual_window_start_ms` / `manual_window_end_ms`), `NARRATIVE` honors it with `selector = 'manual'`, and saving or clearing reruns the pipeline from narrative.
 - Add an "Análise" tab to the Studio editor: sections, energy curve with beats and downbeats, and every lyric line on one source-time axis, with the selected 60-second window highlighted. The playhead follows the preview, the current lyric line lights up, and clicking inside the window seeks the video. No API change.
 - Delete a project: `DELETE /v1/projects/:id`, `pnpm cli project delete`, and an "Excluir" button with confirmation in the Studio editor. Removes jobs, derived rows, and storage under `audio/`, `cache/`, and `renders/`; keeps `feedback_events` (editorial memory); answers `409 PROJECT_BUSY` while a job is RUNNING.
 

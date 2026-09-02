@@ -122,6 +122,19 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
     }
   };
 
+  /** Like `run`, but reports success to the caller instead of owning `busy`. */
+  const attempt = async (action: () => Promise<unknown>, success: string): Promise<boolean> => {
+    try {
+      await action();
+      notify(success);
+      load();
+      return true;
+    } catch (err) {
+      notify(err instanceof Error ? err.message : String(err), 'bad');
+      return false;
+    }
+  };
+
   const selectClip = (clip: TimelineClip) => {
     setSelectedId(clip.id);
     const video = videoRef.current;
@@ -419,11 +432,25 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
             audio={detail.audio}
             lyrics={detail.lyrics}
             editWindow={detail.editWindow}
+            manualWindow={detail.manualWindow ?? null}
             playheadMs={playheadMs}
+            locked={busy !== null || hasActiveJobs(detail.jobs)}
             onSeek={(outputMs) => {
               const video = videoRef.current;
               if (video) video.currentTime = outputMs / 1000;
             }}
+            onSetWindow={(window) =>
+              attempt(
+                () => api.setWindow(id, window),
+                'Trecho salvo. O motor está refazendo o vídeo com ele.',
+              )
+            }
+            onClearWindow={() =>
+              attempt(
+                () => api.clearWindow(id),
+                'Voltando à escolha automática. O motor está refazendo o vídeo.',
+              )
+            }
           />
         ) : null}
 

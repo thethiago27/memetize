@@ -11,4 +11,4 @@ export {
   type NarrativeCoverageInput,
   planNarrativeCoverage,
 } from './coverage';
-export { type HighlightSelectionInput, selectEditWindow } from './highlight';
+export { type HighlightSelectionInput, scoreEditWindow, selectEditWindow } from './highlight';

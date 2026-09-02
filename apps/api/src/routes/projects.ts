@@ -1,6 +1,7 @@
 import { ProjectReprocessFrom, ReprocessBody, SwapClipInput } from '@memetize/contracts';
 import { listJobsForEntity } from '@memetize/job-system';
 import {
+  clearManualWindow,
   deleteProject,
   generateTimeline,
   getAudioAnalysis,
@@ -16,14 +17,16 @@ import {
   listRenders,
   listSegmentMatches,
   listTimelineVersions,
+  ManualWindowError,
   ProjectBusyError,
   renderProject,
   reprocessProject,
+  setManualWindow,
   summarizeMoments,
   swapClip,
 } from '@memetize/projects';
 import type { AppRuntime } from '@memetize/runtime';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { kickDrain } from '../drain';
 import { sendError, sendSwapError } from '../errors';
 import { removeUpload, saveUpload } from '../upload';
@@ -95,6 +98,10 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
       renders,
       jobs,
       editWindow: editWindow ?? null,
+      manualWindow:
+        project.manualWindowStartMs !== null && project.manualWindowEndMs !== null
+          ? { sourceStartMs: project.manualWindowStartMs, sourceEndMs: project.manualWindowEndMs }
+          : null,
       feedback,
       moments,
     };
@@ -161,6 +168,28 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
     return { ok: true };
   });
 
+  app.put('/v1/projects/:id/window', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      const manualWindow = await setManualWindow(runtime.db, id, request.body);
+      kickDrain(runtime, id);
+      return { ok: true, manualWindow };
+    } catch (error) {
+      return sendWindowError(reply, error);
+    }
+  });
+
+  app.delete('/v1/projects/:id/window', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      await clearManualWindow(runtime.db, id);
+      kickDrain(runtime, id);
+      return { ok: true };
+    } catch (error) {
+      return sendWindowError(reply, error);
+    }
+  });
+
   app.post('/v1/projects/:id/generate', async (request, reply) => {
     const { id } = request.params as { id: string };
     const project = await getProject(runtime.db, id);
@@ -219,4 +248,13 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
       return sendSwapError(reply, error);
     }
   });
+}
+
+function sendWindowError(reply: FastifyReply, error: unknown) {
+  if (error instanceof ProjectBusyError) return sendError(reply, 409, error.code, error.message);
+  if (error instanceof ManualWindowError) {
+    const status = error.code === 'NOT_FOUND' ? 404 : error.code === 'NO_AUDIO' ? 409 : 400;
+    return sendError(reply, status, error.code, error.message);
+  }
+  throw error;
 }

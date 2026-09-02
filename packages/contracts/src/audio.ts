@@ -137,3 +137,27 @@ export const EditWindowSelection = z.object({
   selectorVersion: z.string(),
 });
 export type EditWindowSelection = z.infer<typeof EditWindowSelection>;
+
+/** Bounds for an editor-chosen window (manual-window spec). The upper bound mirrors `MAX_OUTPUT_DURATION_MS`. */
+export const MANUAL_WINDOW_MIN_MS = 5_000;
+export const MANUAL_WINDOW_MAX_MS = 60_000;
+
+/**
+ * Editor-chosen source window. The track-length check lives in the API and
+ * CLI, which can see `audio_analysis`.
+ */
+export const ManualWindowInput = z
+  .object({
+    sourceStartMs: z.number().int().nonnegative(),
+    sourceEndMs: z.number().int().positive(),
+  })
+  .refine((w) => w.sourceEndMs > w.sourceStartMs, {
+    message: 'sourceEndMs must be after sourceStartMs',
+  })
+  .refine((w) => w.sourceEndMs - w.sourceStartMs >= MANUAL_WINDOW_MIN_MS, {
+    message: `window must last at least ${MANUAL_WINDOW_MIN_MS} ms`,
+  })
+  .refine((w) => w.sourceEndMs - w.sourceStartMs <= MANUAL_WINDOW_MAX_MS, {
+    message: `window must last at most ${MANUAL_WINDOW_MAX_MS} ms`,
+  });
+export type ManualWindowInput = z.infer<typeof ManualWindowInput>;

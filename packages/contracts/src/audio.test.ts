@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { AudioSection, BeatPoint, EnergyPoint, LyricLine, NarrativeSegment } from './audio';
+import {
+  AudioSection,
+  BeatPoint,
+  EnergyPoint,
+  LyricLine,
+  ManualWindowInput,
+  NarrativeSegment,
+} from './audio';
 import { LyricSource } from './enums';
 
 describe('audio pipeline contracts', () => {
@@ -45,5 +52,17 @@ describe('audio pipeline contracts', () => {
     };
     expect(NarrativeSegment.safeParse({ ...base, literalness: 0.5 }).success).toBe(true);
     expect(NarrativeSegment.safeParse({ ...base, literalness: 1.2 }).success).toBe(false);
+  });
+
+  it('bounds a manual window between 5 and 60 seconds', () => {
+    const ok = (sourceStartMs: number, sourceEndMs: number) =>
+      ManualWindowInput.safeParse({ sourceStartMs, sourceEndMs }).success;
+    expect(ok(10_000, 15_000)).toBe(true);
+    expect(ok(10_000, 70_000)).toBe(true);
+    expect(ok(10_000, 14_999)).toBe(false);
+    expect(ok(10_000, 70_001)).toBe(false);
+    expect(ok(-1, 20_000)).toBe(false);
+    expect(ok(20_000, 10_000)).toBe(false);
+    expect(ok(10_000.5, 20_000)).toBe(false);
   });
 });

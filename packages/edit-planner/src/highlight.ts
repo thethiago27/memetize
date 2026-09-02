@@ -82,6 +82,19 @@ function collectCandidateStarts(input: HighlightSelectionInput): number[] {
   return [...starts];
 }
 
+/**
+ * Scores an arbitrary range with the highlight weights, so a manual pick can
+ * be compared with the selector's own winner. `targetDurationMs` equals the
+ * range length: nothing is being fitted.
+ */
+export function scoreEditWindow(
+  sourceStartMs: number,
+  sourceEndMs: number,
+  input: HighlightSelectionInput,
+): EditWindowSelection {
+  return scoreWindow(sourceStartMs, sourceEndMs, sourceEndMs - sourceStartMs, input);
+}
+
 function scoreWindow(
   sourceStartMs: number,
   sourceEndMs: number,

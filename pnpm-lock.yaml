@@ -325,6 +325,9 @@ importers:
       '@memetize/database':
         specifier: workspace:*
         version: link:../database
+      '@memetize/edit-planner':
+        specifier: workspace:*
+        version: link:../edit-planner
       '@memetize/effects':
         specifier: workspace:*
         version: link:../effects

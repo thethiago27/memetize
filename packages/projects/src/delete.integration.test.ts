@@ -12,7 +12,8 @@ import { claimNextJob, enqueueJob, listJobsForEntity } from '@memetize/job-syste
 import { type AppConfig, loadConfig } from '@memetize/shared';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { getAudioAnalysis } from './audio';
-import { deleteProject, ProjectBusyError } from './delete';
+import { ProjectBusyError } from './busy';
+import { deleteProject } from './delete';
 import { audioDir, renderDir } from './paths';
 import { getProject } from './projects';
 
