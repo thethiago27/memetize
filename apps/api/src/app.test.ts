@@ -87,18 +87,20 @@ describe.skipIf(!handle)('studio API (inject)', () => {
     expect(detail.statusCode).toBe(404);
   });
 
-  it('allows DELETE from the Studio origin in CORS preflight', async () => {
+  it('allows PUT and DELETE from the Studio origin in CORS preflight', async () => {
     const app = await appPromise;
-    const response = await app.inject({
-      method: 'OPTIONS',
-      url: '/v1/projects/prj_any',
-      headers: {
-        origin: 'http://localhost:3000',
-        'access-control-request-method': 'DELETE',
-      },
-    });
-    expect(response.statusCode).toBe(204);
-    expect(response.headers['access-control-allow-methods']).toContain('DELETE');
+    for (const method of ['PUT', 'DELETE']) {
+      const response = await app.inject({
+        method: 'OPTIONS',
+        url: '/v1/projects/prj_any/window',
+        headers: {
+          origin: 'http://localhost:3000',
+          'access-control-request-method': method,
+        },
+      });
+      expect(response.statusCode).toBe(204);
+      expect(response.headers['access-control-allow-methods']).toContain(method);
+    }
   });
 
   it('sets and clears a manual window, reporting it on project detail', async () => {

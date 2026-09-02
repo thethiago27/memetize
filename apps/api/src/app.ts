@@ -13,9 +13,10 @@ export async function buildApi(runtime: AppRuntime): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   await app.register(cors, {
     origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
-    // @fastify/cors 11 defaults to GET,HEAD,POST; the Studio also issues DELETE
-    // (project delete, unban, include range), which browsers preflight.
-    methods: ['GET', 'HEAD', 'POST', 'DELETE'],
+    // @fastify/cors 11 defaults to GET,HEAD,POST; the Studio also issues PUT
+    // (manual window) and DELETE (project delete, unban, include range), which
+    // browsers preflight.
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE'],
   });
   await app.register(multipart, { limits: { fileSize: 2 * 1024 * 1024 * 1024 } });
 
