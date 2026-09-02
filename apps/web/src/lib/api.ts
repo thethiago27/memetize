@@ -188,12 +188,40 @@ export interface ProjectListRow extends ProjectRow {
   sourceEndMs: number | null;
 }
 
+export type TransitionStyle = 'hard' | 'dip_black' | 'flash' | 'crossfade' | 'whip';
+export type ClipStyle = 'none' | 'hold' | 'speed_up' | 'slow_down';
+export type CutDowngradeReason =
+  | 'no_source_handle'
+  | 'slot_too_short'
+  | 'overlapping_transitions'
+  | 'last_clip';
+
+export interface TimelineEffect {
+  type: string;
+  startMs: number;
+  endMs: number;
+  from?: number;
+  to?: number;
+  factor?: number;
+  requested?: ClipStyle;
+  downgradeReason?: CutDowngradeReason;
+}
+
 export interface TimelineClip {
   id: string;
   momentId: string;
   timeline: { startMs: number; endMs: number };
   source: { assetId: string; startMs: number; endMs: number };
-  effects: { type: string; startMs: number; endMs: number; from?: number; to?: number }[];
+  effects: TimelineEffect[];
+  /** What the Director asked for (cut-styles spec). Absent on older timelines. */
+  direction?: { clipStyle: ClipStyle; transitionOut: TransitionStyle };
+  /** What the Effects resolver decided. Absent on older timelines. */
+  transitionOut?: {
+    style: TransitionStyle;
+    durationMs: number;
+    requested: TransitionStyle;
+    downgradeReason?: CutDowngradeReason;
+  };
   reason: { segmentId: string; semanticScore: number; finalScore: number };
 }
 
