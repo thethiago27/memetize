@@ -106,7 +106,6 @@ export function createRenderHandler(): JobHandler {
       resolvedClips.push({ clipId: clip.id, videoPath });
     }
 
-
     const graphStarted = performance.now();
     const graph = buildFfmpegGraph(timeline, {
       audioPath,
