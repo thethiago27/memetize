@@ -1,5 +1,6 @@
 CREATE TABLE "feedback_events" (
 	"id" text PRIMARY KEY NOT NULL,
+	"seq" bigserial NOT NULL,
 	"project_id" text,
 	"timeline_version" integer,
 	"clip_id" text,

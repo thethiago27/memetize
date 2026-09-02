@@ -191,6 +191,24 @@ importers:
         specifier: workspace:*
         version: link:../timeline
 
+  packages/feedback:
+    dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@memetize/database':
+        specifier: workspace:*
+        version: link:../database
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@memetize/timeline':
+        specifier: workspace:*
+        version: link:../timeline
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
+
   packages/job-system:
     dependencies:
       '@memetize/contracts':

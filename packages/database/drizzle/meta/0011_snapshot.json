@@ -1,5 +1,5 @@
 {
-  "id": "d5893ccf-d03d-443a-9b63-12f32a35808a",
+  "id": "816dcf05-dfe7-4821-978d-637cf25b920f",
   "prevId": "38cfaca0-3866-45fd-84cd-e2bc3daf5747",
   "version": "7",
   "dialect": "postgresql",
@@ -290,6 +290,12 @@
           "name": "id",
           "type": "text",
           "primaryKey": true,
+          "notNull": true
+        },
+        "seq": {
+          "name": "seq",
+          "type": "bigserial",
+          "primaryKey": false,
           "notNull": true
         },
         "project_id": {

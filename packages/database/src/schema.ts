@@ -29,6 +29,7 @@ import type { Timeline } from '@memetize/timeline';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  bigserial,
   check,
   index,
   integer,
@@ -507,6 +508,9 @@ export const feedbackEvents = pgTable(
   'feedback_events',
   {
     id: text('id').primaryKey(),
+    // Insertion order: rows written in one batch share `created_at`, and ids
+    // are random, so aggregation and listings order by (created_at, seq).
+    seq: bigserial('seq', { mode: 'number' }).notNull(),
     projectId: text('project_id'),
     timelineVersion: integer('timeline_version'),
     clipId: text('clip_id'),
