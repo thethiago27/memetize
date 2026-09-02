@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Delete a project: `DELETE /v1/projects/:id`, `pnpm cli project delete`, and an "Excluir" button with confirmation in the Studio editor. Removes jobs, derived rows, and storage under `audio/`, `cache/`, and `renders/`; keeps `feedback_events` (editorial memory); answers `409 PROJECT_BUSY` while a job is RUNNING.
+
 - Add cut styles: the Director (prompt `v4`) proposes a transition (`hard`, `dip_black`, `flash`, `crossfade`, `whip`) per segment boundary and a clip style (`hold`, `speed_up`, `slow_down`) per primary clip; a deterministic resolver in `EFFECTS` validates each proposal against tempo, slot lengths, and real source handles, downgrades what cannot render, and records why on the clip and in `effects.json`. The FFmpeg graph renders them with `xfade`, `fade`, `tpad`, and `setpts` while keeping slots contiguous and the output length exact. `WORKER_VERSION.DIRECTOR` and `EFFECTS` 1.2.0.
 - The renderer validates before touching media, rejects a timeline whose duration disagrees with the selected edit window (`TIMELINE_DURATION_MISMATCH`), and rejects transitions over a third of the smaller neighboring slot, overlapping transitions without a head handle, or incoming plus outgoing transitions that exceed a slot.
 - Clip swaps re-resolve cut styles against the new moment's bounds.

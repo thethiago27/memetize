@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Inspector } from '../../../components/Inspector';
 import { StatusPill } from '../../../components/StatusPill';
@@ -33,6 +34,7 @@ type Tab = 'narrativa' | 'renders' | 'memoria' | 'jobs';
 
 export default function ProjectEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const { notify } = useToast();
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -40,6 +42,7 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [tab, setTab] = useState<Tab>('narrativa');
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [playheadMs, setPlayheadMs] = useState<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -192,8 +195,63 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
           >
             {busy === 'render' ? 'Renderizando…' : 'Renderizar'}
           </button>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            title="Excluir este projeto"
+            disabled={busy !== null}
+            onClick={() => setConfirmDelete(true)}
+          >
+            Excluir
+          </button>
         </div>
       </div>
+
+      {confirmDelete ? (
+        <div className="overlay">
+          <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+            <h2 className="section-title" id="delete-title">
+              Excluir projeto?
+            </h2>
+            <p>
+              <strong>{shortName(detail.project.filename)}</strong> será removido com a música, a
+              análise, as timelines e os renders. Isso não pode ser desfeito.
+            </p>
+            <p className="mute small">
+              A memória editorial (avaliações, trocas, notas) é mantida para os próximos projetos.
+            </p>
+            <div className="cluster" style={{ justifyContent: 'flex-end' }}>
+              <button
+                className="btn btn-ghost"
+                type="button"
+                disabled={busy !== null}
+                onClick={() => setConfirmDelete(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn btn-danger"
+                type="button"
+                disabled={busy !== null}
+                onClick={async () => {
+                  setBusy('delete');
+                  try {
+                    await api.deleteProject(id);
+                    notify('Projeto excluído.');
+                    router.push('/');
+                  } catch (err) {
+                    notify(err instanceof Error ? err.message : String(err), 'bad');
+                    setBusy(null);
+                    setConfirmDelete(false);
+                  }
+                }}
+              >
+                {busy === 'delete' ? 'Excluindo…' : 'Excluir projeto'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <section className="panel">
         <Stepper jobs={detail.jobs} />

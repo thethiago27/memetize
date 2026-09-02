@@ -1,6 +1,7 @@
 import { ProjectReprocessFrom, ReprocessBody, SwapClipInput } from '@memetize/contracts';
 import { listJobsForEntity } from '@memetize/job-system';
 import {
+  deleteProject,
   generateTimeline,
   getAudioAnalysis,
   getLatestEditWindow,
@@ -15,6 +16,7 @@ import {
   listRenders,
   listSegmentMatches,
   listTimelineVersions,
+  ProjectBusyError,
   renderProject,
   reprocessProject,
   summarizeMoments,
@@ -140,6 +142,23 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
     } finally {
       await Promise.all(temps.map((path) => removeUpload(path)));
     }
+  });
+
+  app.delete('/v1/projects/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      const deleted = await deleteProject({
+        db: runtime.db,
+        config: runtime.config,
+        projectId: id,
+      });
+      if (!deleted) return sendError(reply, 404, 'NOT_FOUND', `project not found: ${id}`);
+    } catch (error) {
+      if (error instanceof ProjectBusyError)
+        return sendError(reply, 409, error.code, error.message);
+      throw error;
+    }
+    return { ok: true };
   });
 
   app.post('/v1/projects/:id/generate', async (request, reply) => {

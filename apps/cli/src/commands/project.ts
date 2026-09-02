@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import type { RenderWarning } from '@memetize/contracts';
 import {
+  deleteProject,
   generateTimeline,
   getAudioAnalysis,
   getLatestEditWindow,
@@ -13,6 +14,7 @@ import {
   listNarrativeSegments,
   listProjects,
   listSegmentMatches,
+  ProjectBusyError,
   REPROCESS_STAGES,
   type ReprocessStage,
   renderProject,
@@ -166,6 +168,28 @@ export function registerProjectCommands(program: Command): void {
       const ctx = await buildContext();
       try {
         await printProjectDetails(ctx, projectId);
+      } finally {
+        await ctx.close();
+      }
+    });
+
+  project
+    .command('delete')
+    .description('Delete a project, its derived data, jobs, and storage (feedback is kept)')
+    .argument('<projectId>', 'project id (prj_...)')
+    .action(async (projectId: string) => {
+      const ctx = await buildContext();
+      try {
+        const deleted = await deleteProject({ db: ctx.db, config: ctx.config, projectId });
+        process.stdout.write(
+          deleted ? `Deleted ${projectId}\n` : `Project not found: ${projectId}\n`,
+        );
+      } catch (error) {
+        if (error instanceof ProjectBusyError) {
+          process.stdout.write(`${error.message}\n`);
+          return;
+        }
+        throw error;
       } finally {
         await ctx.close();
       }

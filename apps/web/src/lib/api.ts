@@ -58,6 +58,8 @@ export const api = {
     if (lyrics) body.append('lyrics', lyrics);
     return request<{ project: ProjectRow }>('/v1/projects', { method: 'POST', body });
   },
+  deleteProject: (id: string) =>
+    request<{ ok: boolean }>(`/v1/projects/${id}`, { method: 'DELETE' }),
   generate: (id: string) =>
     request<{ ok: boolean }>(`/v1/projects/${id}/generate`, { method: 'POST' }),
   render: (id: string) => request<{ ok: boolean }>(`/v1/projects/${id}/render`, { method: 'POST' }),

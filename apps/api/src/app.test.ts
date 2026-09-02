@@ -70,6 +70,37 @@ describe.skipIf(!handle)('studio API (inject)', () => {
     });
   });
 
+  it('deletes a project and answers 404 for it afterwards', async () => {
+    const app = await appPromise;
+    const projectId = 'prj_api_delete';
+    await db.insert(projects).values({ id: projectId, filename: 'song.mp3', status: 'CREATED' });
+
+    const deleted = await app.inject({ method: 'DELETE', url: `/v1/projects/${projectId}` });
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json()).toEqual({ ok: true });
+
+    const missing = await app.inject({ method: 'DELETE', url: `/v1/projects/${projectId}` });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json().error.code).toBe('NOT_FOUND');
+
+    const detail = await app.inject({ method: 'GET', url: `/v1/projects/${projectId}` });
+    expect(detail.statusCode).toBe(404);
+  });
+
+  it('allows DELETE from the Studio origin in CORS preflight', async () => {
+    const app = await appPromise;
+    const response = await app.inject({
+      method: 'OPTIONS',
+      url: '/v1/projects/prj_any',
+      headers: {
+        origin: 'http://localhost:3000',
+        'access-control-request-method': 'DELETE',
+      },
+    });
+    expect(response.statusCode).toBe(204);
+    expect(response.headers['access-control-allow-methods']).toContain('DELETE');
+  });
+
   it('lists an empty project catalog', async () => {
     const app = await appPromise;
     const response = await app.inject({ method: 'GET', url: '/v1/projects' });
