@@ -70,9 +70,9 @@
 
 ## Phase 1: Contract
 
-- [ ] **Task 1: Timeline schema.** Test first in `timeline.test.ts`: a persisted timeline without the new fields parses to defaults; `direction.transitionOut: 'glitch'` is rejected; `transitionOut.durationMs` must be a non-negative even integer. Add the enums and `direction` / `transitionOut` to `TimelineClip`. Export the enum arrays for the Studio labels. Commit `feat: add cut style fields to the timeline contract`.
+- [x] **Task 1: Timeline schema.** Test first in `timeline.test.ts`: a persisted timeline without the new fields parses to defaults; `direction.transitionOut: 'glitch'` is rejected; `transitionOut.durationMs` must be a non-negative even integer. Add the enums and `direction` / `transitionOut` to `TimelineClip`. Export the enum arrays for the Studio labels. Commit `feat: add cut style fields to the timeline contract`.
 
-- [ ] **Task 2: Director pick contract.** Test: `DirectorPick.parse({segmentId, momentId})` yields `clipStyle: 'none'`, `transitionOut: 'hard'`; an unknown style fails. Bump `WORKER_VERSION.DIRECTOR` and `EFFECTS` to `1.2.0` and update the version assertions in `packages/contracts/src/feedback.test.ts`. Commit `feat: let director picks carry cut styles`.
+- [x] **Task 2: Director pick contract.** Test: `DirectorPick.parse({segmentId, momentId})` yields `clipStyle: 'none'`, `transitionOut: 'hard'`; an unknown style fails. Bump `WORKER_VERSION.DIRECTOR` and `EFFECTS` to `1.2.0` and update the version assertions in `packages/contracts/src/feedback.test.ts`. Commit `feat: let director picks carry cut styles`.
 
 ## Phase 2: Director proposes
 
