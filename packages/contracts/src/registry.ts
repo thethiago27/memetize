@@ -42,9 +42,9 @@ export const WORKER_VERSION: Record<JobType, string> = {
   LYRICS: '1.0.0',
   NARRATIVE: '1.0.0',
   MATCH: '2.0.0',
-  DIRECTOR: '1.1.0',
+  DIRECTOR: '1.2.0',
   TIMING: '1.0.0',
-  EFFECTS: '1.1.0',
+  EFFECTS: '1.2.0',
   RENDER: '1.0.0',
   FEEDBACK_EMBED: '1.0.0',
 };

@@ -1,3 +1,4 @@
+import { ClipStyle, TransitionStyle } from '@memetize/timeline';
 import { z } from 'zod';
 
 /**
@@ -20,9 +21,16 @@ export const DirectorOutput = z.object({
 });
 export type DirectorOutput = z.infer<typeof DirectorOutput>;
 
-/** One choice out of a segment's shortlist. Assemble fills in ranges/transform. */
+/**
+ * One choice out of a segment's shortlist. Assemble fills in ranges/transform.
+ * The cut styles (cut-styles spec) are proposals: Assemble puts `clipStyle`
+ * on the segment's primary clip and `transitionOut` on its last clip, and
+ * the Effects resolver may downgrade either against real source handles.
+ */
 export const DirectorPick = z.object({
   segmentId: z.string(),
   momentId: z.string(),
+  clipStyle: ClipStyle.default('none'),
+  transitionOut: TransitionStyle.default('hard'),
 });
 export type DirectorPick = z.infer<typeof DirectorPick>;

@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@memetize/timeline": "workspace:*",
     "zod": "^4.5.4"
   }
 }

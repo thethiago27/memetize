@@ -62,7 +62,7 @@ describe('feedback contracts', () => {
     expect(JOB_RESOURCE_CLASS.FEEDBACK_EMBED).toBe('GPU');
     expect(WORKER_VERSION.FEEDBACK_EMBED).toBe('1.0.0');
     expect(WORKER_VERSION.MATCH).toBe('2.0.0');
-    expect(WORKER_VERSION.DIRECTOR).toBe('1.1.0');
-    expect(WORKER_VERSION.EFFECTS).toBe('1.1.0');
+    expect(WORKER_VERSION.DIRECTOR).toBe('1.2.0');
+    expect(WORKER_VERSION.EFFECTS).toBe('1.2.0');
   });
 });
