@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redesign the Studio in Portuguese: projects home with cards and a new-project dialog, an editor with pipeline stepper, 9:16 preview, horizontal timeline strip with thumbnails and seek, a clip inspector with segment, current moment, and candidates, tabs for narrative, renders, editorial memory, and jobs, a library grid with drag-and-drop upload, an asset page with scene frames, and toasts for every action.
+- `GET /v1/projects/:id` returns `moments`: descriptions, asset names, and nearest frames for every referenced moment.
+
 - Add editorial memory: append-only `feedback_events` (swaps, clip thumbs, video ratings, bans, notes, system placements) and `moment_feedback_embeddings` learned from swaps, with a `FEEDBACK_EMBED` job.
 - Record `SWAP_OUT` / `SWAP_IN` on every clip swap, `PLACED` per clip at `TIMELINE_READY`, and expose rating, thumbs, notes, and bans in the API, CLI, and Studio.
 - Clip ranker 2.0.0: usage from smoothed win rates (overall and per narrative role), damping for moments rejected from similar segments, cross-project novelty; `WORKER_VERSION.MATCH` 2.0.0.

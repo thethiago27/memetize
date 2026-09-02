@@ -5,6 +5,7 @@ export * from './generate';
 export * from './ingest';
 export * from './lyrics';
 export * from './match';
+export * from './moments';
 export * from './narrative';
 export * from './paths';
 export * from './probe';

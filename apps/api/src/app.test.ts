@@ -246,6 +246,83 @@ describe.skipIf(!handle)('studio API (inject)', () => {
     );
   });
 
+  it('projects referenced moments with descriptions, asset names, and nearest frames', async () => {
+    const app = await appPromise;
+    const projectId = 'prj_api_moments';
+    await db
+      .insert(projects)
+      .values({ id: projectId, filename: 'song.mp3', status: 'TIMELINE_READY' });
+    await db.insert(mediaAssets).values({
+      id: 'ast_m',
+      filename: 'cat.mp4',
+      originalPath: 'storage/assets/ast_m/original.mp4',
+      thumbnailPath: 'storage/assets/ast_m/thumb.jpg',
+      checksum: 'sum_m',
+      durationMs: 4000,
+      status: 'READY',
+    });
+    await db.insert(scenes).values({
+      id: 'scn_m',
+      assetId: 'ast_m',
+      startMs: 0,
+      endMs: 4000,
+      durationMs: 4000,
+      detector: 'fixture',
+      detectorVersion: '1.0.0',
+      frames: [
+        { timestampMs: 0, path: 'storage/frames/scn_m/0.jpg' },
+        { timestampMs: 2000, path: 'storage/frames/scn_m/2000.jpg' },
+      ],
+    });
+    await db.insert(moments).values({
+      id: 'mom_m',
+      sceneId: 'scn_m',
+      assetId: 'ast_m',
+      startMs: 1800,
+      endMs: 3800,
+      durationMs: 2000,
+      description: 'cat stares at the camera',
+      primaryEmotion: 'judgement',
+      extractor: 'fixture',
+      extractorVersion: '1.0.0',
+    });
+    await insertTimelineVersion(db, {
+      projectId,
+      data: Timeline.parse({
+        projectId,
+        durationMs: 2000,
+        audio: { path: 'storage/audio/x.mp3', timelineStartMs: 0, sourceStartMs: 0 },
+        clips: [
+          {
+            id: 'clp_1',
+            momentId: 'mom_m',
+            timeline: { startMs: 0, endMs: 2000 },
+            source: { assetId: 'ast_m', startMs: 1800, endMs: 3800 },
+            reason: { segmentId: 'nar_1', semanticScore: 0.5, finalScore: 0.5 },
+          },
+        ],
+      }),
+      director: 'fixture',
+      directorVersion: '1.0.0',
+      promptVersion: 'v1',
+    });
+
+    const detail = await app.inject({ method: 'GET', url: `/v1/projects/${projectId}` });
+    expect(detail.json().moments).toEqual({
+      mom_m: {
+        id: 'mom_m',
+        assetId: 'ast_m',
+        assetFilename: 'cat.mp4',
+        description: 'cat stares at the camera',
+        primaryEmotion: 'judgement',
+        startMs: 1800,
+        endMs: 3800,
+        durationMs: 2000,
+        thumbnailPath: 'storage/frames/scn_m/2000.jpg',
+      },
+    });
+  });
+
   it('rejects a media path that tries to escape the repo', async () => {
     const app = await appPromise;
     // Fastify/light-my-request canonicalizes `/v1/media/../etc` before routing.

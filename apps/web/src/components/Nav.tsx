@@ -4,8 +4,16 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const LINKS = [
-  { href: '/', label: 'Library' },
-  { href: '/projects', label: 'Projects' },
+  {
+    href: '/',
+    label: 'Projetos',
+    match: (path: string) => path === '/' || path.startsWith('/projects'),
+  },
+  {
+    href: '/library',
+    label: 'Biblioteca',
+    match: (path: string) => path.startsWith('/library') || path.startsWith('/assets'),
+  },
 ];
 
 export function Nav() {
@@ -16,9 +24,7 @@ export function Nav() {
         <Link
           key={link.href}
           href={link.href}
-          data-active={
-            link.href === '/' ? pathname === '/' : pathname.startsWith(link.href) ? 'true' : 'false'
-          }
+          data-active={link.match(pathname) ? 'true' : 'false'}
         >
           {link.label}
         </Link>

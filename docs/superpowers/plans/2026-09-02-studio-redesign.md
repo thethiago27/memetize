@@ -10,9 +10,9 @@
 
 ## Tasks
 
-- [ ] **Task 1: API projection.** `moments` map on project detail with description, asset filename, nearest frame thumbnail. Test in `app.test.ts`.
-- [ ] **Task 2: Web foundation.** `lib/labels.ts` (status and function labels, colors), `components/Toast.tsx` provider, `components/StatusPill.tsx`, new `globals.css` tokens and component classes, nav and layout in Portuguese, `/projects` redirect.
-- [ ] **Task 3: Projetos home.** Cards grid, "Novo projeto" dialog, empty state, polling.
-- [ ] **Task 4: Editor.** Header with actions and rating, stepper from jobs, preview + timeline strip with seek and playhead highlight, inspector with segment, current moment, candidates, tabs (Narrativa, Renders, Memória, Jobs).
-- [ ] **Task 5: Biblioteca and asset page.** Dropzone upload, cards grid, asset header with ban toggle, scene frames, moments with thumbnails.
-- [ ] **Task 6: Verification and docs.** Build, typecheck, lint, README note, CHANGELOG entry.
+- [x] **Task 1: API projection.** `moments` map on project detail with description, asset filename, nearest frame thumbnail. Test in `app.test.ts`.
+- [x] **Task 2: Web foundation.** `lib/labels.ts` (status and function labels, colors), `components/Toast.tsx` provider, `components/StatusPill.tsx`, new `globals.css` tokens and component classes, nav and layout in Portuguese, `/projects` redirect.
+- [x] **Task 3: Projetos home.** Cards grid, "Novo projeto" dialog, empty state, polling.
+- [x] **Task 4: Editor.** Header with actions and rating, stepper from jobs, preview + timeline strip with seek and playhead highlight, inspector with segment, current moment, candidates, tabs (Narrativa, Renders, Memória, Jobs).
+- [x] **Task 5: Biblioteca and asset page.** Dropzone upload, cards grid, asset header with ban toggle, scene frames, moments with thumbnails.
+- [x] **Task 6: Verification and docs.** Build, typecheck, lint, README note, CHANGELOG entry.

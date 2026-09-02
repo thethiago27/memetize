@@ -19,7 +19,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(
       0,
       'API_UNREACHABLE',
-      'Studio API is not running on :8787. Start it with pnpm studio.',
+      'A API do Studio não está respondendo na porta 8787. Inicie com pnpm studio.',
     );
   }
   const data = (await response.json().catch(() => ({}))) as {
@@ -100,6 +100,7 @@ export interface FeedbackEventRow {
   timelineVersion: number | null;
   clipId: string | null;
   momentId: string | null;
+  assetId: string | null;
   kind: string;
   value: number | null;
   note: string | null;
@@ -118,11 +119,40 @@ export interface AssetRow {
   thumbnailPath: string | null;
 }
 
+export interface SceneRow {
+  id: string;
+  startMs: number;
+  endMs: number;
+  frames: { timestampMs: number; path: string }[];
+}
+
+export interface AssetMomentRow {
+  id: string;
+  sceneId: string;
+  startMs: number;
+  endMs: number;
+  description: string;
+  primaryEmotion: string | null;
+  banned: boolean;
+}
+
 export interface AssetDetail {
   asset: AssetRow;
-  scenes: { id: string; startMs: number; endMs: number }[];
-  moments: { id: string; startMs: number; endMs: number; description: string; banned: boolean }[];
+  scenes: SceneRow[];
+  moments: AssetMomentRow[];
   banned: boolean;
+}
+
+export interface MomentSummary {
+  id: string;
+  assetId: string;
+  assetFilename: string;
+  description: string;
+  primaryEmotion: string | null;
+  startMs: number;
+  endMs: number;
+  durationMs: number;
+  thumbnailPath: string | null;
 }
 
 export interface ProjectRow {
@@ -185,6 +215,7 @@ export interface ProjectJob {
   status: string;
   errorCode: string | null;
   errorMessage: string | null;
+  createdAt: string;
 }
 
 export interface ProjectDetail {
@@ -196,21 +227,27 @@ export interface ProjectDetail {
     sections: { type: string; startMs: number; endMs: number }[];
   } | null;
   lyrics: { source: string; lines: { startMs: number; endMs: number; text: string }[] } | null;
-  narrative: {
-    id: string;
-    startMs: number;
-    endMs: number;
-    narrativeFunction: string;
-    meaning: string;
-    emotion: string;
-    energy: number;
-  }[];
+  narrative: NarrativeSegmentRow[];
   matches: { segmentId: string; shortlist: ShortlistEntry[] }[];
   timeline: { version: number; data: { durationMs: number; clips: TimelineClip[] } } | null;
   render: RenderRow | null;
   renders: RenderRow[];
   jobs: ProjectJob[];
   feedback: FeedbackEventRow[];
+  moments: Record<string, MomentSummary>;
+}
+
+export interface NarrativeSegmentRow {
+  id: string;
+  startMs: number;
+  endMs: number;
+  sourceKind: string;
+  lyrics: string;
+  meaning: string;
+  emotion: string;
+  narrativeFunction: string;
+  visualIdeas: string[];
+  energy: number;
 }
 
 export interface RenderRow {

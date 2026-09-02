@@ -17,6 +17,7 @@ import {
   listTimelineVersions,
   renderProject,
   reprocessProject,
+  summarizeMoments,
   swapClip,
 } from '@memetize/projects';
 import type { AppRuntime } from '@memetize/runtime';
@@ -77,6 +78,10 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
       getLatestEditWindow(runtime.db, id),
       listProjectFeedback(runtime.db, id),
     ]);
+    const momentIds = new Set<string>();
+    for (const clip of timeline?.data.clips ?? []) momentIds.add(clip.momentId);
+    for (const match of matches) for (const entry of match.shortlist) momentIds.add(entry.momentId);
+    const moments = await summarizeMoments(runtime.db, momentIds);
     return {
       project,
       audio,
@@ -89,6 +94,7 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
       jobs,
       editWindow: editWindow ?? null,
       feedback,
+      moments,
     };
   });
 

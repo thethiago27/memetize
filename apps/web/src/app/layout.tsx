@@ -3,6 +3,7 @@ import { Barlow_Condensed, Figtree, IBM_Plex_Mono } from 'next/font/google';
 import Link from 'next/link';
 import { ApiLamp } from '../components/ApiLamp';
 import { Nav } from '../components/Nav';
+import { ToastProvider } from '../components/Toast';
 import './globals.css';
 
 const slate = Barlow_Condensed({
@@ -23,26 +24,28 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Memetize bay',
-  description: 'Local edit bay for music-to-meme timelines',
+  title: 'Memetize Studio',
+  description: 'Editor local de vídeos de meme a partir de música',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <body className={`${slate.variable} ${body.variable} ${mono.variable}`}>
-        <div className="shell">
-          <header className="mast">
-            <Link className="wordmark" href="/">
-              Meme<span>tize</span>
-            </Link>
-            <div className="mast-end">
-              <Nav />
-              <ApiLamp />
-            </div>
-          </header>
-          <main className="page">{children}</main>
-        </div>
+        <ToastProvider>
+          <div className="shell">
+            <header className="mast">
+              <Link className="wordmark" href="/">
+                Meme<span>tize</span>
+              </Link>
+              <div className="mast-end">
+                <Nav />
+                <ApiLamp />
+              </div>
+            </header>
+            <main className="page">{children}</main>
+          </div>
+        </ToastProvider>
       </body>
     </html>
   );

@@ -16,7 +16,7 @@ export function ApiLamp() {
   useEffect(ping, [ping]);
   useInterval(ping, true, 4000);
 
-  const label = ok === null ? 'API…' : ok ? 'API live' : 'API down';
+  const label = ok === null ? 'API…' : ok ? 'API online' : 'API offline';
   return (
     <span className="lamp" data-state={ok === true ? 'live' : ok === false ? 'down' : 'wait'}>
       <span className="lamp-dot" />

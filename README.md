@@ -20,7 +20,7 @@ pnpm db:migrate
 pnpm py:sync
 ```
 
-Start Studio (API on `:8787`, web on `:3000`):
+Start Studio (API on `:8787`, web on `:3000`). The web UI is in Portuguese: **Projetos** (home, editor per project) and **Biblioteca** (asset catalog).
 
 ```bash
 pnpm studio

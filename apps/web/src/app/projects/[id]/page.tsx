@@ -1,54 +1,54 @@
 'use client';
 
-import { use, useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Inspector } from '../../../components/Inspector';
+import { StatusPill } from '../../../components/StatusPill';
+import { latestJobByType, Stepper } from '../../../components/Stepper';
+import { TimelineStrip } from '../../../components/TimelineStrip';
+import { useToast } from '../../../components/Toast';
 import {
   api,
-  type FeedbackEventRow,
   formatTimecode,
   hasActiveJobs,
   mediaUrl,
   type ProjectDetail,
   type TimelineClip,
 } from '../../../lib/api';
+import {
+  describeFeedback,
+  functionColor,
+  functionLabel,
+  JOB_LABEL,
+  JOB_STATUS_LABEL,
+  jobTone,
+  PROJECT_STATUS_LABEL,
+  projectTone,
+  shortName,
+} from '../../../lib/labels';
 import { useInterval } from '../../../lib/use-interval';
 
 const RATINGS = [1, 2, 3, 4, 5] as const;
+type Tab = 'narrativa' | 'renders' | 'memoria' | 'jobs';
 
-function describeFeedback(event: FeedbackEventRow): string {
-  const role = event.context.narrativeFunction ? ` as ${event.context.narrativeFunction}` : '';
-  switch (event.kind) {
-    case 'VIDEO_RATING':
-      return `Rated timeline v${event.timelineVersion ?? '?'} ${event.value ?? '?'}/5`;
-    case 'SWAP_OUT':
-      return `Swapped out ${event.momentId}${role}`;
-    case 'SWAP_IN':
-      return `Swapped in ${event.momentId}${role}`;
-    case 'CLIP_UP':
-      return `Kept ${event.momentId}${role}`;
-    case 'CLIP_DOWN':
-      return `Missed ${event.momentId}${role}`;
-    case 'NOTE':
-      return `Note: ${event.note ?? ''}`;
-    case 'PLACED':
-      return `Placed ${event.momentId}${role}`;
-    default:
-      return `${event.kind} ${event.momentId ?? ''}`.trim();
-  }
-}
-
-export default function ProjectStudioPage({ params }: { params: Promise<{ id: string }> }) {
+export default function ProjectEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { notify } = useToast();
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [tab, setTab] = useState<Tab>('narrativa');
+  const [playheadMs, setPlayheadMs] = useState<number | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const load = useCallback(() => {
     api
       .getProject(id)
       .then((next) => {
         setDetail(next);
+        setError(null);
         setSelectedId((current) => current ?? next.timeline?.data.clips[0]?.id ?? null);
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
@@ -57,364 +57,403 @@ export default function ProjectStudioPage({ params }: { params: Promise<{ id: st
   useEffect(load, [load]);
   useInterval(load, detail !== null && hasActiveJobs(detail.jobs));
 
+  const clips = detail?.timeline?.data.clips ?? [];
   const selected = useMemo(
-    () => detail?.timeline?.data.clips.find((clip) => clip.id === selectedId) ?? null,
-    [detail, selectedId],
+    () => clips.find((clip) => clip.id === selectedId) ?? null,
+    [clips, selectedId],
   );
-
+  const segment = useMemo(
+    () =>
+      selected ? detail?.narrative.find((row) => row.id === selected.reason.segmentId) : undefined,
+    [detail, selected],
+  );
   const shortlist = useMemo(() => {
     if (!detail || !selected) return [];
     return (
       detail.matches.find((match) => match.segmentId === selected.reason.segmentId)?.shortlist ?? []
     );
   }, [detail, selected]);
-
   const latestRating = useMemo(
     () => detail?.feedback.find((event) => event.kind === 'VIDEO_RATING')?.value ?? null,
     [detail],
   );
+  const failedJobs = useMemo(() => {
+    if (!detail) return [];
+    return [...latestJobByType(detail.jobs).values()].filter((job) => job.status === 'FAILED');
+  }, [detail]);
 
-  const durationMs = detail?.timeline?.data.durationMs ?? detail?.audio?.durationMs ?? 1;
-  const preview = mediaUrl(detail?.render?.path);
-  const slateAhead =
-    detail?.timeline != null &&
+  if (error)
+    return (
+      <p className="notice" data-tone="bad">
+        {error}
+      </p>
+    );
+  if (!detail) return <p className="mute">Carregando…</p>;
+
+  const durationMs =
+    detail.timeline?.data.durationMs ??
+    detail.editWindow?.durationMs ??
+    detail.audio?.durationMs ??
+    1;
+  const preview = mediaUrl(detail.render?.path);
+  const stale =
+    detail.timeline != null &&
     detail.render != null &&
     detail.timeline.version !== detail.render.timelineVersion;
+  const momentName = (momentId: string) => detail.moments[momentId]?.description ?? momentId;
 
-  if (error) return <p className="err">{error}</p>;
-  if (!detail) return <p className="mute">Loading bay…</p>;
-
-  const run = async (label: string, action: () => Promise<unknown>) => {
+  const run = async (label: string, action: () => Promise<unknown>, success?: string) => {
     setBusy(label);
-    setError(null);
     try {
       await action();
+      if (success) notify(success);
       load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      notify(err instanceof Error ? err.message : String(err), 'bad');
     } finally {
       setBusy(null);
     }
   };
 
+  const selectClip = (clip: TimelineClip) => {
+    setSelectedId(clip.id);
+    const video = videoRef.current;
+    if (video && preview) {
+      video.currentTime = clip.timeline.startMs / 1000;
+    }
+  };
+
   return (
     <>
-      <p className="kicker">{detail.project.id}</p>
-      <h1 className="headline">{detail.project.filename}</h1>
-      <p className="mono mute">
-        {detail.project.status}
-        {detail.audio
-          ? `  ${formatTimecode(detail.audio.durationMs)}  ${detail.audio.bpm} bpm`
-          : ''}
-        {detail.timeline ? `  timeline v${detail.timeline.version}` : ''}
-        {detail.render ? `  render v${detail.render.version}` : ''}
-      </p>
+      <Link className="back" href="/">
+        ← Projetos
+      </Link>
 
-      {detail.jobs.length > 0 ? (
-        <section className="panel jobs">
-          {detail.jobs.map((job) => (
-            <span key={job.id} data-status={job.status}>
-              {job.type} {job.status}
-            </span>
-          ))}
-        </section>
-      ) : null}
-
-      {detail.jobs
-        .filter((job) => job.status === 'FAILED' && (job.errorCode || job.errorMessage))
-        .map((job) => (
-          <section key={`${job.id}-error`} className="panel">
-            <p className="kicker">Job failed</p>
-            <p className="err">
-              {job.type}
-              {job.errorCode ? ` · ${job.errorCode}` : ''}
-              {job.errorMessage ? ` — ${job.errorMessage}` : ''}
-            </p>
-            {job.errorCode === 'INSUFFICIENT_CATALOG' ? (
-              <p className="note">
-                Add more or longer source videos so every selected span can be covered without
-                black, freeze, or looping.
-              </p>
-            ) : null}
-          </section>
-        ))}
-
-      {detail.editWindow ? (
-        <section className="panel">
-          <p className="kicker">Selected source window</p>
-          <p className="mono">
-            {formatTimecode(detail.editWindow.sourceStartMs)}–
-            {formatTimecode(detail.editWindow.sourceEndMs)} ·{' '}
-            {formatTimecode(detail.editWindow.durationMs)}
-          </p>
-          <p className="mute">
-            {detail.editWindow.selector} v{detail.editWindow.selectorVersion} · score{' '}
-            {detail.editWindow.score.toFixed(2)}
-          </p>
-        </section>
-      ) : null}
-
-      {slateAhead ? (
-        <p className="note">Slate is ahead of the print. Render to see the latest swap.</p>
-      ) : null}
-
-      {detail.timeline ? (
-        <section className="panel">
-          <p className="kicker">Rate this cut</p>
-          <div className="actions">
-            {RATINGS.map((value) => (
-              <button
-                key={value}
-                className={value === latestRating ? 'btn btn-cut' : 'btn'}
-                type="button"
-                disabled={busy !== null}
-                onClick={() =>
-                  run(`rate-${value}`, () => api.feedback(id, { kind: 'VIDEO_RATING', value }))
-                }
-              >
-                {value}
-              </button>
-            ))}
-            <span className="mute">
-              {latestRating ? `rated ${latestRating}/5` : 'teaches the ranker what worked'}
+      <div className="page-head">
+        <div className="stack">
+          <h1 className="headline">{shortName(detail.project.filename)}</h1>
+          <div className="cluster">
+            <StatusPill
+              label={PROJECT_STATUS_LABEL[detail.project.status] ?? detail.project.status}
+              tone={projectTone(detail.project.status)}
+            />
+            <span className="mono mute">
+              {detail.audio
+                ? `${formatTimecode(detail.audio.durationMs)} · ${Math.round(detail.audio.bpm)} bpm`
+                : 'aguardando análise'}
+              {detail.timeline ? ` · timeline v${detail.timeline.version}` : ''}
+              {detail.render ? ` · render v${detail.render.version}` : ''}
             </span>
           </div>
-        </section>
-      ) : null}
+        </div>
+        <div className="cluster">
+          {detail.timeline ? (
+            <span className="cluster" title="Avaliar este corte ensina o ranker o que funcionou">
+              <span className="mute small">Avaliar corte</span>
+              <span className="rating">
+                {RATINGS.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className="star"
+                    data-on={latestRating !== null && value <= latestRating ? 'true' : 'false'}
+                    aria-label={`${value} de 5`}
+                    disabled={busy !== null}
+                    onClick={() =>
+                      run(
+                        `rate-${value}`,
+                        () => api.feedback(id, { kind: 'VIDEO_RATING', value }),
+                        `Avaliação ${value}/5 salva.`,
+                      )
+                    }
+                  >
+                    ★
+                  </button>
+                ))}
+              </span>
+            </span>
+          ) : null}
+          <button
+            className="btn"
+            type="button"
+            disabled={busy !== null || hasActiveJobs(detail.jobs)}
+            onClick={() => run('generate', () => api.generate(id), 'Gerando uma nova timeline…')}
+          >
+            {busy === 'generate' ? 'Gerando…' : 'Gerar timeline'}
+          </button>
+          <button
+            className="btn btn-primary"
+            type="button"
+            disabled={busy !== null || !detail.timeline || hasActiveJobs(detail.jobs)}
+            onClick={() => run('render', () => api.render(id), 'Render iniciado.')}
+          >
+            {busy === 'render' ? 'Renderizando…' : 'Renderizar'}
+          </button>
+        </div>
+      </div>
 
-      <div className="studio">
-        <section className="panel">
-          <p className="kicker">Timeline</p>
-          {!detail.timeline || detail.timeline.data.clips.length === 0 ? (
-            <p className="mute">No clips yet. Wait for the motor or regenerate.</p>
-          ) : (
-            <div className="reel">
-              {detail.timeline.data.clips.map((clip) => (
-                <ClipBlock
-                  key={clip.id}
-                  clip={clip}
-                  durationMs={durationMs}
-                  selected={clip.id === selectedId}
-                  functionLabel={
-                    detail.narrative.find((segment) => segment.id === clip.reason.segmentId)
-                      ?.narrativeFunction
-                  }
-                  onSelect={() => setSelectedId(clip.id)}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+      <section className="panel">
+        <Stepper jobs={detail.jobs} />
+        {failedJobs.map((job) => (
+          <div key={job.id} className="notice" data-tone="bad">
+            <strong>{JOB_LABEL[job.type] ?? job.type} falhou</strong>
+            {job.errorCode ? ` · ${job.errorCode}` : ''}
+            {job.errorMessage ? ` — ${job.errorMessage}` : ''}
+            {job.errorCode === 'INSUFFICIENT_CATALOG' ? (
+              <div className="small">
+                Adicione mais vídeos, ou vídeos mais longos, à biblioteca e gere a timeline de novo.
+              </div>
+            ) : null}
+          </div>
+        ))}
+        {stale ? (
+          <p className="notice">
+            A timeline mudou depois do último render. Renderize para ver a troca.
+          </p>
+        ) : null}
+        {detail.editWindow ? (
+          <p className="mono mute small">
+            Trecho da música: {formatTimecode(detail.editWindow.sourceStartMs)}–
+            {formatTimecode(detail.editWindow.sourceEndMs)} · saída{' '}
+            {formatTimecode(detail.editWindow.durationMs)} · seletor {detail.editWindow.selector} v
+            {detail.editWindow.selectorVersion} · score {detail.editWindow.score.toFixed(2)}
+          </p>
+        ) : null}
+      </section>
 
-        <section>
-          <div className="gate">
+      <div className="editor">
+        <section className="panel preview">
+          <div className="screen">
             {preview ? (
-              <video key={preview} src={preview} controls playsInline>
-                <track kind="captions" srcLang="en" label="Captions" />
+              <video
+                key={preview}
+                ref={videoRef}
+                src={preview}
+                controls
+                playsInline
+                onTimeUpdate={(event) =>
+                  setPlayheadMs(Math.round(event.currentTarget.currentTime * 1000))
+                }
+                onPause={() => setPlayheadMs(null)}
+              >
+                <track kind="captions" srcLang="pt" label="Legendas" />
               </video>
             ) : (
-              <div className="empty-gate">No print yet. Hit Render when the slate feels right.</div>
-            )}
-            <div className="burnin">
-              {formatTimecode(durationMs)}
-              {detail.render ? `  v${detail.render.version}` : ''}
-            </div>
-          </div>
-        </section>
-
-        <section className="panel">
-          <p className="kicker">Candidates</p>
-          <div className="actions">
-            <button
-              className="btn"
-              type="button"
-              disabled={busy !== null}
-              onClick={() => run('generate', () => api.generate(id))}
-            >
-              {busy === 'generate' ? 'Generating…' : 'Regenerate timeline'}
-            </button>
-            <button
-              className="btn btn-cut"
-              type="button"
-              disabled={busy !== null || !detail.timeline}
-              onClick={() => run('render', () => api.render(id))}
-            >
-              {busy === 'render' ? 'Rendering…' : 'Render'}
-            </button>
-          </div>
-          {selected ? (
-            <div className="actions">
-              <button
-                className="btn"
-                type="button"
-                disabled={busy !== null}
-                onClick={() =>
-                  run('keep', () => api.feedback(id, { kind: 'CLIP_UP', clipId: selected.id }))
-                }
-              >
-                {busy === 'keep' ? 'Saving…' : 'Keep'}
-              </button>
-              <button
-                className="btn"
-                type="button"
-                disabled={busy !== null}
-                onClick={() =>
-                  run('miss', () => api.feedback(id, { kind: 'CLIP_DOWN', clipId: selected.id }))
-                }
-              >
-                {busy === 'miss' ? 'Saving…' : 'Miss'}
-              </button>
-              <span className="mono mute">{selected.momentId}</span>
-            </div>
-          ) : null}
-          {!selected ? (
-            <p className="mute">Select a clip on the reel.</p>
-          ) : shortlist.length === 0 ? (
-            <p className="mute">Empty shortlist for this segment.</p>
-          ) : (
-            shortlist.map((entry) => (
-              <div key={entry.momentId} className="row">
-                <div>
-                  <div className="mono">{entry.momentId}</div>
-                  <div className="mute">final {entry.finalScore.toFixed(2)}</div>
-                </div>
-                <div className="actions">
-                  <button
-                    className="btn"
-                    type="button"
-                    disabled={busy !== null || entry.momentId === selected.momentId}
-                    onClick={() => run('swap', () => api.swapClip(id, selected.id, entry.momentId))}
-                  >
-                    {entry.momentId === selected.momentId ? 'On slate' : 'Swap in'}
-                  </button>
-                  <button
-                    className="btn"
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() => run('ban', () => api.banMoment(entry.momentId))}
-                  >
-                    Ban
-                  </button>
-                </div>
+              <div className="screen-empty">
+                {detail.timeline
+                  ? 'Ainda não há render. Clique em Renderizar para ver o vídeo.'
+                  : 'O vídeo aparece aqui depois do render.'}
               </div>
-            ))
+            )}
+          </div>
+          {clips.length === 0 ? (
+            <div className="empty">
+              {hasActiveJobs(detail.jobs)
+                ? 'O motor está montando a timeline…'
+                : 'Ainda não há clipes. Gere a timeline.'}
+            </div>
+          ) : (
+            <TimelineStrip
+              clips={clips}
+              durationMs={durationMs}
+              segments={detail.narrative}
+              moments={detail.moments}
+              selectedId={selectedId}
+              playheadMs={playheadMs}
+              onSelect={selectClip}
+            />
           )}
         </section>
+
+        <Inspector
+          clip={selected}
+          segment={segment}
+          moments={detail.moments}
+          shortlist={shortlist}
+          busy={busy}
+          onThumb={(kind) =>
+            selected &&
+            run(
+              kind === 'CLIP_UP' ? 'up' : 'down',
+              () => api.feedback(id, { kind, clipId: selected.id }),
+              kind === 'CLIP_UP'
+                ? 'Clipe marcado como funcionou.'
+                : 'Clipe marcado como não funcionou.',
+            )
+          }
+          onSwap={(momentId) =>
+            selected &&
+            run(
+              `swap-${momentId}`,
+              () => api.swapClip(id, selected.id, momentId),
+              'Clipe trocado. Renderize para ver.',
+            )
+          }
+          onBan={(momentId) =>
+            run(
+              `ban-${momentId}`,
+              () => api.banMoment(momentId),
+              'Momento banido. Ele não entra em novas timelines.',
+            )
+          }
+        />
       </div>
 
       <section className="panel">
-        <p className="kicker">Project</p>
-        {detail.narrative.length === 0 ? (
-          <p className="mute">Narrative is still cooking.</p>
-        ) : (
-          detail.narrative.map((segment) => (
-            <div key={segment.id} className="row">
-              <span>
-                {segment.narrativeFunction} · {segment.emotion}
-              </span>
-              <span className="mono mute">
-                {formatTimecode(segment.startMs)}–{formatTimecode(segment.endMs)}
-              </span>
-            </div>
-          ))
-        )}
-      </section>
+        <div className="tabs" role="tablist">
+          {(
+            [
+              ['narrativa', 'Narrativa'],
+              ['renders', 'Renders'],
+              ['memoria', 'Memória editorial'],
+              ['jobs', 'Jobs'],
+            ] as [Tab, string][]
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              className="tab"
+              data-active={tab === key ? 'true' : 'false'}
+              onClick={() => setTab(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-      <section className="panel">
-        <p className="kicker">Editorial memory</p>
-        <form
-          className="actions"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const text = note.trim();
-            if (!text) return;
-            void run('note', async () => {
-              await api.feedback(id, { kind: 'NOTE', note: text });
-              setNote('');
-            });
-          }}
-        >
-          <input
-            className="mono"
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="A note the Director should remember for this project"
-            maxLength={2000}
-          />
-          <button className="btn" type="submit" disabled={busy !== null || !note.trim()}>
-            {busy === 'note' ? 'Saving…' : 'Add note'}
-          </button>
-        </form>
-        {detail.feedback.length === 0 ? (
-          <p className="mute">Nothing learned yet. Swap, rate, or note to teach the motor.</p>
-        ) : (
-          detail.feedback.map((event) => (
-            <div key={event.id} className="row">
-              <span>
-                {describeFeedback(event)}
-                {event.projectId === null ? <span className="mute"> · global</span> : null}
-              </span>
-              <span className="mono mute">{new Date(event.createdAt).toLocaleString()}</span>
-            </div>
-          ))
-        )}
-      </section>
+        {tab === 'narrativa' ? (
+          detail.narrative.length === 0 ? (
+            <p className="mute">A narrativa ainda está sendo analisada.</p>
+          ) : (
+            detail.narrative.map((row) => (
+              <div key={row.id} className="row" style={{ alignItems: 'flex-start' }}>
+                <div className="stack" style={{ gap: 2 }}>
+                  <div className="cluster">
+                    <span
+                      className="pill"
+                      data-fn="true"
+                      style={{ ['--fn-color' as string]: functionColor(row.narrativeFunction) }}
+                    >
+                      {functionLabel(row.narrativeFunction)}
+                    </span>
+                    <span className="pill">{row.emotion}</span>
+                    <span className="mono mute">energia {row.energy.toFixed(2)}</span>
+                  </div>
+                  {row.lyrics ? <span className="quote small">“{row.lyrics}”</span> : null}
+                  <span className="small">{row.meaning}</span>
+                </div>
+                <span className="mono mute">
+                  {formatTimecode(row.startMs)}–{formatTimecode(row.endMs)}
+                </span>
+              </div>
+            ))
+          )
+        ) : null}
 
-      <section className="panel">
-        <p className="kicker">Renders</p>
-        {(detail.renders ?? []).length === 0 ? (
-          <p className="mute">No prints yet.</p>
-        ) : (
-          detail.renders.map((render) => (
-            <div key={render.version} className="row">
-              <span className="mono">
-                v{render.version} · timeline v{render.timelineVersion} · {render.width}×
-                {render.height}
-              </span>
-              <span className="mono mute">
-                {render.validation.warnings.length > 0
-                  ? render.validation.warnings.map((warning) => warning.code).join(' · ')
-                  : 'clean'}
-              </span>
-            </div>
-          ))
-        )}
+        {tab === 'renders' ? (
+          (detail.renders ?? []).length === 0 ? (
+            <p className="mute">Nenhum render ainda.</p>
+          ) : (
+            detail.renders.map((render) => (
+              <div key={render.version} className="row">
+                <span className="mono">
+                  v{render.version} · timeline v{render.timelineVersion} · {render.width}×
+                  {render.height} · {formatTimecode(render.durationMs)}
+                </span>
+                <span className="cluster">
+                  <span className="mono mute">
+                    {render.validation.warnings.length > 0
+                      ? render.validation.warnings.map((warning) => warning.code).join(' · ')
+                      : 'sem avisos'}
+                  </span>
+                  <a
+                    className="btn btn-sm btn-ghost"
+                    href={mediaUrl(render.path) ?? '#'}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Abrir
+                  </a>
+                </span>
+              </div>
+            ))
+          )
+        ) : null}
+
+        {tab === 'memoria' ? (
+          <>
+            <form
+              className="cluster"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const text = note.trim();
+                if (!text) return;
+                void run(
+                  'note',
+                  async () => {
+                    await api.feedback(id, { kind: 'NOTE', note: text });
+                    setNote('');
+                  },
+                  'Nota adicionada. O Director passa a considerá-la.',
+                );
+              }}
+            >
+              <input
+                className="input"
+                style={{ flex: 1, minWidth: 240 }}
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="Uma instrução para o Director lembrar neste projeto"
+                maxLength={2000}
+              />
+              <button className="btn" type="submit" disabled={busy !== null || !note.trim()}>
+                {busy === 'note' ? 'Salvando…' : 'Adicionar nota'}
+              </button>
+            </form>
+            {detail.feedback.length === 0 ? (
+              <p className="mute">
+                Nada aprendido ainda. Troque, avalie ou anote para ensinar o motor.
+              </p>
+            ) : (
+              detail.feedback.map((event) => (
+                <div key={event.id} className="row">
+                  <span className="small">
+                    {describeFeedback(event, momentName)}
+                    {event.projectId === null ? <span className="mute"> · global</span> : null}
+                  </span>
+                  <span className="mono mute">
+                    {new Date(event.createdAt).toLocaleString('pt-BR')}
+                  </span>
+                </div>
+              ))
+            )}
+          </>
+        ) : null}
+
+        {tab === 'jobs' ? (
+          detail.jobs.length === 0 ? (
+            <p className="mute">Nenhum job ainda.</p>
+          ) : (
+            detail.jobs.map((job) => (
+              <div key={job.id} className="row">
+                <span className="cluster">
+                  <StatusPill
+                    label={JOB_STATUS_LABEL[job.status] ?? job.status}
+                    tone={jobTone(job.status)}
+                  />
+                  <span>{JOB_LABEL[job.type] ?? job.type}</span>
+                </span>
+                <span className="mono mute small">
+                  {job.errorCode
+                    ? `${job.errorCode} ${job.errorMessage ?? ''}`
+                    : new Date(job.createdAt).toLocaleString('pt-BR')}
+                </span>
+              </div>
+            ))
+          )
+        ) : null}
       </section>
     </>
-  );
-}
-
-function ClipBlock({
-  clip,
-  durationMs,
-  selected,
-  functionLabel,
-  onSelect,
-}: {
-  clip: TimelineClip;
-  durationMs: number;
-  selected: boolean;
-  functionLabel?: string;
-  onSelect: () => void;
-}) {
-  const slot = clip.timeline.endMs - clip.timeline.startMs;
-  const height = Math.max(36, Math.round((slot / durationMs) * 320));
-  const zoom = clip.effects?.find((effect) => effect.type === 'zoom');
-  return (
-    <button
-      type="button"
-      className="clip"
-      data-selected={selected ? 'true' : 'false'}
-      style={{ height }}
-      onClick={onSelect}
-    >
-      <div className="mono">
-        {formatTimecode(clip.timeline.startMs)}–{formatTimecode(clip.timeline.endMs)}
-      </div>
-      <div>
-        {functionLabel ?? clip.reason.segmentId}
-        {zoom ? '  · zoom' : ''}
-      </div>
-    </button>
   );
 }
