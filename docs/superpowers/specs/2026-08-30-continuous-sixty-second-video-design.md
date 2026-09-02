@@ -323,7 +323,7 @@ Before opening a pull request:
 
 ## Non-goals
 
-- crossfade or decorative transition effects;
+- crossfade or decorative transition effects (revised on 2026-09-01 by `2026-09-01-cut-styles-design.md`, which adds a closed vocabulary of transitions and clip styles while keeping slots contiguous; the "no black interval" check becomes "no black interval outside declared `dip_black` windows");
 - generative filler video;
 - looping or slow-motion stretching of short clips;
 - configurable output durations other than the approved 60-second maximum policy;

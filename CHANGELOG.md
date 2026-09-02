@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add cut styles: the Director (prompt `v4`) proposes a transition (`hard`, `dip_black`, `flash`, `crossfade`, `whip`) per segment boundary and a clip style (`hold`, `speed_up`, `slow_down`) per primary clip; a deterministic resolver in `EFFECTS` validates each proposal against tempo, slot lengths, and real source handles, downgrades what cannot render, and records why on the clip and in `effects.json`. The FFmpeg graph renders them with `xfade`, `fade`, `tpad`, and `setpts` while keeping slots contiguous and the output length exact. `WORKER_VERSION.DIRECTOR` and `EFFECTS` 1.2.0.
+- The renderer validates before touching media, rejects a timeline whose duration disagrees with the selected edit window (`TIMELINE_DURATION_MISMATCH`), and rejects transitions over a third of the smaller neighboring slot, overlapping transitions without a head handle, or incoming plus outgoing transitions that exceed a slot.
+- Clip swaps re-resolve cut styles against the new moment's bounds.
+- The Studio strip marks non-hard boundaries and styled clips; the Inspector gains a "Corte" section with the resolved transition and the downgrade reason in Portuguese.
+- `LLM_PROVIDER=fixture LLM_MODEL=styled` makes the fixture Director propose every style by segment position, for tests.
+
 - Exclude source ranges of an asset (`EXCLUDE_RANGE` / `INCLUDE_RANGE` feedback events): every moment touching an excluded range is banned from retrieval and swaps, surviving reprocessing. Exposed as `POST`/`DELETE /v1/assets/:id/exclusions`, `pnpm cli asset exclude|include`, and per-scene, per-moment, and custom-range controls on the Studio asset page.
 
 - Fix a spurious `INSUFFICIENT_CATALOG`: the coverage resolver now tries every duration-compatible candidate in preference order instead of giving up when the Director's pick would leave an unabsorbable tail.

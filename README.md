@@ -80,7 +80,8 @@ What the pipeline does with it:
 
 - `MATCH` (ranker `2.0.0`) excludes banned moments and assets in SQL, never offers a moment swapped out of the same segment again, searches the feedback vectors alongside the catalog, and scores usage from smoothed win rates (overall and per narrative function) with a cross-project novelty term. The newest event considered is stored as `feedback_cutoff_at`.
 - `EFFECTS` records one `PLACED` event per clip when the project reaches `TIMELINE_READY`.
-- `DIRECTOR` (prompt `v3`) receives `memory`: templated lessons about the shortlisted moments, the editor's notes, and up to three examples of past choices for similar segments. The fixture provider ignores it; the gateway provider includes it in the prompt.
+- `DIRECTOR` (prompt `v4`) receives `memory`: templated lessons about the shortlisted moments, the editor's notes, and up to three examples of past choices for similar segments. The fixture provider ignores it; the gateway provider includes it in the prompt.
+- `DIRECTOR` also proposes a cut style per segment (see [Cut styles](#cut-styles)). The fixture provider proposes none; `LLM_PROVIDER=fixture LLM_MODEL=styled` makes it walk the whole vocabulary by segment position, which is how the resolver and renderer are exercised end to end.
 
 Measure whether the ranker would have agreed with past decisions, using only the feedback that existed before each one:
 
@@ -92,7 +93,27 @@ The report (top-1, top-3, MRR for chosen moments; rejected-still-first rate) is 
 
 ## Render
 
-The renderer rejects empty, gapped, or source-short timelines. The FFmpeg graph uses hard cuts, `atrim` + `asetpts=PTS-STARTPTS`, and fades only when the selected window does not start at 0 or does not reach the end of the track. Output is 1080×1920@30 h264/aac. `render.json` records wall-time metrics (`validationMs`, `graphBuildMs`, `ffmpegMs`, `probeMs`, clip count, unique sources).
+The renderer rejects empty, gapped, source-short timelines, a timeline whose duration disagrees with the selected edit window, and transitions the time model below cannot honor. Video segments join with `concat` for hard cuts and fades and with `xfade` for crossfades and whips; audio is one track with `atrim` + `asetpts=PTS-STARTPTS` and fades only when the selected window does not start at 0 or does not reach the end of the track. Output is 1080×1920@30 h264/aac. `render.json` records wall-time metrics (`validationMs`, `graphBuildMs`, `ffmpegMs`, `probeMs`, clip count, unique sources).
+
+## Cut styles
+
+The Director picks, per segment, how its main clip is styled and how the segment cuts into the next one, from a closed vocabulary (`docs/superpowers/specs/2026-09-01-cut-styles-design.md`). The `EFFECTS` worker resolves every proposal against the real source material and downgrades what cannot render, recording why on the clip (`transitionOut.downgradeReason`) and in `effects.json` (`cuts`). Durations come from the song's tempo, never from the model.
+
+| Transition | Renders as | Needs |
+| --- | --- | --- |
+| `hard` | `concat` | nothing; default and universal fallback |
+| `dip_black` / `flash` | `fade` out on A, `fade` in on B, through black or white | nothing |
+| `crossfade` / `whip` | `xfade=fade` / `xfade=slideleft` | `D/2` of spare source on each side of the boundary, inside the moment |
+
+| Clip style | Renders as | Needs |
+| --- | --- | --- |
+| `hold` | last frame frozen with `tpad=stop_mode=clone` | at least 300 ms of motion left in the slot |
+| `speed_up` | `setpts=PTS/1.25` | `slot × 0.25` of spare source after the clip |
+| `slow_down` | `setpts=PTS/0.8` | nothing |
+
+Time model: slots stay contiguous and never overlap. A transition is metadata on the boundary, centered on it; each side extends its rendered segment by half the duration (a *handle*), and `xfade` consumes exactly that much, so the output length never changes. Every transition is capped at a third of the smaller neighboring slot.
+
+Downgrades: `crossfade` → `dip_black` → `hard`; `whip` → `hard`; `flash` and `dip_black` shrink to their minimum, then `hard`; `hold` shrinks, then none; `speed_up` → none. A swap in the Studio re-resolves the whole timeline so a new moment never leaves a transition without a handle. The Studio shows the resolved style on the strip and in the Inspector; editing it by hand is a later increment.
 
 ## Tests
 

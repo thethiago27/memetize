@@ -1520,6 +1520,8 @@ musical downbeat
 
 Responsável por decidir efeitos simples.
 
+> Implementado como cut styles (`docs/superpowers/specs/2026-09-01-cut-styles-design.md`): o Director propõe `hard` / `dip_black` / `flash` / `crossfade` / `whip` por fronteira e `hold` / `speed_up` / `slow_down` por clipe; o Effects resolve contra a fonte real e rebaixa com motivo. Zoom de punchline continua automático.
+
 Inicialmente:
 
 ```text
@@ -2318,6 +2320,8 @@ fade
 ```
 
 Não adicionar biblioteca enorme de transições.
+
+> Revisado em 2026-09-01: existe um vocabulário fechado e pequeno de transições e estilos de clipe, escolhido pelo Director e validado por um resolver determinístico (`docs/superpowers/specs/2026-09-01-cut-styles-design.md`). Continua sem biblioteca aberta.
 
 Para vídeos de meme:
 
