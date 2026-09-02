@@ -76,11 +76,11 @@
 
 ## Phase 2: Director proposes
 
-- [ ] **Task 3: Prompt v4.** Test in `packages/prompts`: v4 contains every vocabulary word and the "at most one third" rule. Write `DIRECTOR_PROMPT_V4` as v3 plus the spec paragraph; set `DIRECTOR_PROMPT_VERSION = 'v4'`. Commit `feat: describe cut styles in the director prompt`.
+- [x] **Task 3: Prompt v4.** Test in `packages/prompts`: v4 contains every vocabulary word and the "at most one third" rule. Write `DIRECTOR_PROMPT_V4` as v3 plus the spec paragraph; set `DIRECTOR_PROMPT_VERSION = 'v4'`. Commit `feat: describe cut styles in the director prompt`.
 
-- [ ] **Task 4: Providers.** Gateway test: `DirectorPicksSchema` accepts omitted styles and explicit styles, rejects an unknown one. Fixture tests: `plain` mode emits only defaults; `styled` mode is deterministic and assigns by segment index (`i % 5` over the transition enum, `i % 4` over the clip enum, last segment `hard`). Add `directorStyles` to the fixture options and thread `DirectorPickSuggestion` fields through `DirectTimelineResult`. Commit `feat: emit cut styles from the fixture and gateway providers`.
+- [x] **Task 4: Providers.** Gateway test: `DirectorPicksSchema` accepts omitted styles and explicit styles, rejects an unknown one. Fixture tests: `plain` mode emits only defaults; `styled` mode is deterministic and assigns by segment index (`i % 5` over the transition enum, `i % 4` over the clip enum, last segment `hard`). Add `directorStyles` to the fixture options and thread `DirectorPickSuggestion` fields through `DirectTimelineResult`. Commit `feat: emit cut styles from the fixture and gateway providers`.
 
-- [ ] **Task 5: Assemble.** Test in `assemble.test.ts`: a segment tiled into three clips gets `direction.clipStyle` only on the `primary` clip and `direction.transitionOut` only on the last clip; other clips get `none` / `hard`; a pick without styles yields defaults on every clip. Use `CoverageDecision.role` and clip order per segment to place them. Update `workers/director/src/handler.ts` to pass the styles and add them to the debug file. Commit `feat: place director cut styles on assembled clips`.
+- [x] **Task 5: Assemble.** Test in `assemble.test.ts`: a segment tiled into three clips gets `direction.clipStyle` only on the `primary` clip and `direction.transitionOut` only on the last clip; other clips get `none` / `hard`; a pick without styles yields defaults on every clip. Use `CoverageDecision.role` and clip order per segment to place them. Update `workers/director/src/handler.ts` to pass the styles and add them to the debug file. Commit `feat: place director cut styles on assembled clips`.
 
 ## Phase 3: Resolver
 
