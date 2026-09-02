@@ -41,8 +41,9 @@ function buildTimeline(clips: TimelineClip[], durationMs = 10_000): Timeline {
 
 function context(
   entries: ReadonlyArray<[string, { narrativeFunction: string; energy: number }]>,
+  extra: Partial<EffectsContext> = {},
 ): EffectsContext {
-  return { segmentById: new Map(entries) };
+  return { segmentById: new Map(entries), ...extra };
 }
 
 describe('planEffects', () => {
@@ -202,5 +203,66 @@ describe('planEffects', () => {
     expect(effect?.startMs).toBeGreaterThanOrEqual(1200);
     expect(effect?.endMs).toBeLessThanOrEqual(3200);
     expect(effect?.startMs).toBeLessThan(effect?.endMs ?? 0);
+  });
+
+  it('reports no cut decisions and hard transitions when the director asked for nothing', () => {
+    const clip = buildClip('clp_1', { startMs: 0, endMs: 2000 });
+    const result = planEffects(buildTimeline([clip]), context([]));
+    expect(result.cuts).toEqual([]);
+    expect(result.timeline.clips[0]?.transitionOut).toEqual({
+      style: 'hard',
+      durationMs: 0,
+      requested: 'hard',
+    });
+  });
+
+  it('ends the punchline zoom where a hold starts', () => {
+    const clip = buildClip(
+      'clp_1',
+      { startMs: 0, endMs: 3000 },
+      { direction: { clipStyle: 'hold', transitionOut: 'hard' } },
+    );
+    const result = planEffects(
+      buildTimeline([clip]),
+      context([['seg_clp_1', { narrativeFunction: 'payoff', energy: 0.4 }]], { beatMs: 500 }),
+    );
+
+    expect(result.timeline.clips[0]?.effects).toEqual([
+      { type: 'hold', startMs: 2500, endMs: 3000, requested: 'hold' },
+      { type: 'zoom', startMs: 2500 - ZOOM_TAIL_MS, endMs: 2500, from: 1, to: 1.12 },
+    ]);
+    expect(result.cuts).toEqual([
+      { clipId: 'clp_1', kind: 'clip', requested: 'hold', resolved: 'hold', durationMs: 500 },
+    ]);
+  });
+
+  it('skips the punchline zoom on a slowed-down clip', () => {
+    const clip = buildClip(
+      'clp_1',
+      { startMs: 0, endMs: 3000 },
+      { direction: { clipStyle: 'slow_down', transitionOut: 'hard' } },
+    );
+    const result = planEffects(
+      buildTimeline([clip]),
+      context([['seg_clp_1', { narrativeFunction: 'payoff', energy: 0.4 }]]),
+    );
+
+    expect(result.planned).toEqual([]);
+    expect(result.timeline.clips[0]?.effects).toEqual([
+      { type: 'speed', startMs: 0, endMs: 3000, factor: 0.8, requested: 'slow_down' },
+    ]);
+  });
+
+  it('does not accumulate hold or speed effects on a re-run', () => {
+    const clip = buildClip(
+      'clp_1',
+      { startMs: 0, endMs: 3000 },
+      { direction: { clipStyle: 'hold', transitionOut: 'hard' } },
+    );
+    const ctx = context([['seg_clp_1', { narrativeFunction: 'payoff', energy: 0.4 }]]);
+    const once = planEffects(buildTimeline([clip]), ctx);
+    const twice = planEffects(once.timeline, ctx);
+    expect(twice.timeline).toEqual(once.timeline);
+    expect(twice.timeline.clips[0]?.effects).toHaveLength(2);
   });
 });
