@@ -332,7 +332,11 @@ importers:
         specifier: ^0.45.2
         version: 0.45.2(postgres@3.4.9)
 
-  packages/prompts: {}
+  packages/prompts:
+    dependencies:
+      '@memetize/timeline':
+        specifier: workspace:*
+        version: link:../timeline
 
   packages/renderer:
     dependencies:
