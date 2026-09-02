@@ -114,6 +114,42 @@ export function functionColor(narrativeFunction: string | undefined): string {
   return `var(--fn-${functionKey(narrativeFunction)})`;
 }
 
+/** Musical sections emitted by the audio analyzer. Unknown types keep their raw name. */
+export const SECTION_LABEL: Record<string, string> = {
+  intro: 'Intro',
+  verse: 'Verso',
+  chorus: 'Refrão',
+  bridge: 'Ponte',
+  outro: 'Final',
+  drop: 'Drop',
+  break: 'Pausa',
+};
+
+export function sectionLabel(type: string): string {
+  return SECTION_LABEL[type.toLowerCase()] ?? type;
+}
+
+/** One fixed hue per section type so the same type reads the same across projects. */
+const SECTION_COLOR: Record<string, string> = {
+  intro: 'var(--fn-other)',
+  verse: 'var(--fn-setup)',
+  chorus: 'var(--fn-payoff)',
+  bridge: 'var(--fn-escalation)',
+  outro: 'var(--mute)',
+  drop: 'var(--cut)',
+  break: 'var(--tape)',
+};
+
+export function sectionColor(type: string): string {
+  return SECTION_COLOR[type.toLowerCase()] ?? 'var(--fn-other)';
+}
+
+export const LYRIC_SOURCE_LABEL: Record<string, string> = {
+  USER: 'Letra do usuário',
+  TRANSCRIPT: 'Letra transcrita',
+  FIXTURE: 'Letra de fixture',
+};
+
 export function describeFeedback(event: FeedbackEventRow, momentName: (id: string) => string) {
   const role = event.context.narrativeFunction
     ? ` como ${functionLabel(event.context.narrativeFunction).toLowerCase()}`

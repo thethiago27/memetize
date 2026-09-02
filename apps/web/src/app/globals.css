@@ -905,3 +905,188 @@ p {
     transition: none;
   }
 }
+
+/* Análise: sections, energy, lyrics, and ruler on one source-time axis */
+.analysis .chart {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  overflow: hidden;
+  user-select: none;
+}
+
+.analysis .chart[data-seek="yes"] {
+  cursor: pointer;
+}
+
+.analysis .chart[data-seek="no"] {
+  cursor: not-allowed;
+}
+
+.analysis .track {
+  position: relative;
+  width: 100%;
+  border-bottom: 1px solid var(--rule);
+}
+
+.analysis .track:last-child {
+  border-bottom: 0;
+}
+
+.analysis .track-window {
+  height: 18px;
+  border-bottom: 0;
+}
+
+.analysis .window-label {
+  position: absolute;
+  top: 2px;
+  transform: translateX(2px);
+  font-size: 0.7rem;
+  color: var(--amber);
+}
+
+.analysis .window-label[data-edge="end"] {
+  transform: translateX(calc(-100% - 2px));
+}
+
+.analysis .track-sections {
+  height: 28px;
+}
+
+.analysis .section {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--section-color) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--section-color) 70%, transparent);
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 0 4px;
+}
+
+.analysis .track-energy {
+  height: 72px;
+}
+
+.analysis .energy {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.analysis .energy polygon {
+  fill: color-mix(in srgb, var(--amber) 40%, transparent);
+  stroke: var(--amber);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.analysis .energy .downbeat {
+  stroke: var(--ink);
+  stroke-width: 1;
+  opacity: 0.6;
+}
+
+.analysis .energy .beat {
+  stroke: var(--tape);
+  stroke-width: 1;
+}
+
+.analysis .track-lyrics {
+  height: 40px;
+}
+
+.analysis .lyrics-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+}
+
+.analysis .lyric {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  color: var(--tape);
+  font-size: 0.72rem;
+  padding: 0 5px;
+  white-space: nowrap;
+}
+
+.analysis .lyric span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.analysis .lyric[data-current="true"] {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: var(--amber-ink);
+}
+
+.analysis .track-ruler {
+  height: 18px;
+}
+
+.analysis .tick {
+  position: absolute;
+  top: 0;
+  height: 5px;
+  border-left: 1px solid var(--mute);
+  font-size: 0.65rem;
+  color: var(--mute);
+}
+
+.analysis .tick[data-major="true"] {
+  height: 8px;
+  border-left-color: var(--ink);
+}
+
+.analysis .tick[data-major="true"] .mono {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.analysis .tick .mono {
+  position: absolute;
+  top: 5px;
+  left: 2px;
+  font-size: 0.65rem;
+}
+
+.analysis .window {
+  position: absolute;
+  top: 18px;
+  bottom: 0;
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+  border-left: 1px solid var(--amber);
+  border-right: 1px solid var(--amber);
+  pointer-events: none;
+}
+
+.analysis .playhead {
+  position: absolute;
+  top: 18px;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--amber);
+  pointer-events: none;
+}

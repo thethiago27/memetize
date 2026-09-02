@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnalysisPanel } from '../../../components/AnalysisPanel';
 import { Inspector } from '../../../components/Inspector';
 import { StatusPill } from '../../../components/StatusPill';
 import { latestJobByType, Stepper } from '../../../components/Stepper';
@@ -30,7 +31,7 @@ import {
 import { useInterval } from '../../../lib/use-interval';
 
 const RATINGS = [1, 2, 3, 4, 5] as const;
-type Tab = 'narrativa' | 'renders' | 'memoria' | 'jobs';
+type Tab = 'narrativa' | 'analise' | 'renders' | 'memoria' | 'jobs';
 
 export default function ProjectEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -365,6 +366,7 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
           {(
             [
               ['narrativa', 'Narrativa'],
+              ['analise', 'Análise'],
               ['renders', 'Renders'],
               ['memoria', 'Memória editorial'],
               ['jobs', 'Jobs'],
@@ -410,6 +412,19 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
               </div>
             ))
           )
+        ) : null}
+
+        {tab === 'analise' ? (
+          <AnalysisPanel
+            audio={detail.audio}
+            lyrics={detail.lyrics}
+            editWindow={detail.editWindow}
+            playheadMs={playheadMs}
+            onSeek={(outputMs) => {
+              const video = videoRef.current;
+              if (video) video.currentTime = outputMs / 1000;
+            }}
+          />
         ) : null}
 
         {tab === 'renders' ? (

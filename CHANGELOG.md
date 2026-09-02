@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add an "Análise" tab to the Studio editor: sections, energy curve with beats and downbeats, and every lyric line on one source-time axis, with the selected 60-second window highlighted. The playhead follows the preview, the current lyric line lights up, and clicking inside the window seeks the video. No API change.
 - Delete a project: `DELETE /v1/projects/:id`, `pnpm cli project delete`, and an "Excluir" button with confirmation in the Studio editor. Removes jobs, derived rows, and storage under `audio/`, `cache/`, and `renders/`; keeps `feedback_events` (editorial memory); answers `409 PROJECT_BUSY` while a job is RUNNING.
 
 - Add cut styles: the Director (prompt `v4`) proposes a transition (`hard`, `dip_black`, `flash`, `crossfade`, `whip`) per segment boundary and a clip style (`hold`, `speed_up`, `slow_down`) per primary clip; a deterministic resolver in `EFFECTS` validates each proposal against tempo, slot lengths, and real source handles, downgrades what cannot render, and records why on the clip and in `effects.json`. The FFmpeg graph renders them with `xfade`, `fade`, `tpad`, and `setpts` while keeping slots contiguous and the output length exact. `WORKER_VERSION.DIRECTOR` and `EFFECTS` 1.2.0.

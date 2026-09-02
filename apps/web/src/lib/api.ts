@@ -269,12 +269,8 @@ export interface ProjectJob {
 export interface ProjectDetail {
   project: ProjectRow;
   editWindow: EditWindowRow | null;
-  audio: {
-    durationMs: number;
-    bpm: number;
-    sections: { type: string; startMs: number; endMs: number }[];
-  } | null;
-  lyrics: { source: string; lines: { startMs: number; endMs: number; text: string }[] } | null;
+  audio: AudioAnalysisRow | null;
+  lyrics: LyricsRow | null;
   narrative: NarrativeSegmentRow[];
   matches: { segmentId: string; shortlist: ShortlistEntry[] }[];
   timeline: { version: number; data: { durationMs: number; clips: TimelineClip[] } } | null;
@@ -283,6 +279,36 @@ export interface ProjectDetail {
   jobs: ProjectJob[];
   feedback: FeedbackEventRow[];
   moments: Record<string, MomentSummary>;
+}
+
+export interface AudioSection {
+  type: string;
+  startMs: number;
+  endMs: number;
+}
+
+export interface AudioAnalysisRow {
+  durationMs: number;
+  bpm: number;
+  beats: { timeMs: number; strength: number }[];
+  downbeats: number[];
+  sections: AudioSection[];
+  energyCurve: { timeMs: number; value: number }[];
+  analyzer: string;
+  analyzerVersion: string;
+}
+
+export interface LyricLineRow {
+  startMs: number;
+  endMs: number;
+  text: string;
+}
+
+export interface LyricsRow {
+  source: string;
+  lines: LyricLineRow[];
+  model: string;
+  modelVersion: string;
 }
 
 export interface NarrativeSegmentRow {
