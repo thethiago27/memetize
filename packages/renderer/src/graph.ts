@@ -18,7 +18,8 @@ import {
   transitionOutOf,
   xfadeTransitionName,
 } from './cuts';
-import type { FfmpegGraph, FfmpegInput, ResolvedAssets } from './types';
+import { BASELINE_RATIO } from './subtitles/constants';
+import type { FfmpegGraph, FfmpegInput, RenderedCue, ResolvedAssets } from './types';
 import { buildZoomFilter, parseZoomEffect } from './zoom';
 
 /** One clip rendered as a labelled segment, with the output ms and frames it lasts. */
@@ -78,7 +79,11 @@ function transitionFrames(transition: TimelineTransitionOut, fps: number): Trans
  * whips with `xfade` at `offset = accumulated − D` — so the output is
  * exactly `durationMs` long.
  */
-export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): FfmpegGraph {
+export function buildFfmpegGraph(
+  timeline: Timeline,
+  assets: ResolvedAssets,
+  options?: { subtitles?: RenderedCue[] },
+): FfmpegGraph {
   const { fps } = timeline.canvas;
   const videoPathByClipId = new Map(assets.clips.map((clip) => [clip.clipId, clip.videoPath]));
   const clips = [...timeline.clips].sort((a, b) => a.timeline.startMs - b.timeline.startMs);
@@ -150,7 +155,12 @@ export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): Ff
     throw new Error('buildFfmpegGraph: timeline gap');
   }
 
-  filterParts.push(...joinSegments(segments, joinedTransitions, joinedFrames, fps));
+  const cues = options?.subtitles ?? [];
+  const joinLabel = cues.length > 0 ? '[vjoin]' : '[vout]';
+  filterParts.push(...joinSegments(segments, joinedTransitions, joinedFrames, fps, joinLabel));
+  if (cues.length > 0) {
+    filterParts.push(...buildSubtitleOverlays(cues, timeline.canvas.height, inputs));
+  }
   filterParts.push(buildAudioFilter(timeline, assets));
 
   const outputArgs = [
@@ -280,6 +290,7 @@ function joinSegments(
   transitions: readonly TimelineTransitionOut[],
   transitionFrames: readonly TransitionFrames[],
   fps: number,
+  outputLabel = '[vout]',
 ): string[] {
   const ops: { inputs: string; filter: string }[] = [];
   const state: { acc: Segment | null; run: Segment[]; labels: number } = {
@@ -345,14 +356,37 @@ function joinSegments(
   flushRun();
 
   if (ops.length === 0) {
-    // A single clip with nothing to join still has to produce `[vout]`.
-    return [`${state.acc?.label ?? ''}concat=n=1:v=1:a=0[vout]`];
+    // A single clip with nothing to join still has to produce the output label.
+    return [`${state.acc?.label ?? ''}concat=n=1:v=1:a=0${outputLabel}`];
   }
 
   return ops.map((op, index) => {
-    const out = index === ops.length - 1 ? '[vout]' : `[acc${index + 1}]`;
+    const out = index === ops.length - 1 ? outputLabel : `[acc${index + 1}]`;
     return `${op.inputs}${op.filter}${out}`;
   });
+}
+
+/**
+ * Composites each caption PNG over the joined video for its window. Cues are
+ * contiguous, so two overlays are never enabled at the same instant.
+ */
+function buildSubtitleOverlays(
+  cues: readonly RenderedCue[],
+  canvasHeight: number,
+  inputs: FfmpegInput[],
+): string[] {
+  const ops: string[] = [];
+  cues.forEach((cue, index) => {
+    const inputIndex = inputs.length;
+    inputs.push({ path: cue.pngPath, kind: 'image' });
+    const y = Math.round(canvasHeight * BASELINE_RATIO - cue.height);
+    const prev = index === 0 ? '[vjoin]' : `[vs${index - 1}]`;
+    const next = index === cues.length - 1 ? '[vout]' : `[vs${index}]`;
+    ops.push(
+      `${prev}[${inputIndex}:v]overlay=x=(W-w)/2:y=${y}:enable='between(t,${toSeconds(cue.startMs)},${toSeconds(cue.endMs)})'${next}`,
+    );
+  });
+  return ops;
 }
 
 /**

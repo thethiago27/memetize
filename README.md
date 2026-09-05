@@ -35,10 +35,11 @@ a `providers:` line, so a simulated analysis is never mistaken for a real one.
   frames with a multimodal model. Frame paths are resolved against the repo
   root, so the API may run from `apps/api` (`pnpm studio`).
 - `LLM_PROVIDER=gateway` + `LLM_MODEL=<creator/model>` drives moment
-  suggestion, narrative analysis and the Director. `LLM_MOMENTS_MODEL`,
-  `LLM_NARRATIVE_MODEL` and `LLM_DIRECTOR_MODEL` override the model for one
-  stage (empty falls back to `LLM_MODEL`). Provenance records the model that
-  ran: `extractorVersion` / `directorVersion` are `1.0.0/<creator/model>`.
+  suggestion, narrative analysis, the Director, and subtitle translation.
+  `LLM_MOMENTS_MODEL`, `LLM_NARRATIVE_MODEL`, `LLM_DIRECTOR_MODEL` and
+  `LLM_SUBTITLES_MODEL` override the model for one stage (empty falls back
+  to `LLM_MODEL`). Provenance records the model that ran:
+  `extractorVersion` / `directorVersion` are `1.0.0/<creator/model>`.
 - `EMBEDDING_PROVIDER=gateway` + `EMBEDDING_MODEL=<creator/model>` embeds
   moments and feedback. The request pins the catalog's vector width (384), and
   the vector space id (`model@384d/unit`) is stored as `modelVersion`, so
@@ -114,9 +115,14 @@ pnpm cli project inspect prj_...
 pnpm cli project generate prj_...
 pnpm cli project render prj_...
 pnpm cli project reprocess prj_... --from narrative
+pnpm cli project reprocess prj_... --from subtitles
 ```
 
 `project create` stops at `TIMELINE_READY`. Render is an explicit second step.
+`SUBTITLES` translates the project's lyrics to Brazilian Portuguese in parallel
+with narrative planning and burns them into the MP4 as bottom-third captions.
+Projects created before this step need `project reprocess <id> --from subtitles`
+once; otherwise a render with lyrics fails with `RENDER_SUBTITLES_MISSING`.
 
 ## Output window
 

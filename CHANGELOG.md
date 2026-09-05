@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Burn translated TikTok-style captions into the render: `SUBTITLES` translates
+  lyric lines to `pt-BR` (fixture keeps the original), rasterizes them with
+  Inter Bold, and FFmpeg overlays the PNGs. `LLM_SUBTITLES_MODEL` overrides the
+  gateway model. `project reprocess --from subtitles` re-translates without
+  touching the timeline. Existing projects with lyrics must run that once
+  before render (`RENDER_SUBTITLES_MISSING`).
+
 - Per-stage LLM models: `LLM_MOMENTS_MODEL`, `LLM_NARRATIVE_MODEL` and `LLM_DIRECTOR_MODEL` override `LLM_MODEL` for one gateway stage each; provenance (`extractorVersion` / `directorVersion`) records the model that actually ran.
 - Cap the output window at 30 seconds (`MAX_OUTPUT_DURATION_MS`, `MANUAL_WINDOW_MAX_MS`, Studio copy and bounds): tracks up to 30 s render in full, longer ones get a 30 s highlight.
 - Accept a rendered video stream that ends somewhat before the audio as a `DURATION_DRIFT` warning when it still covers at least 80% of the timeline (`VIDEO_MIN_COVERAGE`); a truncated video, unknown coverage, or a late-starting stream remain hard failures.

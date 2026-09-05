@@ -2,6 +2,7 @@ import {
   DIRECTOR_PROMPT_VERSION,
   MOMENTS_PROMPT_VERSION,
   NARRATIVE_PROMPT_VERSION,
+  SUBTITLES_PROMPT_VERSION,
   VISION_PROMPT_VERSION,
 } from '@memetize/prompts';
 import { sha256Hex } from '@memetize/shared';
@@ -22,6 +23,8 @@ import type {
   NarrativeAnalyzeInput,
   NarrativeAnalyzeResult,
   NarrativeSegmentSuggestion,
+  TranslateLyricsInput,
+  TranslateLyricsResult,
   VisionAnalyzeInput,
   VisionAnalyzeResult,
   VisionProvider,
@@ -151,6 +154,21 @@ export class FixtureLLMProvider implements LLMProvider {
       director: FIXTURE_NAME,
       directorVersion: FIXTURE_VERSION,
       promptVersion: DIRECTOR_PROMPT_VERSION,
+    };
+  }
+
+  /**
+   * Passthrough (translated-subtitles spec): fixture never calls a model, so
+   * the original lines are shown and `translated` stays false.
+   */
+  async translateLyrics(input: TranslateLyricsInput): Promise<TranslateLyricsResult> {
+    return {
+      lines: [...input.lines],
+      sourceLanguage: 'und',
+      translated: false,
+      model: FIXTURE_NAME,
+      modelVersion: FIXTURE_VERSION,
+      promptVersion: SUBTITLES_PROMPT_VERSION,
     };
   }
 }

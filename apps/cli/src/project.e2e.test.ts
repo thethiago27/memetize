@@ -90,17 +90,22 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('project pipeline (e
 
     const outcomes = await orchestrator.drain({ entityId: project.id });
     const types = outcomes.map((outcome) => outcome.job.type);
-    // AUDIO_ANALYZE and LYRICS fan out in parallel (relative order unspecified);
-    // NARRATIVE only runs once both are done, then chains into MATCH, then
-    // DIRECTOR, then TIMING, then EFFECTS (spec sections 32-33).
-    expect(types).toHaveLength(5);
-    expect(new Set(types.slice(0, 2))).toEqual(new Set(['AUDIO_ANALYZE', 'LYRICS']));
-    expect(types[2]).toBe('NARRATIVE');
-    expect(types[3]).toBe('MATCH');
-    expect(types[4]).toBe('DIRECTOR');
-    expect(outcomes.slice(0, 4).every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
-    expect(outcomes[4]?.status).toBe('FAILED');
-    expect(outcomes[4]?.error?.code).toBe('INSUFFICIENT_CATALOG');
+    // AUDIO_ANALYZE and LYRICS fan out in parallel; SUBTITLES starts after
+    // LYRICS and may finish anywhere after it. NARRATIVE waits for both
+    // siblings, then MATCH → DIRECTOR (translated-subtitles spec).
+    const chain = types.filter((type) => type !== 'SUBTITLES');
+    expect(types).toContain('SUBTITLES');
+    expect(chain).toHaveLength(5);
+    expect(new Set(chain.slice(0, 2))).toEqual(new Set(['AUDIO_ANALYZE', 'LYRICS']));
+    expect(chain.slice(2)).toEqual(['NARRATIVE', 'MATCH', 'DIRECTOR']);
+    const director = outcomes.find((outcome) => outcome.job.type === 'DIRECTOR');
+    expect(director?.status).toBe('FAILED');
+    expect(director?.error?.code).toBe('INSUFFICIENT_CATALOG');
+    expect(
+      outcomes
+        .filter((outcome) => outcome.job.type !== 'DIRECTOR')
+        .every((outcome) => outcome.status === 'COMPLETED'),
+    ).toBe(true);
 
     const refreshed = await getProject(db, project.id);
     expect(refreshed?.status).toBe('FAILED');

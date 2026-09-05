@@ -30,6 +30,7 @@
     "@memetize/renderer-worker": "workspace:*",
     "@memetize/scene-detector": "workspace:*",
     "@memetize/shared": "workspace:*",
+    "@memetize/subtitles": "workspace:*",
     "@memetize/timing-worker": "workspace:*",
     "@memetize/transcript": "workspace:*",
     "@memetize/video-normalizer": "workspace:*",

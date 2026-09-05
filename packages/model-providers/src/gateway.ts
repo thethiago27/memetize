@@ -6,6 +6,8 @@ import {
   MOMENTS_PROMPT_VERSION,
   NARRATIVE_PROMPT_V2,
   NARRATIVE_PROMPT_VERSION,
+  SUBTITLES_PROMPT_V1,
+  SUBTITLES_PROMPT_VERSION,
 } from '@memetize/prompts';
 import type { LLMStage } from '@memetize/shared';
 import { generateObject } from 'ai';
@@ -18,6 +20,8 @@ import type {
   MomentSuggestResult,
   NarrativeAnalyzeInput,
   NarrativeAnalyzeResult,
+  TranslateLyricsInput,
+  TranslateLyricsResult,
 } from './types';
 
 const GATEWAY_NAME = 'gateway';
@@ -54,6 +58,12 @@ const MomentsSchema = z.object({
       metadata: z.record(z.string(), z.unknown()).default({}),
     }),
   ),
+});
+
+const TranslateLyricsSchema = z.object({
+  sourceLanguage: z.string(),
+  alreadyTargetLanguage: z.boolean(),
+  lines: z.array(z.string()),
 });
 
 const NarrativeSchema = z.object({
@@ -166,6 +176,41 @@ export class GatewayLLMProvider implements LLMProvider {
       director: GATEWAY_NAME,
       directorVersion: gatewayModelVersion(model),
       promptVersion: DIRECTOR_PROMPT_VERSION,
+    };
+  }
+
+  async translateLyrics(input: TranslateLyricsInput): Promise<TranslateLyricsResult> {
+    const model = this.modelFor('subtitles');
+    const run = async () => {
+      const { object } = await generateObject({
+        model,
+        schema: TranslateLyricsSchema,
+        system: SUBTITLES_PROMPT_V1,
+        prompt: JSON.stringify({
+          targetLanguage: input.targetLanguage,
+          lines: input.lines,
+        }),
+      });
+      return TranslateLyricsSchema.parse(object);
+    };
+
+    let parsed = await run();
+    if (parsed.lines.length !== input.lines.length) {
+      parsed = await run();
+    }
+    if (parsed.lines.length !== input.lines.length) {
+      throw new Error(
+        `translateLyrics: expected ${input.lines.length} lines, got ${parsed.lines.length}`,
+      );
+    }
+
+    return {
+      lines: parsed.lines,
+      sourceLanguage: parsed.sourceLanguage,
+      translated: !parsed.alreadyTargetLanguage,
+      model: GATEWAY_NAME,
+      modelVersion: gatewayModelVersion(model),
+      promptVersion: SUBTITLES_PROMPT_VERSION,
     };
   }
 }

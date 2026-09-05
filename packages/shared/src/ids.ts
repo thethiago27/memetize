@@ -14,6 +14,7 @@ export type IdPrefix =
   | 'nar'
   | 'aud'
   | 'lyr'
+  | 'sub'
   | 'mat'
   | 'tlv'
   | 'clp'
@@ -38,6 +39,7 @@ export const projectId = (): string => prefixedId('prj');
 export const narrativeId = (): string => prefixedId('nar');
 export const audioAnalysisId = (): string => prefixedId('aud');
 export const lyricsId = (): string => prefixedId('lyr');
+export const subtitlesId = (): string => prefixedId('sub');
 export const matchId = (): string => prefixedId('mat');
 export const timelineVersionId = (): string => prefixedId('tlv');
 export const clipId = (): string => prefixedId('clp');

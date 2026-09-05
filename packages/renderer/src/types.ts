@@ -43,9 +43,17 @@ export interface ResolvedAssets {
   clips: readonly ResolvedClip[];
 }
 
+export interface RenderedCue {
+  pngPath: string;
+  startMs: number;
+  endMs: number;
+  width: number;
+  height: number;
+}
+
 export interface FfmpegInput {
   path: string;
-  kind: 'audio' | 'video';
+  kind: 'audio' | 'video' | 'image';
 }
 
 export interface FfmpegGraph {

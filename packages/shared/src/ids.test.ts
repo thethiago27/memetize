@@ -17,6 +17,7 @@ import {
   renderId,
   sceneId,
   segmentId,
+  subtitlesId,
   timelineVersionId,
 } from './ids';
 
@@ -32,6 +33,7 @@ describe('ids', () => {
     expect(narrativeId()).toMatch(/^nar_[0-9a-z]{21}$/);
     expect(audioAnalysisId()).toMatch(/^aud_[0-9a-z]{21}$/);
     expect(lyricsId()).toMatch(/^lyr_[0-9a-z]{21}$/);
+    expect(subtitlesId()).toMatch(/^sub_[0-9a-z]{21}$/);
     expect(matchId()).toMatch(/^mat_[0-9a-z]{21}$/);
     expect(timelineVersionId()).toMatch(/^tlv_[0-9a-z]{21}$/);
     expect(clipId()).toMatch(/^clp_[0-9a-z]{21}$/);

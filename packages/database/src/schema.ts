@@ -21,6 +21,7 @@ import type {
   ResourceClass,
   RetrievedCandidate,
   ShortlistCandidate,
+  SubtitleLine,
   TranscriptWord,
   VisionSceneAnalysis,
 } from '@memetize/contracts';
@@ -30,6 +31,7 @@ import { sql } from 'drizzle-orm';
 import {
   bigint,
   bigserial,
+  boolean,
   check,
   index,
   integer,
@@ -396,6 +398,25 @@ export const lyrics = pgTable(
   ],
 );
 
+/** Translated caption track (translated-subtitles spec): one current row per project. */
+export const subtitles = pgTable(
+  'subtitles',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    language: text('language').notNull(),
+    sourceLanguage: text('source_language'),
+    translated: boolean('translated').notNull().default(false),
+    lines: jsonb('lines').$type<SubtitleLine[]>().notNull().default([]),
+    model: text('model').notNull(),
+    modelVersion: text('model_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('subtitles_project_idx').on(table.projectId)],
+);
+
 /** Narrative Analyzer output (spec section 27): editorial reading of lyrics + musical structure. */
 export const narrativeSegments = pgTable(
   'narrative_segments',
@@ -562,6 +583,8 @@ export type AudioAnalysisRow = typeof audioAnalysis.$inferSelect;
 export type NewAudioAnalysisRow = typeof audioAnalysis.$inferInsert;
 export type LyricsRow = typeof lyrics.$inferSelect;
 export type NewLyricsRow = typeof lyrics.$inferInsert;
+export type SubtitlesRow = typeof subtitles.$inferSelect;
+export type NewSubtitlesRow = typeof subtitles.$inferInsert;
 export type NarrativeSegmentRow = typeof narrativeSegments.$inferSelect;
 export type NewNarrativeSegmentRow = typeof narrativeSegments.$inferInsert;
 export type SegmentMatchRow = typeof segmentMatches.$inferSelect;

@@ -20,6 +20,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { ProjectBusyError } from './busy';
 import { listSegmentMatches } from './match';
 import { listNarrativeSegments } from './narrative';
+import { renderProject } from './render';
 import { reprocessProject } from './reprocess';
 import { insertEditWindow } from './window';
 
@@ -314,6 +315,47 @@ describe.skipIf(!handle)('reprocessProject (integration)', () => {
       where: (t, { eq }) => eq(t.projectId, projectId),
     });
     expect(timelines).toHaveLength(1);
+  });
+
+  it('reprocessing from "subtitles" cancels pending SUBTITLES and RENDER only', async () => {
+    const projectId = 'prj_reprocess_subtitles';
+    await seedProjectWithAudio(db, projectId);
+    const lyricsJob = await completed(projectId, 'LYRICS');
+    const pendingSubtitles = await enqueueJob(db, {
+      type: 'SUBTITLES',
+      entityId: projectId,
+      input: { projectId },
+    });
+    const pendingRender = await enqueueJob(db, {
+      type: 'RENDER',
+      entityId: projectId,
+      input: { projectId },
+    });
+
+    const outcome = await reprocessProject(db, projectId, 'subtitles');
+
+    const jobs = await listJobsForEntity(db, projectId);
+    expect(jobs.find((job) => job.id === lyricsJob.id)?.status).toBe('COMPLETED');
+    expect(jobs.find((job) => job.id === pendingSubtitles.job.id)?.status).toBe('CANCELLED');
+    expect(jobs.find((job) => job.id === pendingRender.job.id)?.status).toBe('CANCELLED');
+    const fresh = latestOfType(jobs, 'SUBTITLES');
+    expect(fresh?.id).not.toBe(pendingSubtitles.job.id);
+    expect(fresh?.status).toBe('PENDING');
+    expect(fresh?.generationId).toBe(outcome.generationId);
+    expect(fresh?.payload).toMatchObject({ projectId });
+  });
+
+  it('renderProject is busy while SUBTITLES is RUNNING', async () => {
+    const projectId = 'prj_render_busy_subtitles';
+    await seedProjectWithAudio(db, projectId);
+    await seedRawTimeline(projectId, 'tlv_busy_subtitles');
+    await enqueueJob(db, { type: 'SUBTITLES', entityId: projectId, input: { projectId } });
+    await claimNextJob(db, { entityId: projectId, types: ['SUBTITLES'] });
+
+    await expect(renderProject(db, projectId)).rejects.toBeInstanceOf(ProjectBusyError);
+    const jobs = await listJobsForEntity(db, projectId);
+    expect(ofType(jobs, 'SUBTITLES').filter((job) => job.status === 'RUNNING')).toHaveLength(1);
+    expect(ofType(jobs, 'RENDER')).toHaveLength(0);
   });
 
   it('two reprocess commands on the same project serialize into two distinct generations', async () => {

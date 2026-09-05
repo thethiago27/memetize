@@ -73,6 +73,7 @@ export function EditorTabs({
         <AnalysisPanel
           audio={detail.audio}
           lyrics={detail.lyrics}
+          subtitles={detail.subtitles ?? null}
           editWindow={detail.editWindow}
           manualWindow={detail.manualWindow ?? null}
           positionMs={transport.positionMs}

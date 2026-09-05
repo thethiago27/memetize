@@ -228,3 +228,18 @@ describe('FixtureLLMProvider.directTimeline', () => {
     expect(first).toEqual(second);
   });
 });
+
+describe('FixtureLLMProvider.translateLyrics', () => {
+  it('returns the input lines unchanged and marks them as not translated', async () => {
+    const provider = new FixtureLLMProvider();
+    const result = await provider.translateLyrics({
+      lines: ['hello world', 'I thought everything was fine'],
+      targetLanguage: 'pt-BR',
+    });
+    expect(result.lines).toEqual(['hello world', 'I thought everything was fine']);
+    expect(result.translated).toBe(false);
+    expect(result.sourceLanguage).toBe('und');
+    expect(result.model).toBe('fixture');
+    expect(result.promptVersion).toBeTruthy();
+  });
+});

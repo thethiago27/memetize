@@ -9,6 +9,7 @@ import { z } from 'zod';
 export const ProjectReprocessFrom = z.enum([
   'audio',
   'lyrics',
+  'subtitles',
   'narrative',
   'match',
   'director',

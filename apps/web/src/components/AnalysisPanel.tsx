@@ -23,6 +23,7 @@ import {
   formatTimecode,
   type LyricsRow,
   type ManualWindow,
+  type SubtitlesSummary,
 } from '../lib/api';
 import { LYRIC_SOURCE_LABEL, sectionColor, sectionLabel } from '../lib/labels';
 
@@ -54,6 +55,7 @@ function mmss(ms: number): string {
 export function AnalysisPanel({
   audio,
   lyrics,
+  subtitles,
   editWindow,
   manualWindow,
   positionMs,
@@ -64,6 +66,7 @@ export function AnalysisPanel({
 }: {
   audio: AudioAnalysisRow | null;
   lyrics: LyricsRow | null;
+  subtitles: SubtitlesSummary | null;
   editWindow: EditWindowRow | null;
   manualWindow: ManualWindow | null;
   /** The transport's output position (editor-transport spec). */
@@ -213,6 +216,13 @@ export function AnalysisPanel({
               <span className="mono mute">
                 {lyrics.model} · {lyrics.modelVersion}
               </span>
+            </span>
+          ) : null}
+          {subtitles ? (
+            <span className="mute small">
+              {subtitles.translated
+                ? `Legendas: traduzidas de ${subtitles.sourceLanguage ?? 'und'} · ${subtitles.lineCount} linhas`
+                : 'Legendas: letra original (já em português / provedor fixture)'}
             </span>
           ) : null}
           <span className="mono mute">

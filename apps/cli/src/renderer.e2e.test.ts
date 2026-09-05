@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -9,10 +9,12 @@ import { createTestDatabase, type Database, truncateAll } from '@memetize/databa
 import { ingestAsset, probeVideo } from '@memetize/media-catalog';
 import type { Orchestrator } from '@memetize/orchestrator';
 import {
+  deleteSubtitles,
   effectsDebugFile,
   getLatestRender,
   getLatestTimeline,
   getProject,
+  getSubtitles,
   ingestProject,
   listRenders,
   renderDebugFile,
@@ -139,6 +141,43 @@ async function probeStartTimes(path: string): Promise<{
     videoStart: Number(video?.start_time ?? Number.NaN),
     audioStart: Number(audio?.start_time ?? Number.NaN),
   };
+}
+
+/** Near-white pixels in the burned-in caption band (1080×1920, baseline 0.78). */
+async function countCaptionBrightPixels(videoPath: string, atSeconds: number): Promise<number> {
+  const { stdout } = await execFileAsync(
+    'ffmpeg',
+    [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-ss',
+      atSeconds.toFixed(3),
+      '-i',
+      videoPath,
+      '-frames:v',
+      '1',
+      '-vf',
+      'crop=1080:240:0:1360',
+      '-f',
+      'rawvideo',
+      '-pix_fmt',
+      'rgb24',
+      'pipe:1',
+    ],
+    { encoding: 'buffer', maxBuffer: 1080 * 240 * 3 + 4096 },
+  );
+  const pixels = stdout as Buffer;
+  let bright = 0;
+  for (let index = 0; index + 2 < pixels.length; index += 3) {
+    const r = pixels[index] ?? 0;
+    const g = pixels[index + 1] ?? 0;
+    const b = pixels[index + 2] ?? 0;
+    if (r > 220 && g > 220 && b > 220) {
+      bright += 1;
+    }
+  }
+  return bright;
 }
 
 async function detectBlack(path: string): Promise<string> {
@@ -365,5 +404,95 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('renderer pipeline (
         `black ${interval.startMs}-${interval.endMs}ms outside dip_black windows`,
       ).toBe(true);
     }
+  }, 180_000);
+
+  it('burns fixture captions into a lyrics render and refuses when the subtitles row is missing', async () => {
+    await truncateAll(db);
+    for (const index of [0, 1, 2]) {
+      const clipPath = join(tmp, `caption-clip-${index}.mp4`);
+      await makeMovingClip(clipPath, 8);
+      const { asset } = await ingestAsset({ db, config, filePath: clipPath });
+      const outcomes = await orchestrator.drain({ entityId: asset.id });
+      expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
+    }
+
+    const lyricsPath = join(tmp, 'captions.lrc');
+    await writeFile(
+      lyricsPath,
+      ['[00:01.00]HELLO WORLD CAPTION TEST', '[00:03.00]SECOND LINE HERE NOW'].join('\n'),
+    );
+
+    const { project: lyricsProject } = await ingestProject({
+      db,
+      config,
+      filePath: songFixture,
+      lyricsPath,
+    });
+    const lyricsCreate = await orchestrator.drain({ entityId: lyricsProject.id });
+    expect(lyricsCreate.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
+    expect(lyricsCreate.some((outcome) => outcome.job.type === 'SUBTITLES')).toBe(true);
+    const captions = await getSubtitles(db, lyricsProject.id);
+    expect(captions?.translated).toBe(false);
+    expect(captions?.lines.length).toBeGreaterThan(0);
+
+    await renderProject(db, lyricsProject.id);
+    const lyricsRender = await orchestrator.drain({ entityId: lyricsProject.id });
+    expect(lyricsRender.map((outcome) => outcome.job.type)).toEqual(['RENDER']);
+    expect(lyricsRender[0]?.status).toBe('COMPLETED');
+
+    const lyricsFile = resolveStorage(
+      config,
+      (await getLatestRender(db, lyricsProject.id))?.path ?? '',
+    );
+    const lyricsProbe = await probeVideo(lyricsFile);
+    expect(lyricsProbe.width).toBe(1080);
+    expect(lyricsProbe.height).toBe(1920);
+    expect(Math.abs(lyricsProbe.durationMs - 6000)).toBeLessThanOrEqual(200);
+
+    const lyricsDebug = JSON.parse(
+      await readFile(renderDebugFile(config, lyricsProject.id).absolute, 'utf8'),
+    );
+    expect(lyricsDebug.subtitles).toMatchObject({
+      lineCount: captions?.lines.length,
+      cueCount: expect.any(Number),
+      translated: false,
+      model: 'fixture',
+    });
+    expect(lyricsDebug.subtitles.cueCount).toBeGreaterThan(0);
+    expect(String(lyricsDebug.graph.filterComplex)).toContain('[vjoin]');
+    expect(String(lyricsDebug.graph.filterComplex)).toContain('overlay=');
+
+    const { project: instrumentalProject } = await ingestProject({
+      db,
+      config,
+      filePath: songFixture,
+    });
+    const instrumentalCreate = await orchestrator.drain({ entityId: instrumentalProject.id });
+    expect(instrumentalCreate.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
+    await renderProject(db, instrumentalProject.id);
+    const instrumentalRender = await orchestrator.drain({ entityId: instrumentalProject.id });
+    expect(instrumentalRender[0]?.status).toBe('COMPLETED');
+
+    const instrumentalFile = resolveStorage(
+      config,
+      (await getLatestRender(db, instrumentalProject.id))?.path ?? '',
+    );
+    const instrumentalDebug = JSON.parse(
+      await readFile(renderDebugFile(config, instrumentalProject.id).absolute, 'utf8'),
+    );
+    expect(instrumentalDebug.subtitles).toBeNull();
+    expect(String(instrumentalDebug.graph.filterComplex)).not.toContain('overlay=');
+
+    const captionedBright = await countCaptionBrightPixels(lyricsFile, 1.5);
+    const instrumentalBright = await countCaptionBrightPixels(instrumentalFile, 1.5);
+    expect(captionedBright).toBeGreaterThan(instrumentalBright);
+
+    await deleteSubtitles(db, lyricsProject.id);
+    expect(await getSubtitles(db, lyricsProject.id)).toBeUndefined();
+    await renderProject(db, lyricsProject.id);
+    const missing = await orchestrator.drain({ entityId: lyricsProject.id });
+    expect(missing.map((outcome) => outcome.job.type)).toEqual(['RENDER']);
+    expect(missing[0]?.status).toBe('FAILED');
+    expect(missing[0]?.error?.code).toBe('RENDER_SUBTITLES_MISSING');
   }, 180_000);
 });

@@ -27,6 +27,7 @@ export const JobType = z.enum([
   'EMBED',
   'AUDIO_ANALYZE',
   'LYRICS',
+  'SUBTITLES',
   'NARRATIVE',
   'MATCH',
   'DIRECTOR',
