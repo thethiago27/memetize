@@ -1,9 +1,9 @@
 import { fileURLToPath } from 'node:url';
-import { TranscriptInput, TranscriptOutput, WorkerResult } from '@memetize/contracts';
+import { TranscriptInput, TranscriptOutput } from '@memetize/contracts';
 import { JobFailure } from '@memetize/job-system';
 import { assetFile, replaceTranscript, resolveStorage } from '@memetize/media-catalog';
 import type { JobHandler } from '@memetize/orchestrator';
-import { runPythonWorker } from '@memetize/shared';
+import { decodePythonResponse, type PythonRunResult, runPythonWorker } from '@memetize/shared';
 import { extractAudio } from './audio';
 
 /** Python project root (this file lives at workers/transcript/src/handler.ts). */
@@ -29,9 +29,9 @@ export function createTranscriptHandler(): JobHandler {
     const provider = ctx.config.providers.transcription.kind;
     const useMlx = provider === 'mlx' || provider === 'mlx-whisper';
 
-    let stdout: string;
+    let run: PythonRunResult;
     try {
-      ({ stdout } = await runPythonWorker({
+      run = await runPythonWorker({
         cwd: TRANSCRIPT_DIR,
         module: 'transcript_worker',
         args: useMlx ? ['run', '--extra', 'mlx', 'python', '-m', 'transcript_worker'] : undefined,
@@ -47,7 +47,7 @@ export function createTranscriptHandler(): JobHandler {
           },
         },
         timeoutMs: TIMEOUT_MS,
-      }));
+      });
     } catch (error) {
       throw new JobFailure(
         'TRANSCRIPT_SPAWN_ERROR',
@@ -56,22 +56,17 @@ export function createTranscriptHandler(): JobHandler {
       );
     }
 
-    let raw: unknown;
+    let result: ReturnType<typeof decodePythonResponse>;
     try {
-      raw = JSON.parse(stdout);
+      result = decodePythonResponse(run, ctx.job.id);
     } catch (error) {
       throw new JobFailure(
         'TRANSCRIPT_BAD_OUTPUT',
-        `stdout was not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+        `${error instanceof Error ? error.message : String(error)}; stderr: ${run.stderr.trim().slice(0, 2000)}`,
         false,
       );
     }
-
-    const resultParse = WorkerResult.safeParse(raw);
-    if (!resultParse.success) {
-      throw new JobFailure('TRANSCRIPT_BAD_OUTPUT', resultParse.error.message, false);
-    }
-    const result = resultParse.data;
+    // A declared failure preserves the worker's code/message/retryability (F14).
     if (result.status === 'failed') {
       throw new JobFailure(result.error.code, result.error.message, result.error.retryable);
     }

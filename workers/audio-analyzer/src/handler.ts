@@ -1,11 +1,11 @@
 import { writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AudioAnalyzeInput, AudioAnalyzeOutput, WorkerResult } from '@memetize/contracts';
+import { AudioAnalyzeInput, AudioAnalyzeOutput } from '@memetize/contracts';
 import { JobFailure } from '@memetize/job-system';
 import type { JobHandler } from '@memetize/orchestrator';
 import { audioDebugFile, replaceAudioAnalysis, resolveStorage } from '@memetize/projects';
-import { ensureDir, runPythonWorker } from '@memetize/shared';
+import { decodePythonResponse, ensureDir, type PythonRunResult, runPythonWorker } from '@memetize/shared';
 
 /** Python project root (this file lives at workers/audio-analyzer/src/handler.ts). */
 export const AUDIO_ANALYZER_DIR = fileURLToPath(new URL('..', import.meta.url));
@@ -31,9 +31,9 @@ export function createAudioAnalyzeHandler(): JobHandler {
     const path = resolveStorage(ctx.config, originalPath);
     const useLibrosa = provider === 'librosa';
 
-    let stdout: string;
+    let run: PythonRunResult;
     try {
-      ({ stdout } = await runPythonWorker({
+      run = await runPythonWorker({
         cwd: AUDIO_ANALYZER_DIR,
         module: 'audio_analyzer',
         args: useLibrosa
@@ -46,7 +46,7 @@ export function createAudioAnalyzeHandler(): JobHandler {
           input: { projectId, durationMs, provider, path },
         },
         timeoutMs: useLibrosa ? LIBROSA_TIMEOUT_MS : FIXTURE_TIMEOUT_MS,
-      }));
+      });
     } catch (error) {
       throw new JobFailure(
         'AUDIO_ANALYZE_SPAWN_ERROR',
@@ -55,22 +55,17 @@ export function createAudioAnalyzeHandler(): JobHandler {
       );
     }
 
-    let raw: unknown;
+    let result: ReturnType<typeof decodePythonResponse>;
     try {
-      raw = JSON.parse(stdout);
+      result = decodePythonResponse(run, ctx.job.id);
     } catch (error) {
       throw new JobFailure(
         'AUDIO_ANALYZE_BAD_OUTPUT',
-        `stdout was not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+        `${error instanceof Error ? error.message : String(error)}; stderr: ${run.stderr.trim().slice(0, 2000)}`,
         false,
       );
     }
-
-    const resultParse = WorkerResult.safeParse(raw);
-    if (!resultParse.success) {
-      throw new JobFailure('AUDIO_ANALYZE_BAD_OUTPUT', resultParse.error.message, false);
-    }
-    const result = resultParse.data;
+    // A declared failure preserves the worker's code/message/retryability (F14).
     if (result.status === 'failed') {
       throw new JobFailure(result.error.code, result.error.message, result.error.retryable);
     }

@@ -1,9 +1,9 @@
 import { fileURLToPath } from 'node:url';
-import { SceneDetectInput, SceneDetectionOutput, WorkerResult } from '@memetize/contracts';
+import { SceneDetectInput, SceneDetectionOutput } from '@memetize/contracts';
 import { JobFailure } from '@memetize/job-system';
 import { getAsset, replaceScenes, resolveStorage } from '@memetize/media-catalog';
 import type { JobHandler } from '@memetize/orchestrator';
-import { runPythonWorker } from '@memetize/shared';
+import { decodePythonResponse, type PythonRunResult, runPythonWorker } from '@memetize/shared';
 
 /** Python project root (this file lives at workers/scene-detector/src/handler.ts). */
 export const SCENE_DETECTOR_DIR = fileURLToPath(new URL('..', import.meta.url));
@@ -23,9 +23,9 @@ export function createSceneDetectHandler(): JobHandler {
     const { assetId } = parsed.data;
     const analysisAbsolute = resolveStorage(ctx.config, parsed.data.analysisPath);
 
-    let stdout: string;
+    let run: PythonRunResult;
     try {
-      ({ stdout } = await runPythonWorker({
+      run = await runPythonWorker({
         cwd: SCENE_DETECTOR_DIR,
         module: 'scene_detector',
         request: {
@@ -35,7 +35,7 @@ export function createSceneDetectHandler(): JobHandler {
           input: { assetId, analysisPath: analysisAbsolute },
         },
         timeoutMs: TIMEOUT_MS,
-      }));
+      });
     } catch (error) {
       throw new JobFailure(
         'SCENE_DETECT_SPAWN_ERROR',
@@ -44,22 +44,18 @@ export function createSceneDetectHandler(): JobHandler {
       );
     }
 
-    let raw: unknown;
+    let result: ReturnType<typeof decodePythonResponse>;
     try {
-      raw = JSON.parse(stdout);
+      result = decodePythonResponse(run, ctx.job.id);
     } catch (error) {
+      // A protocol error carries the worker's stderr for diagnosis.
       throw new JobFailure(
         'SCENE_DETECT_BAD_OUTPUT',
-        `stdout was not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+        `${error instanceof Error ? error.message : String(error)}; stderr: ${run.stderr.trim().slice(0, 2000)}`,
         false,
       );
     }
-
-    const resultParse = WorkerResult.safeParse(raw);
-    if (!resultParse.success) {
-      throw new JobFailure('SCENE_DETECT_BAD_OUTPUT', resultParse.error.message, false);
-    }
-    const result = resultParse.data;
+    // A declared failure preserves the worker's code/message/retryability (F14).
     if (result.status === 'failed') {
       throw new JobFailure(result.error.code, result.error.message, result.error.retryable);
     }

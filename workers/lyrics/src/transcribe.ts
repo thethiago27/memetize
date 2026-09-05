@@ -1,6 +1,6 @@
-import { TranscriptOutput, WorkerResult } from '@memetize/contracts';
+import { TranscriptOutput } from '@memetize/contracts';
 import { JobFailure } from '@memetize/job-system';
-import { runPythonWorker } from '@memetize/shared';
+import { decodePythonResponse, type PythonRunResult, runPythonWorker } from '@memetize/shared';
 import { TRANSCRIPT_DIR } from '@memetize/transcript';
 
 const TRANSCRIBE_TIMEOUT_MS = 900_000;
@@ -22,9 +22,9 @@ export async function transcribeProjectAudio(args: {
   provider: string;
   model: string | null;
 }): Promise<TranscriptOutput> {
-  let stdout: string;
+  let run: PythonRunResult;
   try {
-    ({ stdout } = await runPythonWorker({
+    run = await runPythonWorker({
       cwd: TRANSCRIPT_DIR,
       module: 'transcript_worker',
       args: ['run', '--extra', 'mlx', 'python', '-m', 'transcript_worker'],
@@ -40,7 +40,7 @@ export async function transcribeProjectAudio(args: {
         },
       },
       timeoutMs: TRANSCRIBE_TIMEOUT_MS,
-    }));
+    });
   } catch (error) {
     throw new JobFailure(
       'LYRICS_TRANSCRIBE_ERROR',
@@ -49,22 +49,17 @@ export async function transcribeProjectAudio(args: {
     );
   }
 
-  let raw: unknown;
+  let result: ReturnType<typeof decodePythonResponse>;
   try {
-    raw = JSON.parse(stdout);
+    result = decodePythonResponse(run, args.jobId);
   } catch (error) {
     throw new JobFailure(
       'LYRICS_TRANSCRIBE_ERROR',
-      `stdout was not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      `${error instanceof Error ? error.message : String(error)}; stderr: ${run.stderr.trim().slice(0, 2000)}`,
       false,
     );
   }
-
-  const resultParse = WorkerResult.safeParse(raw);
-  if (!resultParse.success) {
-    throw new JobFailure('LYRICS_TRANSCRIBE_ERROR', resultParse.error.message, false);
-  }
-  const result = resultParse.data;
+  // A declared failure preserves the worker's code/message/retryability (F14).
   if (result.status === 'failed') {
     throw new JobFailure(result.error.code, result.error.message, result.error.retryable);
   }
