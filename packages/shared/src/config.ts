@@ -115,7 +115,13 @@ export interface AppConfig {
  * spread across workers (spec section 65): everything comes from here.
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const parsed = EnvSchema.parse(env);
+  // CI and integration tests often set only TEST_DATABASE_URL. Fall back so
+  // loadConfig() works without a production DATABASE_URL.
+  const resolved = { ...env };
+  if (!resolved.DATABASE_URL?.trim() && resolved.TEST_DATABASE_URL?.trim()) {
+    resolved.DATABASE_URL = resolved.TEST_DATABASE_URL;
+  }
+  const parsed = EnvSchema.parse(resolved);
   // Stored paths are persisted relative to the repo root and resolved back
   // against it, so an absolute STORAGE_PATH would make storageDirRelative a bogus
   // key and break media resolution. Reject it explicitly until relative-to-
