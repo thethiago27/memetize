@@ -65,7 +65,10 @@ export async function replaceMoments(
       ),
     });
     const idByInterval = new Map(
-      existing.map((moment) => [intervalKey(moment.assetId, moment.startMs, moment.endMs), moment.id]),
+      existing.map((moment) => [
+        intervalKey(moment.assetId, moment.startMs, moment.endMs),
+        moment.id,
+      ]),
     );
     const preserved = rows.map((row) => {
       const stableId = idByInterval.get(intervalKey(row.assetId, row.startMs, row.endMs));

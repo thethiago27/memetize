@@ -104,7 +104,12 @@ describe.skipIf(!handle)('job-system (integration)', () => {
   });
 
   it('reconciles an expired lease with no attempts left to FAILED (F08)', async () => {
-    const { job } = await enqueueJob(db, { type: 'PING', entityId: 'e6', input: {}, maxAttempts: 1 });
+    const { job } = await enqueueJob(db, {
+      type: 'PING',
+      entityId: 'e6',
+      input: {},
+      maxAttempts: 1,
+    });
     await claimNextJob(db, { entityId: 'e6' });
     await db
       .update(jobs)

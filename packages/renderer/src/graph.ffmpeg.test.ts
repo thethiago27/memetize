@@ -43,14 +43,7 @@ describe.skipIf(!available)('buildFfmpegGraph: real FFmpeg render (F04)', () => 
   beforeAll(async () => {
     dir = await mkdtemp(join(tmpdir(), 'memetize-f04-'));
     // One long audio bed and five distinct 5s source clips.
-    await run('ffmpeg', [
-      '-y',
-      '-f',
-      'lavfi',
-      '-i',
-      'sine=frequency=440:duration=12',
-      audioPath(),
-    ]);
+    await run('ffmpeg', ['-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=12', audioPath()]);
     for (let i = 1; i <= 5; i += 1) {
       await run('ffmpeg', [
         '-y',
@@ -92,7 +85,9 @@ describe.skipIf(!available)('buildFfmpegGraph: real FFmpeg render (F04)', () => 
   };
 
   async function render(name: string, outs: (TimelineTransitionOut | undefined)[]): Promise<void> {
-    const clips = outs.map((t, i) => clip(`clp_${i + 1}`, i, i === outs.length - 1 ? undefined : t));
+    const clips = outs.map((t, i) =>
+      clip(`clp_${i + 1}`, i, i === outs.length - 1 ? undefined : t),
+    );
     const durationMs = clips.length * 2000;
     const tl = Timeline.parse({
       projectId: 'prj_f04',

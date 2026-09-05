@@ -1,4 +1,4 @@
-import { ensureEntityExecution, type Executor, lockEntity } from '@memetize/job-system';
+import { type Executor, ensureEntityExecution, lockEntity } from '@memetize/job-system';
 
 /**
  * Acquires the per-project coordination lock for the current transaction (F09).

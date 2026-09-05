@@ -1,5 +1,11 @@
-import { createTestDatabase, type Database, mediaAssets, scenes, truncateAll } from '@memetize/database';
 import type { MomentCandidate } from '@memetize/contracts';
+import {
+  createTestDatabase,
+  type Database,
+  mediaAssets,
+  scenes,
+  truncateAll,
+} from '@memetize/database';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { replaceMoments } from './moments';
 

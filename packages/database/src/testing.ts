@@ -26,9 +26,7 @@ export async function createTestDatabase(): Promise<DatabaseHandle | null> {
   const url = process.env.TEST_DATABASE_URL?.trim();
   if (!url) {
     if (process.env.REQUIRE_INTEGRATION_TESTS === '1') {
-      throw new Error(
-        'TEST_DATABASE_URL is required when REQUIRE_INTEGRATION_TESTS=1',
-      );
+      throw new Error('TEST_DATABASE_URL is required when REQUIRE_INTEGRATION_TESTS=1');
     }
     return null;
   }

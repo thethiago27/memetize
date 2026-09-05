@@ -38,7 +38,10 @@ describe('media route storage confinement (F16)', () => {
   });
 
   it('serves a legitimate media file', async () => {
-    const res = await app.inject({ method: 'GET', url: '/v1/media/storage/renders/prj_1/render_001.mp4' });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/media/storage/renders/prj_1/render_001.mp4',
+    });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('video/mp4');
   });

@@ -13,8 +13,14 @@ import type { CutSourceBounds } from './types';
 describe('F05: pipeline reserves handles for overlapping transitions', () => {
   function buildAndResolve(momentDurationMs: number) {
     const moments = new Map<string, AssembleMoment>([
-      ['mom_a', { assetId: 'ast_a', startMs: 0, endMs: momentDurationMs, durationMs: momentDurationMs }],
-      ['mom_b', { assetId: 'ast_b', startMs: 0, endMs: momentDurationMs, durationMs: momentDurationMs }],
+      [
+        'mom_a',
+        { assetId: 'ast_a', startMs: 0, endMs: momentDurationMs, durationMs: momentDurationMs },
+      ],
+      [
+        'mom_b',
+        { assetId: 'ast_b', startMs: 0, endMs: momentDurationMs, durationMs: momentDurationMs },
+      ],
     ]);
     const { timeline } = assembleDirectedTimeline({
       projectId: 'prj_f05',

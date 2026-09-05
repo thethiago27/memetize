@@ -1,9 +1,4 @@
-import {
-  type Database,
-  type EntityExecutionRow,
-  entityExecution,
-  jobs,
-} from '@memetize/database';
+import { type Database, type EntityExecutionRow, entityExecution, jobs } from '@memetize/database';
 import { and, eq, sql } from 'drizzle-orm';
 
 export type EntityKind = 'project' | 'asset';
@@ -60,11 +55,15 @@ export async function reserveRenderVersion(
 ): Promise<number> {
   const rows = await tx
     .update(entityExecution)
-    .set({ nextRenderVersion: sql`${entityExecution.nextRenderVersion} + 1`, updatedAt: new Date() })
+    .set({
+      nextRenderVersion: sql`${entityExecution.nextRenderVersion} + 1`,
+      updatedAt: new Date(),
+    })
     .where(and(eq(entityExecution.entityKind, kind), eq(entityExecution.entityId, entityId)))
     .returning({ reserved: sql<number>`${entityExecution.nextRenderVersion} - 1` });
   const reserved = rows[0]?.reserved;
-  if (reserved === undefined) throw new Error(`cannot reserve render version for ${kind}:${entityId}`);
+  if (reserved === undefined)
+    throw new Error(`cannot reserve render version for ${kind}:${entityId}`);
   return Number(reserved);
 }
 
@@ -83,7 +82,8 @@ export async function reserveTimelineVersion(
     .where(and(eq(entityExecution.entityKind, kind), eq(entityExecution.entityId, entityId)))
     .returning({ reserved: sql<number>`${entityExecution.nextTimelineVersion} - 1` });
   const reserved = rows[0]?.reserved;
-  if (reserved === undefined) throw new Error(`cannot reserve timeline version for ${kind}:${entityId}`);
+  if (reserved === undefined)
+    throw new Error(`cannot reserve timeline version for ${kind}:${entityId}`);
   return Number(reserved);
 }
 
@@ -95,11 +95,15 @@ export async function reserveWindowVersion(
 ): Promise<number> {
   const rows = await tx
     .update(entityExecution)
-    .set({ nextWindowVersion: sql`${entityExecution.nextWindowVersion} + 1`, updatedAt: new Date() })
+    .set({
+      nextWindowVersion: sql`${entityExecution.nextWindowVersion} + 1`,
+      updatedAt: new Date(),
+    })
     .where(and(eq(entityExecution.entityKind, kind), eq(entityExecution.entityId, entityId)))
     .returning({ reserved: sql<number>`${entityExecution.nextWindowVersion} - 1` });
   const reserved = rows[0]?.reserved;
-  if (reserved === undefined) throw new Error(`cannot reserve window version for ${kind}:${entityId}`);
+  if (reserved === undefined)
+    throw new Error(`cannot reserve window version for ${kind}:${entityId}`);
   return Number(reserved);
 }
 
@@ -118,7 +122,8 @@ export async function bumpConstraintsRevision(
     .where(and(eq(entityExecution.entityKind, kind), eq(entityExecution.entityId, entityId)))
     .returning({ revision: entityExecution.constraintsRevision });
   const revision = rows[0]?.revision;
-  if (revision === undefined) throw new Error(`cannot bump constraints revision for ${kind}:${entityId}`);
+  if (revision === undefined)
+    throw new Error(`cannot bump constraints revision for ${kind}:${entityId}`);
   return revision;
 }
 

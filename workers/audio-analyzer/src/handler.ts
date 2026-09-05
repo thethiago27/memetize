@@ -5,7 +5,12 @@ import { AudioAnalyzeInput, AudioAnalyzeOutput } from '@memetize/contracts';
 import { JobFailure } from '@memetize/job-system';
 import type { JobHandler } from '@memetize/orchestrator';
 import { audioDebugFile, replaceAudioAnalysis, resolveStorage } from '@memetize/projects';
-import { decodePythonResponse, ensureDir, type PythonRunResult, runPythonWorker } from '@memetize/shared';
+import {
+  decodePythonResponse,
+  ensureDir,
+  type PythonRunResult,
+  runPythonWorker,
+} from '@memetize/shared';
 
 /** Python project root (this file lives at workers/audio-analyzer/src/handler.ts). */
 export const AUDIO_ANALYZER_DIR = fileURLToPath(new URL('..', import.meta.url));

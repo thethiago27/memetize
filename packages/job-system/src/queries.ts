@@ -33,9 +33,7 @@ export async function countRunningForEntity(
   const rows = await db
     .select({ value: count() })
     .from(jobs)
-    .where(
-      and(eq(jobs.entityId, entityId), eq(jobs.status, 'RUNNING'), inArray(jobs.type, types)),
-    );
+    .where(and(eq(jobs.entityId, entityId), eq(jobs.status, 'RUNNING'), inArray(jobs.type, types)));
   return Number(rows[0]?.value ?? 0);
 }
 
@@ -58,9 +56,7 @@ export async function deleteJobsForEntity(
   if (types.length === 0) return;
   await db
     .delete(jobs)
-    .where(
-      and(eq(jobs.entityId, entityId), inArray(jobs.type, types), ne(jobs.status, 'RUNNING')),
-    );
+    .where(and(eq(jobs.entityId, entityId), inArray(jobs.type, types), ne(jobs.status, 'RUNNING')));
 }
 
 /**

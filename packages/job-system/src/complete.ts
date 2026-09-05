@@ -14,7 +14,11 @@ export async function completeJob(
   leaseToken?: string,
 ): Promise<JobRow | null> {
   const guard = leaseToken
-    ? [eq(jobs.status, 'RUNNING'), eq(jobs.leaseToken, leaseToken), sql`${jobs.leaseExpiresAt} > clock_timestamp()`]
+    ? [
+        eq(jobs.status, 'RUNNING'),
+        eq(jobs.leaseToken, leaseToken),
+        sql`${jobs.leaseExpiresAt} > clock_timestamp()`,
+      ]
     : [];
   const rows = await db
     .update(jobs)
@@ -56,7 +60,11 @@ export async function failJob(
   const shouldRetry = (args.retryable ?? false) && current.attempts < current.maxAttempts;
 
   const guard = leaseToken
-    ? [eq(jobs.status, 'RUNNING'), eq(jobs.leaseToken, leaseToken), sql`${jobs.leaseExpiresAt} > clock_timestamp()`]
+    ? [
+        eq(jobs.status, 'RUNNING'),
+        eq(jobs.leaseToken, leaseToken),
+        sql`${jobs.leaseExpiresAt} > clock_timestamp()`,
+      ]
     : [];
   const rows = await db
     .update(jobs)
