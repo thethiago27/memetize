@@ -8,6 +8,7 @@ import {
   aggregateFeedback,
   buildExamples,
   buildLessons,
+  listActiveBans,
   listFeedbackEvents,
 } from '@memetize/feedback';
 import { JobFailure } from '@memetize/job-system';
@@ -27,6 +28,7 @@ import {
 } from '@memetize/projects';
 import { ensureDir } from '@memetize/shared';
 import { inArray } from 'drizzle-orm';
+import { filterBannedCandidates } from './bans';
 import { hydrateShortlist } from './hydrate';
 import { DirectorInvalidPickError, validatePicks } from './validate';
 
@@ -69,28 +71,37 @@ export function createDirectorHandler(): JobHandler {
     }
 
     const segments = await listNarrativeSegments(ctx.db, projectId);
-    const matches = await listSegmentMatches(ctx.db, projectId);
-    if (matches.length === 0) {
+    const allMatches = await listSegmentMatches(ctx.db, projectId);
+    if (allMatches.length === 0) {
       throw new JobFailure(
         'DIRECTOR_NO_MATCHES',
         `project ${projectId} has no segment matches yet — run MATCH first`,
         false,
       );
     }
-    const matchBySegment = new Map(matches.map((match) => [match.segmentId, match]));
-
     const momentIds = new Set<string>();
-    for (const match of matches) {
+    for (const match of allMatches) {
       for (const entry of match.shortlist) momentIds.add(entry.momentId);
       for (const entry of match.ranked) momentIds.add(entry.momentId);
     }
-    const momentRows =
+    const allMomentRows =
       momentIds.size > 0
         ? await ctx.db.query.moments.findMany({
             where: inArray(momentsTable.id, Array.from(momentIds)),
           })
         : [];
-    const momentById = new Map(momentRows.map((moment) => [moment.id, moment]));
+
+    // Enforce the current bans here too (F13): `project generate` restarts at
+    // DIRECTOR and reuses the persisted shortlist/ranked without re-running MATCH,
+    // so a moment banned after MATCH would otherwise reappear. `listActiveBans`
+    // already folds direct bans, asset bans, and excluded ranges into momentIds.
+    const bans = await listActiveBans(ctx.db);
+    const { momentRows, momentById, matches } = filterBannedCandidates(
+      allMomentRows,
+      allMatches,
+      bans,
+    );
+    const matchBySegment = new Map(matches.map((match) => [match.segmentId, match]));
 
     const directorSegments: DirectorSegmentInput[] = segments.map((segment) => {
       const match = matchBySegment.get(segment.id);
