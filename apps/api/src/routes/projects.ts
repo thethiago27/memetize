@@ -124,15 +124,20 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
   app.post('/v1/projects', async (request, reply) => {
     const parts = request.parts();
     let audioPath: string | undefined;
+    let audioName: string | undefined;
     let lyricsPath: string | undefined;
     const temps: string[] = [];
     try {
       for await (const part of parts) {
         if (part.type !== 'file') continue;
-        const tmp = await saveUpload(part);
-        temps.push(tmp);
-        if (part.fieldname === 'lyrics') lyricsPath = tmp;
-        else audioPath = tmp;
+        const saved = await saveUpload(part);
+        temps.push(saved.path);
+        if (part.fieldname === 'lyrics') {
+          lyricsPath = saved.path;
+        } else {
+          audioPath = saved.path;
+          audioName = saved.originalName;
+        }
       }
       if (!audioPath) return sendError(reply, 400, 'NO_FILE', 'expected an audio file field');
       const { project } = await ingestProject({
@@ -140,6 +145,7 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
         config: runtime.config,
         filePath: audioPath,
         lyricsPath,
+        displayName: audioName,
       });
       kickDrain(runtime, project.id);
       return reply.status(201).send({ project });

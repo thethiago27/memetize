@@ -92,7 +92,9 @@ export function createLyricsHandler(): JobHandler {
       JSON.stringify({ projectId, source, model, modelVersion, lines: persisted.lines }, null, 2),
     );
 
-    const lrcFile = audioFile(ctx.config, projectId, 'lyrics.lrc');
+    // Write the normalized export to its own file, never onto the user's source
+    // copy (`source-lyrics.*` from ingest), so the original bytes are preserved.
+    const lrcFile = audioFile(ctx.config, projectId, 'generated-lyrics.lrc');
     await ensureDir(dirname(lrcFile.absolute));
     await writeFile(lrcFile.absolute, formatLrc(persisted.lines), 'utf8');
 

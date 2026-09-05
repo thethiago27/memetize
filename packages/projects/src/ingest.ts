@@ -23,6 +23,11 @@ export interface IngestProjectArgs {
   filePath: string;
   /** Optional user-supplied lyrics file (`.lrc` or `.txt`, spec section 26). */
   lyricsPath?: string;
+  /**
+   * Display name to persist, e.g. the user's original upload filename. Falls
+   * back to the temp file's basename when absent (minor issue).
+   */
+  displayName?: string;
 }
 
 export interface IngestProjectResult {
@@ -42,6 +47,7 @@ export async function ingestProject({
   config,
   filePath,
   lyricsPath,
+  displayName,
 }: IngestProjectArgs): Promise<IngestProjectResult> {
   const ext = extname(filePath).toLowerCase();
   if (!SUPPORTED_EXTENSIONS.has(ext)) {
@@ -71,12 +77,17 @@ export async function ingestProject({
       throw new Error(`lyrics file not found: ${lyricsPath}`);
     }
     const lyricsExt = extname(lyricsPath).toLowerCase();
-    const lyricsFile = audioFile(config, id, `lyrics${lyricsExt}`);
+    // Keep the user's file as an immutable source copy, separate from the
+    // normalized `generated-lyrics.lrc` the lyrics worker writes, so re-exporting
+    // never clobbers lines/metadata the parser did not preserve (minor issue).
+    const lyricsFile = audioFile(config, id, `source-lyrics${lyricsExt}`);
     await copyFile(lyricsPath, lyricsFile.absolute);
     lyricsRelative = lyricsFile.relative;
   }
 
-  await db.insert(projects).values({ id, filename: basename(filePath), status: 'CREATED' });
+  await db
+    .insert(projects)
+    .values({ id, filename: displayName ?? basename(filePath), status: 'CREATED' });
   await db.insert(projectAudio).values({
     projectId: id,
     originalPath: original.relative,

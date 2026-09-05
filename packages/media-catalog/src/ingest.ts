@@ -22,6 +22,9 @@ export interface IngestArgs {
   config: AppConfig;
   filePath: string;
   source?: string;
+  /** Display name to persist (e.g. the original upload filename); falls back to
+   * the temp file's basename when absent (minor issue). */
+  displayName?: string;
 }
 
 export interface IngestResult {
@@ -40,6 +43,7 @@ export async function ingestAsset({
   config,
   filePath,
   source,
+  displayName,
 }: IngestArgs): Promise<IngestResult> {
   const ext = extname(filePath).toLowerCase();
   if (!SUPPORTED_EXTENSIONS.has(ext)) {
@@ -74,7 +78,7 @@ export async function ingestAsset({
       .insert(mediaAssets)
       .values({
         id,
-        filename: basename(filePath),
+        filename: displayName ?? basename(filePath),
         originalPath: original.relative,
         checksum,
         durationMs: probe.durationMs,

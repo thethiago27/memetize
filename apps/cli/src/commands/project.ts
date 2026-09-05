@@ -340,7 +340,7 @@ async function printProjectDetails(ctx: CliContext, id: string): Promise<void> {
 
   if (lyrics) {
     lines.push(
-      `  lyrics:   source=${lyrics.source}  ${lyrics.lines.length === 0 ? '(instrumental)' : `${lyrics.lines.length} lines`}  lrc=${ctx.config.storageDirRelative}/audio/${id}/lyrics.lrc`,
+      `  lyrics:   source=${lyrics.source}  ${lyrics.lines.length === 0 ? '(instrumental)' : `${lyrics.lines.length} lines`}  lrc=${ctx.config.storageDirRelative}/audio/${id}/generated-lyrics.lrc`,
     );
     for (const line of lyrics.lines) {
       lines.push(`    ${line.startMs}..${line.endMs} ms  "${line.text}"`);

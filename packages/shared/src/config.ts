@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import type { ResourceClass } from '@memetize/contracts';
 import { config as loadDotenv } from 'dotenv';
 import { z } from 'zod';
@@ -93,6 +93,15 @@ export interface AppConfig {
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = EnvSchema.parse(env);
+  // Stored paths are persisted relative to the repo root and resolved back
+  // against it, so an absolute STORAGE_PATH would make storageDirRelative a bogus
+  // key and break media resolution. Reject it explicitly until relative-to-
+  // storage keys are supported (minor issue in the report).
+  if (isAbsolute(parsed.STORAGE_PATH)) {
+    throw new Error(
+      `STORAGE_PATH must be a repo-relative path, not an absolute one (got "${parsed.STORAGE_PATH}")`,
+    );
+  }
   const storageDirRelative = parsed.STORAGE_PATH.replace(/^\.\//, '').replace(/\/+$/, '');
   const testUrl = parsed.TEST_DATABASE_URL?.trim();
   return {

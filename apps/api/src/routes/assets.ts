@@ -54,15 +54,16 @@ export function registerAssetRoutes(app: FastifyInstance, runtime: AppRuntime): 
   app.post('/v1/assets', async (request, reply) => {
     const file = await request.file();
     if (!file) return sendError(reply, 400, 'NO_FILE', 'expected a video file field');
-    const tmp = await saveUpload(file);
+    const saved = await saveUpload(file);
     try {
       const sourceField = file.fields.source;
       const source = sourceField && 'value' in sourceField ? String(sourceField.value) : undefined;
       const { asset, created } = await ingestAsset({
         db: runtime.db,
         config: runtime.config,
-        filePath: tmp,
+        filePath: saved.path,
         source,
+        displayName: saved.originalName,
       });
       kickDrain(runtime, asset.id);
       return reply.status(created ? 201 : 200).send({ asset, created });
@@ -70,7 +71,7 @@ export function registerAssetRoutes(app: FastifyInstance, runtime: AppRuntime): 
       const message = error instanceof Error ? error.message : String(error);
       return sendError(reply, 400, 'INGEST_FAILED', message);
     } finally {
-      await removeUpload(tmp);
+      await removeUpload(saved.path);
     }
   });
 
