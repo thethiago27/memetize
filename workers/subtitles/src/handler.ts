@@ -83,7 +83,7 @@ export function createSubtitlesHandler(): JobHandler {
           translated: persisted.translated,
           model: persisted.model,
           modelVersion: persisted.modelVersion,
-          lines: persisted.lines,
+          lines,
         },
         null,
         2,
@@ -92,7 +92,7 @@ export function createSubtitlesHandler(): JobHandler {
 
     ctx.logger.info('subtitles_completed', {
       projectId,
-      lineCount: persisted.lines.length,
+      lineCount: lines.length,
       translated: persisted.translated,
       model: persisted.model,
     });
@@ -102,7 +102,7 @@ export function createSubtitlesHandler(): JobHandler {
       language: persisted.language,
       sourceLanguage: persisted.sourceLanguage,
       translated: persisted.translated,
-      lineCount: persisted.lines.length,
+      lineCount: lines.length,
       model: persisted.model,
       modelVersion: persisted.modelVersion,
     };
