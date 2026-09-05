@@ -335,6 +335,35 @@ describe('validateTimeline', () => {
 
     expect(result.ok).toBe(true);
   });
+
+  it('fails when the window has the same duration but a different start (F11)', () => {
+    // An old 0-60s timeline (audio.sourceStartMs = 0) must not satisfy a new
+    // 60-120s window even though both are 60s long.
+    const result = validateTimeline(
+      timeline({
+        durationMs: 60_000,
+        clips: [clip({ id: 'clp_1', timeline: { startMs: 0, endMs: 60_000 } })],
+      }),
+      { expectedDurationMs: 60_000, expectedWindowStartMs: 60_000 },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({ code: 'TIMELINE_WINDOW_MISMATCH' }),
+    );
+  });
+
+  it('accepts a timeline whose audio start matches the selected window (F11)', () => {
+    const result = validateTimeline(
+      timeline({
+        durationMs: 1_000,
+        clips: [clip({ id: 'clp_1', timeline: { startMs: 0, endMs: 1_000 } })],
+      }),
+      { expectedDurationMs: 1_000, expectedWindowStartMs: 0 },
+    );
+
+    expect(result.ok).toBe(true);
+  });
 });
 
 function gappedTimeline(): Timeline {

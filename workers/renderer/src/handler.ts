@@ -62,6 +62,7 @@ export function createRenderHandler(): JobHandler {
     const editWindow = await getLatestEditWindow(ctx.db, projectId);
     const timelineValidation = validateTimeline(timeline, {
       expectedDurationMs: editWindow?.durationMs,
+      expectedWindowStartMs: editWindow?.sourceStartMs,
     });
     const validationMs = performance.now() - validationStarted;
     if (!timelineValidation.ok) {

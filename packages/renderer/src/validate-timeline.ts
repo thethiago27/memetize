@@ -11,6 +11,13 @@ export interface ValidateTimelineOptions {
    * window must never render (renderer selected-window guard).
    */
   expectedDurationMs?: number;
+  /**
+   * The selected edit window's source start. Duration alone cannot tell two
+   * equal-length windows apart, so a timeline whose audio is cut from a
+   * different offset than the selected window must not render (F11): e.g. an old
+   * 0-60s timeline must never satisfy a new 60-120s window.
+   */
+  expectedWindowStartMs?: number;
 }
 
 /**
@@ -35,6 +42,16 @@ export function validateTimeline(
     errors.push({
       code: 'TIMELINE_DURATION_MISMATCH',
       message: `timeline durationMs (${timeline.durationMs}ms) differs from the selected edit-window duration (${options.expectedDurationMs}ms); regenerate the timeline`,
+    });
+  }
+
+  if (
+    options.expectedWindowStartMs !== undefined &&
+    timeline.audio.sourceStartMs !== options.expectedWindowStartMs
+  ) {
+    errors.push({
+      code: 'TIMELINE_WINDOW_MISMATCH',
+      message: `timeline audio starts at ${timeline.audio.sourceStartMs}ms but the selected edit window starts at ${options.expectedWindowStartMs}ms; regenerate the timeline`,
     });
   }
 

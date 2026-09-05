@@ -62,7 +62,12 @@ export function createNarrativeHandler(): JobHandler {
         false,
       );
     }
-    const window = await insertEditWindow(ctx.db, { projectId, selection });
+    // Work against the resolved selection, not a persisted window: publishing a
+    // new edit window before the analysis succeeds would leave a failed
+    // generation's window as "latest" for a render to pick up (F11). The window
+    // is only persisted once coverage is validated, right before its segments.
+    const sourceStartMs = selection.sourceStartMs;
+    const sourceEndMs = selection.sourceEndMs;
 
     const { llm } = createProviders(ctx.config);
 
@@ -70,15 +75,17 @@ export function createNarrativeHandler(): JobHandler {
     try {
       suggestion = await llm.analyzeNarrative({
         durationMs: audio.durationMs,
-        sourceStartMs: window.sourceStartMs,
-        sourceEndMs: window.sourceEndMs,
-        sections: clipRanges(audio.sections, window.sourceStartMs, window.sourceEndMs),
+        sourceStartMs,
+        sourceEndMs,
+        sections: clipRanges(audio.sections, sourceStartMs, sourceEndMs),
         energyCurve: audio.energyCurve.filter(
-          (point) => point.timeMs >= window.sourceStartMs && point.timeMs <= window.sourceEndMs,
+          (point) => point.timeMs >= sourceStartMs && point.timeMs <= sourceEndMs,
         ),
-        lyrics: clipRanges(lyricsRow.lines, window.sourceStartMs, window.sourceEndMs).map(
-          (line) => ({ startMs: line.startMs, endMs: line.endMs, text: line.text }),
-        ),
+        lyrics: clipRanges(lyricsRow.lines, sourceStartMs, sourceEndMs).map((line) => ({
+          startMs: line.startMs,
+          endMs: line.endMs,
+          text: line.text,
+        })),
       });
     } catch (error) {
       throw new JobFailure(
@@ -90,14 +97,16 @@ export function createNarrativeHandler(): JobHandler {
 
     const beats = uniqueSorted([...audio.beats.map((beat) => beat.timeMs), ...audio.downbeats]);
     const normalized = planNarrativeCoverage({
-      window: { sourceStartMs: window.sourceStartMs, sourceEndMs: window.sourceEndMs },
+      window: { sourceStartMs, sourceEndMs },
       suggestions: suggestion.segments,
       sections: audio.sections,
       beats,
       energyCurve: audio.energyCurve,
     });
-    validateCoverage(normalized, window.sourceStartMs, window.sourceEndMs);
+    validateCoverage(normalized, sourceStartMs, sourceEndMs);
 
+    // Analysis succeeded: publish the window, then its segments.
+    const window = await insertEditWindow(ctx.db, { projectId, selection });
     const segments = normalized.map((segment) => NarrativeSegment.parse(segment));
     const persisted = await replaceNarrativeSegments(ctx.db, {
       projectId,
