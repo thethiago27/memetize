@@ -1,0 +1,16 @@
+{
+  "name": "Memetize",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "studio",
+      "command": "export PATH=\"$HOME/.local/bin:$PATH\" && pnpm studio",
+      "description": "Memetize Studio: Fastify API on :8787 and Next.js web on :3000."
+    }
+  ],
+  "ports": [
+    { "name": "web", "port": 3000 },
+    { "name": "api", "port": 8787 }
+  ]
+}
