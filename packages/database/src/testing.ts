@@ -48,3 +48,11 @@ export async function truncateAll(db: Database): Promise<void> {
     sql`truncate table moment_feedback_embeddings, feedback_events, moment_embeddings, moment_identities, moments, transcript_segments, scenes, media_assets, renders, timeline_versions, segment_matches, narrative_segments, subtitles, lyrics, audio_analysis, project_audio, edit_windows, projects, jobs, entity_execution restart identity cascade`,
   );
 }
+
+/**
+ * Test-only: drops a project's caption row so a suite can observe how RENDER
+ * behaves when lyrics exist but `subtitles` does not (translated-subtitles spec).
+ */
+export async function deleteProjectSubtitles(db: Database, projectId: string): Promise<void> {
+  await db.execute(sql`delete from subtitles where project_id = ${projectId}`);
+}

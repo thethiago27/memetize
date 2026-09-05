@@ -5,11 +5,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { AUDIO_ANALYZER_DIR } from '@memetize/audio-analyzer';
-import { createTestDatabase, type Database, truncateAll } from '@memetize/database';
+import {
+  createTestDatabase,
+  type Database,
+  deleteProjectSubtitles,
+  truncateAll,
+} from '@memetize/database';
 import { ingestAsset, probeVideo } from '@memetize/media-catalog';
 import type { Orchestrator } from '@memetize/orchestrator';
 import {
-  deleteSubtitles,
   effectsDebugFile,
   getLatestRender,
   getLatestTimeline,
@@ -487,7 +491,7 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('renderer pipeline (
     const instrumentalBright = await countCaptionBrightPixels(instrumentalFile, 1.5);
     expect(captionedBright).toBeGreaterThan(instrumentalBright);
 
-    await deleteSubtitles(db, lyricsProject.id);
+    await deleteProjectSubtitles(db, lyricsProject.id);
     expect(await getSubtitles(db, lyricsProject.id)).toBeUndefined();
     await renderProject(db, lyricsProject.id);
     const missing = await orchestrator.drain({ entityId: lyricsProject.id });

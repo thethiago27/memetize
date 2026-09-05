@@ -72,7 +72,7 @@ export async function maybeEnqueueSubtitles(
   return enqueueJob(tx, {
     type: 'SUBTITLES',
     entityId: projectId,
-    input: { projectId },
+    input: { projectId, ...(generationId ? { generationId } : {}) },
     generationId,
     stepKey: generationId ? stepKeyFor('SUBTITLES') : null,
   });

@@ -8,6 +8,9 @@ import {
   MAX_WIDTH_RATIO,
   MIN_FONT_SCALE,
   OUTLINE_RATIO,
+  SHADOW_BLUR,
+  SHADOW_OFFSET_X,
+  SHADOW_OFFSET_Y,
 } from './constants';
 import { ensureFont } from './font';
 
@@ -17,6 +20,8 @@ export interface CueLayout {
   width: number;
   height: number;
   outlineWidth: number;
+  /** Transparent margin on every side so the outline and drop shadow are never clipped. */
+  padding: number;
 }
 
 function measureWidth(ctx: SKRSContext2D, text: string, fontSize: number): number {
@@ -102,7 +107,16 @@ export function layoutCue(text: string, canvas: TimelineCanvas): CueLayout {
   const outlineWidth = Math.max(1, Math.round(fontSize * OUTLINE_RATIO));
   const textWidth = Math.max(...lines.map((line) => measureWidth(probe, line, fontSize)), 0);
   const lineHeightPx = Math.round(fontSize * LINE_HEIGHT);
-  const width = Math.min(maxWidth, Math.ceil(textWidth) + outlineWidth * 4 + 8);
-  const height = lineHeightPx * lines.length + outlineWidth * 2 + 8;
-  return { lines, fontSize, width, height, outlineWidth };
+  // The text was wrapped to `maxWidth`; the box only adds the outline, the
+  // shadow reach and a small margin, so nothing drawn is ever cut off.
+  const padding = shadowPadding(outlineWidth);
+  const width = Math.ceil(textWidth) + padding * 2;
+  const height = lineHeightPx * lines.length + padding * 2;
+  return { lines, fontSize, width, height, outlineWidth, padding };
+}
+
+/** Outline plus the farthest the blurred shadow reaches, plus a 4 px margin. */
+export function shadowPadding(outlineWidth: number): number {
+  const shadowReach = SHADOW_BLUR + Math.max(Math.abs(SHADOW_OFFSET_X), Math.abs(SHADOW_OFFSET_Y));
+  return outlineWidth + shadowReach + 4;
 }

@@ -163,6 +163,7 @@ describe.skipIf(!handle)('maybeEnqueueNarrative (integration)', () => {
     expect(first?.created).toBe(true);
     expect(second?.created).toBe(false);
     expect(first?.job.stepKey).toBe(stepKeyFor('SUBTITLES'));
+    expect(first?.job.payload).toEqual({ projectId, generationId });
     const subtitleJobs = await db
       .select({ id: jobs.id })
       .from(jobs)

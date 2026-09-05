@@ -1,7 +1,15 @@
 import { DEFAULT_CANVAS } from '@memetize/timeline';
 import { describe, expect, it } from 'vitest';
-import { FONT_SIZE_RATIO, MAX_LINES, MIN_FONT_SCALE } from './constants';
-import { layoutCue } from './layout';
+import {
+  FONT_SIZE_RATIO,
+  LINE_HEIGHT,
+  MAX_LINES,
+  MIN_FONT_SCALE,
+  SHADOW_BLUR,
+  SHADOW_OFFSET_X,
+  SHADOW_OFFSET_Y,
+} from './constants';
+import { layoutCue, shadowPadding } from './layout';
 import { rasterizeCue } from './rasterize';
 
 describe('layoutCue', () => {
@@ -38,6 +46,18 @@ describe('layoutCue', () => {
     const first = layoutCue('mesmo texto', DEFAULT_CANVAS);
     const second = layoutCue('mesmo texto', DEFAULT_CANVAS);
     expect(second).toEqual(first);
+  });
+});
+
+describe('layoutCue padding', () => {
+  it('reserves room for the outline and the drop shadow on every side', () => {
+    const layout = layoutCue('sombra', DEFAULT_CANVAS);
+    const reach = SHADOW_BLUR + Math.max(Math.abs(SHADOW_OFFSET_X), Math.abs(SHADOW_OFFSET_Y));
+    expect(layout.padding).toBe(shadowPadding(layout.outlineWidth));
+    expect(layout.padding).toBeGreaterThan(layout.outlineWidth + reach);
+    expect(layout.height).toBe(
+      Math.round(layout.fontSize * LINE_HEIGHT) * layout.lines.length + layout.padding * 2,
+    );
   });
 });
 

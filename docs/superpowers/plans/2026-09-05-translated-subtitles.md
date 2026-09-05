@@ -4,7 +4,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-05-translated-subtitles-design.md`
 
-**Status (2026-09-05):** implemented on `main` by PRs #2 (`6e5ee23`) and #3 (`9948daa`), reviewed against the spec. All tasks below are covered; Task 19's Studio walkthrough was not performed, the automated checks were (typecheck 40/40, unit 553 pass, feature integration/E2E 28 pass). Known nits: the SUBTITLES enqueue payload omits `generationId` (the job row carries it), `deleteSubtitles` is exported from `@memetize/projects` only for the E2E test, and the caption PNG does not reserve room for the shadow blur, so its bottom edge may clip by a few pixels.
+**Status (2026-09-05):** implemented on `main` by PRs #2 (`6e5ee23`) and #3 (`9948daa`), reviewed against the spec. All tasks below are covered; Task 19's Studio walkthrough was not performed, the automated checks were (typecheck 40/40, unit 553 pass, feature integration/E2E 28 pass). Review follow-ups applied the same day: the SUBTITLES enqueue payload carries `generationId`, the E2E-only delete helper moved to `@memetize/database` testing, the caption PNG reserves padding for outline and shadow, and Biome parses Tailwind directives so `pnpm lint` passes. Migration `0016` was applied to the local dev and test databases.
 
 **Tech Stack:** TypeScript 5.9, Node.js 22+, pnpm/Turborepo, Vitest, Zod, Drizzle/PostgreSQL, Fastify, Next.js/React, FFmpeg, `@napi-rs/canvas` (new).
 

@@ -764,7 +764,11 @@ p {
 }
 
 .clip[data-playing="true"]::after {
-  background: linear-gradient(to top, color-mix(in srgb, var(--signal) 45%, transparent), rgba(0, 0, 0, 0.1));
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--signal) 45%, transparent),
+    rgba(0, 0, 0, 0.1)
+  );
 }
 
 .clip-label {

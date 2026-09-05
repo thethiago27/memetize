@@ -61,8 +61,3 @@ export function getSubtitles(db: Executor, projectId: string): Promise<Subtitles
     orderBy: desc(subtitles.createdAt),
   });
 }
-
-/** Drops the project's caption track so RENDER can observe a missing row. */
-export async function deleteSubtitles(db: Executor, projectId: string): Promise<void> {
-  await db.delete(subtitles).where(eq(subtitles.projectId, projectId));
-}
