@@ -7,6 +7,11 @@ export const MIN_CLIP_MS = 300;
 export const AUDIO_FADE_IN_MS = 120;
 export const AUDIO_FADE_OUT_MS = 250;
 export const DURATION_DRIFT_MS = 100;
+/**
+ * Audio streams carry encoder priming/padding, so a rendered audio stream is
+ * allowed to drift more than the video before it counts as a truncated stream.
+ */
+export const AUDIO_DRIFT_MS = 300;
 export const RENDERER_NAME = 'ffmpeg';
 export const RENDERER_VERSION = '1.0.0';
 

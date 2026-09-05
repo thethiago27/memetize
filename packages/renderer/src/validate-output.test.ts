@@ -21,6 +21,8 @@ function probe(overrides: Partial<OutputProbe> = {}): OutputProbe {
     fpsMilli: 30000,
     videoCodec: 'h264',
     audioCodec: 'aac',
+    videoDurationMs: null,
+    audioDurationMs: null,
     ...overrides,
   };
 }
@@ -57,10 +59,38 @@ describe('validateOutput', () => {
     expect(result.warnings.some((w) => w.code === 'DURATION_DRIFT')).toBe(false);
   });
 
-  it('is valid with a DURATION_DRIFT warning when the drift exceeds tolerance', () => {
+  it('is invalid with a DURATION_DRIFT warning when the drift exceeds tolerance (F07)', () => {
     const result = validateOutput(probe({ durationMs: 4250 }), timeline(4000));
-    expect(result.valid).toBe(true);
+    expect(result.valid).toBe(false);
     expect(result.warnings).toContainEqual(expect.objectContaining({ code: 'DURATION_DRIFT' }));
+  });
+
+  it('rejects a 1s render for a 60s timeline (F07)', () => {
+    const result = validateOutput(probe({ durationMs: 1000 }), timeline(60_000));
+    expect(result.valid).toBe(false);
+    expect(result.warnings).toContainEqual(expect.objectContaining({ code: 'DURATION_DRIFT' }));
+  });
+
+  it('rejects an unreadable (NaN or zero) duration (F07)', () => {
+    expect(validateOutput(probe({ durationMs: Number.NaN }), timeline(4000)).valid).toBe(false);
+    expect(validateOutput(probe({ durationMs: 0 }), timeline(4000)).valid).toBe(false);
+  });
+
+  it('rejects a short video stream hidden under a full-length container (F07)', () => {
+    const result = validateOutput(
+      probe({ durationMs: 60_000, videoDurationMs: 1000, audioDurationMs: 60_000 }),
+      timeline(60_000),
+    );
+    expect(result.valid).toBe(false);
+    expect(result.warnings.some((w) => w.message?.includes('video stream'))).toBe(true);
+  });
+
+  it('is valid when both streams cover the timeline', () => {
+    const result = validateOutput(
+      probe({ durationMs: 60_000, videoDurationMs: 60_000, audioDurationMs: 60_050 }),
+      timeline(60_000),
+    );
+    expect(result.valid).toBe(true);
   });
 
   it('is valid with no warnings on a perfect match', () => {

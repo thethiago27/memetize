@@ -30,6 +30,7 @@ import {
   validateTimeline,
 } from '@memetize/renderer';
 import { ensureDir } from '@memetize/shared';
+import { chooseRenderSource } from './source';
 
 const execFileAsync = promisify(execFile);
 
@@ -45,7 +46,7 @@ export function createRenderHandler(): JobHandler {
     if (!parsed.success) {
       throw new JobFailure('INVALID_INPUT', parsed.error.message, false);
     }
-    const { projectId } = parsed.data;
+    const { projectId, profile } = parsed.data;
 
     await setProjectStatus(ctx.db, projectId, 'RENDERING');
 
@@ -85,17 +86,29 @@ export function createRenderHandler(): JobHandler {
     }
 
     const resolvedClips: ResolvedAssets['clips'][number][] = [];
+    const sourceOrigins = new Set<string>();
     for (const clip of timeline.clips) {
       const asset = await getAsset(ctx.db, clip.source.assetId);
-      const sourceRelative = asset?.proxyPath ?? asset?.analysisPath ?? asset?.originalPath;
-      if (!asset || !sourceRelative) {
+      if (!asset) {
         throw new JobFailure(
           'RENDER_MISSING_ASSET',
-          `clip "${clip.id}" references asset "${clip.source.assetId}", which has no proxy/analysis/original clip`,
+          `clip "${clip.id}" references unknown asset "${clip.source.assetId}"`,
           false,
         );
       }
-      const videoPath = resolveStorage(ctx.config, sourceRelative);
+      // A final export reads the original; only a preview may use the proxy (F06).
+      let chosen: ReturnType<typeof chooseRenderSource>;
+      try {
+        chosen = chooseRenderSource(asset, profile);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new JobFailure(
+          'RENDER_MISSING_ASSET',
+          `clip "${clip.id}" asset "${clip.source.assetId}" has no usable ${profile} source: ${message}`,
+          false,
+        );
+      }
+      const videoPath = resolveStorage(ctx.config, chosen.path);
       if (!existsSync(videoPath)) {
         throw new JobFailure(
           'RENDER_MISSING_ASSET',
@@ -103,6 +116,7 @@ export function createRenderHandler(): JobHandler {
           false,
         );
       }
+      sourceOrigins.add(chosen.origin);
       resolvedClips.push({ clipId: clip.id, videoPath });
     }
 
@@ -181,6 +195,8 @@ export function createRenderHandler(): JobHandler {
         {
           projectId,
           timelineVersion: timelineVersion.version,
+          profile,
+          sourceOrigins: [...sourceOrigins],
           args,
           graph,
           validation,
@@ -197,6 +213,8 @@ export function createRenderHandler(): JobHandler {
       projectId,
       version: persisted.version,
       path: persisted.path,
+      profile,
+      sourceOrigins: [...sourceOrigins],
       warningCount: warnings.length,
     });
 
@@ -217,6 +235,8 @@ const BROKEN_PROBE: Omit<OutputProbe, 'exists'> = {
   fpsMilli: 0,
   videoCodec: null,
   audioCodec: null,
+  videoDurationMs: null,
+  audioDurationMs: null,
 };
 
 /**

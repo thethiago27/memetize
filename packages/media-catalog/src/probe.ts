@@ -13,6 +13,10 @@ export interface VideoProbe {
   videoCodec: string | null;
   /** Codec name of the first audio stream, e.g. `aac`; `null` when there is none. */
   audioCodec: string | null;
+  /** Duration of the first video stream in ms; `null` when ffprobe omits it. */
+  videoDurationMs: number | null;
+  /** Duration of the first audio stream in ms; `null` when ffprobe omits it. */
+  audioDurationMs: number | null;
 }
 
 interface FfprobeStream {
@@ -59,7 +63,16 @@ export async function probeVideo(path: string): Promise<VideoProbe> {
     fpsMilli: parseFpsMilli(video.avg_frame_rate ?? video.r_frame_rate),
     videoCodec: video.codec_name ?? null,
     audioCodec: audio?.codec_name ?? null,
+    videoDurationMs: parseStreamDurationMs(video.duration),
+    audioDurationMs: parseStreamDurationMs(audio?.duration),
   };
+}
+
+/** Per-stream duration in ms, or null when ffprobe does not report one. */
+function parseStreamDurationMs(duration: string | undefined): number | null {
+  if (duration === undefined) return null;
+  const seconds = Number(duration);
+  return Number.isFinite(seconds) && seconds > 0 ? secondsToMs(seconds) : null;
 }
 
 function parseFpsMilli(rate: string | undefined): number {

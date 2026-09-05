@@ -6,8 +6,18 @@ import { z } from 'zod';
  * only FFmpeg/ffprobe (spec section 36's "no AI").
  */
 
+/**
+ * Which source a render reads from. `final` exports from the original
+ * (full-resolution) asset; `preview` may use the low-resolution proxy. The
+ * default is `final` so an unqualified render never silently exports the
+ * preview proxy (F06).
+ */
+export const RenderProfile = z.enum(['preview', 'final']);
+export type RenderProfile = z.infer<typeof RenderProfile>;
+
 export const RenderInput = z.object({
   projectId: z.string(),
+  profile: RenderProfile.default('final'),
 });
 export type RenderInput = z.infer<typeof RenderInput>;
 

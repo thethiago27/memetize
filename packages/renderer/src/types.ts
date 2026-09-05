@@ -64,4 +64,8 @@ export interface OutputProbe {
   fpsMilli: number;
   videoCodec: string | null;
   audioCodec: string | null;
+  /** Duration of the video stream in ms; `null` when ffprobe omits it. */
+  videoDurationMs: number | null;
+  /** Duration of the audio stream in ms; `null` when ffprobe omits it. */
+  audioDurationMs: number | null;
 }
