@@ -126,7 +126,7 @@ export default function ProjectsPage() {
               <input className="input" id="lyrics" name="lyrics" type="file" accept=".lrc,.txt" />
             </div>
             <p className="mute small">
-              Músicas com mais de 60 segundos viram um trecho contínuo de 60 segundos escolhido pelo
+              Músicas com mais de 30 segundos viram um trecho contínuo de 30 segundos escolhido pelo
               motor.
             </p>
             <div className="cluster" style={{ justifyContent: 'flex-end' }}>

@@ -6,6 +6,7 @@ import {
   formatField,
   lineAt,
   linesWithin,
+  MANUAL_WINDOW_MAX_MS,
   parseTimecode,
   snapToDownbeat,
   snapTolerance,
@@ -116,7 +117,7 @@ export function AnalysisPanel({
   const beginSelection = () => {
     const seed: WindowDraft = editWindow
       ? { startMs: editWindow.sourceStartMs, endMs: editWindow.sourceEndMs }
-      : { startMs: 0, endMs: Math.min(durationMs, 60_000) };
+      : { startMs: 0, endMs: Math.min(durationMs, MANUAL_WINDOW_MAX_MS) };
     setDraft(seed);
   };
 

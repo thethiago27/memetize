@@ -1,7 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { DirectorInput } from '@memetize/contracts';
-import { moments as momentsTable } from '@memetize/database';
 import type { AssembleMoment, AssembleSegmentMatch } from '@memetize/director';
 import { assembleDirectedTimeline, InsufficientCatalogError } from '@memetize/director';
 import {
@@ -28,7 +27,6 @@ import {
   timelineFile,
 } from '@memetize/projects';
 import { ensureDir } from '@memetize/shared';
-import { inArray } from 'drizzle-orm';
 import { filterBannedCandidates } from './bans';
 import { hydrateShortlist } from './hydrate';
 import { DirectorInvalidPickError, validatePicks } from './validate';
@@ -80,17 +78,10 @@ export function createDirectorHandler(): JobHandler {
         false,
       );
     }
-    const momentIds = new Set<string>();
-    for (const match of allMatches) {
-      for (const entry of match.shortlist) momentIds.add(entry.momentId);
-      for (const entry of match.ranked) momentIds.add(entry.momentId);
-    }
-    const allMomentRows =
-      momentIds.size > 0
-        ? await ctx.db.query.moments.findMany({
-            where: inArray(momentsTable.id, Array.from(momentIds)),
-          })
-        : [];
+    // The whole catalog, not just the shortlisted moments: coverage may need a
+    // moment outside a segment's pool when the pool holds only moments shorter
+    // than the segment (catalog fallback). Bans are applied to all of it below.
+    const allMomentRows = await ctx.db.query.moments.findMany();
 
     // Enforce the current bans here too (F13): `project generate` restarts at
     // DIRECTOR and reuses the persisted shortlist/ranked without re-running MATCH,
@@ -195,6 +186,10 @@ export function createDirectorHandler(): JobHandler {
       ]),
     );
     const beats = uniqueSorted([...audio.beats.map((beat) => beat.timeMs), ...audio.downbeats]);
+    // Fallback order: best-quality, then longest, so a filler clip is at least a good one.
+    const catalog = [...momentRows]
+      .sort((a, b) => (b.qualityScore ?? 0) - (a.qualityScore ?? 0) || b.durationMs - a.durationMs)
+      .map((moment) => moment.id);
 
     let assembled: ReturnType<typeof assembleDirectedTimeline>;
     try {
@@ -215,6 +210,7 @@ export function createDirectorHandler(): JobHandler {
         moments: momentContext,
         matches: matchContext,
         beats,
+        catalog,
       });
     } catch (error) {
       if (error instanceof InsufficientCatalogError) {

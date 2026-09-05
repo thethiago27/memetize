@@ -144,4 +144,54 @@ describe.skipIf(!available)('buildFfmpegGraph: real FFmpeg render (F04)', () => 
   it('renders a five-clip hard/crossfade alternation', async () => {
     await render('alt5', [hard, xfade, hard, xfade, undefined]);
   }, 90_000);
+
+  it('keeps the video stream as long as the audio when clips have fractional frame lengths (F07)', async () => {
+    // Ten 433 ms clips = 12.99 frames each at 30 fps. Trimming each by seconds
+    // keeps 12 whole frames, so the concatenated video used to come out ~330 ms
+    // short of the 4330 ms audio and fail output validation.
+    const slotMs = 433;
+    const clips: TimelineClip[] = Array.from({ length: 10 }, (_, i) => ({
+      id: `clp_${i + 1}`,
+      momentId: `mom_${i + 1}`,
+      timeline: { startMs: i * slotMs, endMs: (i + 1) * slotMs },
+      source: { assetId: `ast_${i}`, startMs: 1000, endMs: 1000 + slotMs },
+      transform: DEFAULT_TRANSFORM,
+      effects: [],
+      direction: DEFAULT_DIRECTION,
+      reason: { segmentId: `nar_${i + 1}`, semanticScore: 0.5, finalScore: 0.5 },
+    }));
+    const durationMs = 10 * slotMs;
+    const tl = Timeline.parse({
+      projectId: 'prj_f07',
+      durationMs,
+      audio: { path: audioPath(), timelineStartMs: 0, sourceStartMs: 0 },
+      clips,
+    });
+    const assets: ResolvedAssets = {
+      audioPath: audioPath(),
+      audioDurationMs: 12_000,
+      clips: clips.map((c, i) => ({ clipId: c.id, videoPath: videoPath((i % 5) + 1) })),
+    };
+    const outPath = join(dir, 'fractional.mp4');
+    await run('ffmpeg', toFfmpegArgs(buildFfmpegGraph(tl, assets), outPath), {
+      maxBuffer: 32 * 1024 * 1024,
+    });
+    const probe = await run('ffprobe', [
+      '-v',
+      'error',
+      '-select_streams',
+      'v:0',
+      '-count_frames',
+      '-show_entries',
+      'stream=duration,nb_read_frames',
+      '-of',
+      'json',
+      outPath,
+    ]);
+    const stream = (
+      JSON.parse(probe.stdout) as { streams: { duration: string; nb_read_frames: string }[] }
+    ).streams[0];
+    expect(Number(stream?.nb_read_frames)).toBe(Math.round((durationMs * 30) / 1000));
+    expect(Math.abs(Number(stream?.duration) * 1000 - durationMs)).toBeLessThanOrEqual(34);
+  }, 90_000);
 });

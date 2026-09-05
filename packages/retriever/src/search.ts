@@ -4,7 +4,7 @@ import type { Database } from '@memetize/database';
 import { mediaAssets, momentEmbeddings, moments } from '@memetize/database';
 import { createProviders } from '@memetize/model-providers';
 import type { AppConfig } from '@memetize/shared';
-import { and, asc, cosineDistance, eq, notInArray, type SQL } from 'drizzle-orm';
+import { and, asc, cosineDistance, eq, gte, notInArray, type SQL } from 'drizzle-orm';
 
 /** Moments and assets to leave out of a search (editorial-memory bans). */
 export interface SearchExclusions {
@@ -56,6 +56,8 @@ export interface SearchByVectorParams {
   type?: EmbeddingType;
   limit?: number;
   exclude?: SearchExclusions;
+  /** Only moments at least this long (ms): the coverage pass for short segments. */
+  minDurationMs?: number;
 }
 
 /**
@@ -91,6 +93,9 @@ export async function searchMomentsByVector(
         eq(momentEmbeddings.model, params.query.model),
         eq(momentEmbeddings.modelVersion, params.query.modelVersion),
         eq(mediaAssets.status, 'READY'),
+        ...(params.minDurationMs !== undefined
+          ? [gte(moments.durationMs, params.minDurationMs)]
+          : []),
         ...exclusionConditions(params.exclude),
       ),
     )

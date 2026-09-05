@@ -54,7 +54,7 @@ export function thin<T>(items: T[], max = 2000): T[] {
 }
 
 export const MANUAL_WINDOW_MIN_MS = 5_000;
-export const MANUAL_WINDOW_MAX_MS = 60_000;
+export const MANUAL_WINDOW_MAX_MS = 30_000;
 
 export interface WindowDraft {
   startMs: number;
@@ -135,6 +135,6 @@ export function windowProblem(draft: WindowDraft, durationMs: number): string | 
   if (draft.endMs <= draft.startMs) return 'O fim precisa vir depois do início';
   const length = draft.endMs - draft.startMs;
   if (length < MANUAL_WINDOW_MIN_MS) return 'Mínimo de 5 segundos';
-  if (length > MANUAL_WINDOW_MAX_MS) return 'Máximo de 60 segundos';
+  if (length > MANUAL_WINDOW_MAX_MS) return 'Máximo de 30 segundos';
   return null;
 }

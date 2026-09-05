@@ -252,7 +252,7 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('renderer pipeline (
     expect(Array.isArray(debug.args)).toBe(true);
     expect(debug.validation.valid).toBe(true);
     expect(debug.graph.filterComplex).not.toContain('color=c=black');
-    expect(debug.graph.filterComplex).not.toContain('tpad=stop_mode=clone');
+    expect(debug.graph.filterComplex).not.toContain('tpad=stop_mode=clone:stop_duration');
     expect(debug.performance).toMatchObject({
       clipCount: timeline?.data.clips.length,
       uniqueSourceCount: expect.any(Number),
@@ -349,7 +349,7 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('renderer pipeline (
     const filter = String(debug.graph.filterComplex);
     expect(filter.includes('xfade=')).toBe(resolved.some((t) => isOverlapStyle(t.style)));
     expect(filter.includes('fade=t=out')).toBe(resolved.some((t) => isFadeStyle(t.style)));
-    expect(filter.includes('tpad=stop_mode=clone')).toBe(
+    expect(filter.includes('tpad=stop_mode=clone:stop_duration')).toBe(
       timeline.clips.some((clip) => clip.effects.some((effect) => effect.type === 'hold')),
     );
 

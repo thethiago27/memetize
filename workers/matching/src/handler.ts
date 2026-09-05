@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import {
   createDiversityContext,
   diversifySegment,
+  ensureCoverageCandidates,
   type MomentForDiversity,
   type MomentForRanking,
   RANKER_NAME,
@@ -79,7 +80,12 @@ export function createMatchHandler(): JobHandler {
           emotion: segment.emotion,
           narrativeFunction: segment.narrativeFunction,
         },
-        { exclude: bans, rejectedMomentIds: rejected },
+        {
+          exclude: bans,
+          rejectedMomentIds: rejected,
+          // Keep at least a few candidates able to cover the whole segment.
+          coverDurationMs: segment.endMs - segment.startMs,
+        },
       );
       retrievedBySegment.set(segment.id, retrieved);
       for (const candidate of retrieved) allMomentIds.add(candidate.momentId);
@@ -129,7 +135,8 @@ export function createMatchHandler(): JobHandler {
 
     for (const segment of segments) {
       const retrieved = retrievedBySegment.get(segment.id) ?? [];
-      const ranked = rankCandidates({
+      const rankedAll = rankCandidates({
+        limit: retrieved.length,
         candidates: retrieved,
         moments: rankingMoments,
         segment: {
@@ -143,6 +150,16 @@ export function createMatchHandler(): JobHandler {
         usage: feedback.usage,
         projectId,
       });
+      // The top slice by score may hold only moments shorter than the segment;
+      // keep the best covering candidates in it so coverage never runs dry.
+      const durationById = new Map(
+        [...rankingMoments].map(([momentId, moment]) => [momentId, moment.durationMs]),
+      );
+      const ranked = ensureCoverageCandidates(
+        rankedAll,
+        durationById,
+        segment.endMs - segment.startMs,
+      );
 
       const rankedInput: SegmentRankedInput = {
         segmentId: segment.id,

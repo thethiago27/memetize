@@ -62,7 +62,10 @@ describe('buildFfmpegGraph', () => {
     const graph = buildFfmpegGraph(tl, assetsFor(clips, 120_000));
 
     expect(graph.filterComplex).not.toContain('color=c=black');
-    expect(graph.filterComplex).not.toContain('tpad=stop_mode=clone');
+    // Frame-grid alignment clones at most a few frames per cut (`stop=`); a
+    // timed clone pad (`stop_duration=`) would be a freeze-frame filler.
+    expect(graph.filterComplex).not.toContain('tpad=stop_mode=clone:stop_duration');
+    expect(graph.filterComplex).toContain('trim=end_frame=1800');
     expect(graph.filterComplex).toContain(
       'atrim=start=30.000:duration=60.000,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.120,afade=t=out:st=59.750:d=0.250',
     );
@@ -218,7 +221,8 @@ describe('buildFfmpegGraph: cut styles', () => {
     expect(graph.filterComplex).toMatch(/\[1:v\]trim=start=1\.000:end=3\.150,/);
     expect(graph.filterComplex).toMatch(/\[2:v\]trim=start=0\.850:end=3\.000,/);
     expect(graph.filterComplex).toContain(
-      '[v0][v1]xfade=transition=fade:duration=0.300:offset=1.850[vout]',
+      // 300 ms = 9 frames; the left segment is 60 slot frames + 5 tail frames.
+      '[v0][v1]xfade=transition=fade:duration=0.300000:offset=1.866667[vout]',
     );
     expect(graph.filterComplex).not.toContain('concat=');
     expect(graph.durationMs).toBe(4000);
@@ -240,7 +244,9 @@ describe('buildFfmpegGraph: cut styles', () => {
     ];
     const graph = buildFfmpegGraph(timeline({ durationMs: 4000, clips }), assetsFor(clips));
     expect(graph.filterComplex.match(/fps=30/g)).toHaveLength(2);
-    expect(graph.filterComplex).toContain('xfade=transition=slideleft:duration=0.200:offset=1.900');
+    expect(graph.filterComplex).toContain(
+      'xfade=transition=slideleft:duration=0.200000:offset=1.900000',
+    );
   });
 
   it('chains concat and xfade left to right with offsets from the accumulated length', () => {
@@ -264,7 +270,7 @@ describe('buildFfmpegGraph: cut styles', () => {
     expect(graph.filterComplex).toContain('[v0][v1]concat=n=2:v=1:a=0,fps=30,settb=1/30[acc1]');
     // Accumulated 1000 + 2000 + 100 handle = 3100 ms; offset = 3100 - 200.
     expect(graph.filterComplex).toContain(
-      '[acc1][v2]xfade=transition=slideleft:duration=0.200:offset=2.900[vout]',
+      '[acc1][v2]xfade=transition=slideleft:duration=0.200000:offset=2.900000[vout]',
     );
   });
 
@@ -312,7 +318,9 @@ describe('buildFfmpegGraph: cut styles', () => {
     // Motion part only, then the frozen frame for 500 + 150 ms.
     expect(graph.filterComplex).toMatch(/\[1:v\]trim=start=0\.000:end=1\.500,/);
     expect(graph.filterComplex).toContain('tpad=stop_mode=clone:stop_duration=0.650');
-    expect(graph.filterComplex).toContain('xfade=transition=fade:duration=0.300:offset=1.850');
+    expect(graph.filterComplex).toContain(
+      'xfade=transition=fade:duration=0.300000:offset=1.866667',
+    );
   });
 
   it('applies speed before zoom and hold, trimming less source for a slow-down', () => {

@@ -122,16 +122,16 @@ describe.skipIf(!handle)('studio API (inject)', () => {
     const put = await app.inject({
       method: 'PUT',
       url: `/v1/projects/${projectId}/window`,
-      payload: { sourceStartMs: 30_000, sourceEndMs: 80_000 },
+      payload: { sourceStartMs: 30_000, sourceEndMs: 55_000 },
     });
     expect(put.statusCode).toBe(200);
     expect(put.json()).toEqual({
       ok: true,
-      manualWindow: { sourceStartMs: 30_000, sourceEndMs: 80_000 },
+      manualWindow: { sourceStartMs: 30_000, sourceEndMs: 55_000 },
     });
 
     const detail = await app.inject({ method: 'GET', url: `/v1/projects/${projectId}` });
-    expect(detail.json().manualWindow).toEqual({ sourceStartMs: 30_000, sourceEndMs: 80_000 });
+    expect(detail.json().manualWindow).toEqual({ sourceStartMs: 30_000, sourceEndMs: 55_000 });
 
     const bad = await app.inject({
       method: 'PUT',

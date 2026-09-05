@@ -254,15 +254,15 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
     expect((await getProject(db, project.id))?.status).toBe('TIMELINE_READY');
   }, 180_000);
 
-  it('selects a sixty-second window for a long track and covers it continuously', async () => {
+  it('selects a thirty-second window for a long track and covers it continuously', async () => {
     const { project } = await ingestProject({ db, config, filePath: longSong });
     const outcomes = await orchestrator.drain({ entityId: project.id });
     expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
 
     const window = await getLatestEditWindow(db, project.id);
     const timeline = await getLatestTimeline(db, project.id);
-    expect(window?.durationMs).toBe(60_000);
-    expect(timeline?.data.durationMs).toBe(60_000);
+    expect(window?.durationMs).toBe(30_000);
+    expect(timeline?.data.durationMs).toBe(30_000);
     expect(timeline?.data.audio.sourceStartMs).toBeGreaterThanOrEqual(0);
     if (timeline) assertContinuous(timeline.data);
   }, 180_000);

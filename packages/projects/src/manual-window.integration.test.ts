@@ -81,7 +81,7 @@ describe.skipIf(!handle)('manual edit window (integration)', () => {
     await seedProject('prj_mw_auto');
     const selection = await resolveEditWindow(db, 'prj_mw_auto', selectionInput);
     expect(selection.selector).toBe('structural-highlight');
-    expect(selection.durationMs).toBe(60_000);
+    expect(selection.durationMs).toBe(30_000);
   });
 
   it('resolves to the manual window, scored, when the project carries one', async () => {
@@ -112,13 +112,13 @@ describe.skipIf(!handle)('manual edit window (integration)', () => {
 
     const window = await setManualWindow(db, projectId, {
       sourceStartMs: 30_000,
-      sourceEndMs: 75_000,
+      sourceEndMs: 55_000,
     });
-    expect(window).toEqual({ sourceStartMs: 30_000, sourceEndMs: 75_000 });
+    expect(window).toEqual({ sourceStartMs: 30_000, sourceEndMs: 55_000 });
 
     const project = await getProject(db, projectId);
     expect(project?.manualWindowStartMs).toBe(30_000);
-    expect(project?.manualWindowEndMs).toBe(75_000);
+    expect(project?.manualWindowEndMs).toBe(55_000);
 
     const jobs = await listJobsForEntity(db, projectId);
     // The pending DIRECTOR is superseded (history kept), NARRATIVE runs in the new generation.

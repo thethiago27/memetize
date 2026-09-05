@@ -21,10 +21,49 @@ import {
 import type { FfmpegGraph, FfmpegInput, ResolvedAssets } from './types';
 import { buildZoomFilter, parseZoomEffect } from './zoom';
 
-/** One clip rendered as a labelled segment, with the output ms it lasts. */
+/** One clip rendered as a labelled segment, with the output ms and frames it lasts. */
 interface Segment {
   label: string;
   lengthMs: number;
+  /** Exact output frame count the segment is cut to; sums to the timeline's total. */
+  frames: number;
+}
+
+/**
+ * Frames cloned at the end of every segment before it is cut to its exact
+ * frame count. A `trim` by seconds keeps whole frames only, so each clip can
+ * come out up to one frame short of its slot; over a 29-clip minute that adds
+ * up to several missing frames and a video stream shorter than the audio (F07).
+ * Cloning a couple of frames and cutting at `end_frame` makes every segment
+ * exactly as long as its slot on the frame grid — at most one duplicated frame
+ * at a cut, never a visible freeze.
+ */
+const FRAME_PAD = 3;
+
+/** The frame-grid position of a timeline instant. */
+function frameAt(ms: number, fps: number): number {
+  return Math.round((ms * fps) / 1000);
+}
+
+/** Seconds with enough precision to name a frame boundary exactly. */
+function framesToSeconds(frames: number, fps: number): string {
+  return (frames / fps).toFixed(6);
+}
+
+interface TransitionFrames {
+  /** Whole frames the overlap lasts; head + tail. */
+  durationFrames: number;
+  /** Frames the incoming (right) clip extends before its slot. */
+  headFrames: number;
+  /** Frames the outgoing (left) clip extends past its slot. */
+  tailFrames: number;
+}
+
+function transitionFrames(transition: TimelineTransitionOut, fps: number): TransitionFrames {
+  if (!isOverlapStyle(transition.style)) return { durationFrames: 0, headFrames: 0, tailFrames: 0 };
+  const durationFrames = frameAt(transition.durationMs, fps);
+  const headFrames = Math.floor(durationFrames / 2);
+  return { durationFrames, headFrames, tailFrames: durationFrames - headFrames };
 }
 
 /**
@@ -49,11 +88,13 @@ export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): Ff
   }
 
   const transitions = clips.map((clip, index) => transitionOutOf(clip, index === clips.length - 1));
-  const usesXfade = transitions.some((transition) => isOverlapStyle(transition.style));
+  const framesByTransition = transitions.map((transition) => transitionFrames(transition, fps));
 
   const inputs: FfmpegInput[] = [{ path: assets.audioPath, kind: 'audio' }];
   const filterParts: string[] = [];
   const segments: Segment[] = [];
+  const joinedTransitions: TimelineTransitionOut[] = [];
+  const joinedFrames: TransitionFrames[] = [];
   let cursorMs = 0;
 
   clips.forEach((clip, index) => {
@@ -66,36 +107,50 @@ export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): Ff
     if (!videoPath) {
       throw new Error(`buildFfmpegGraph: no resolved asset for clip "${clip.id}"`);
     }
-    const inputIndex = inputs.length;
-    inputs.push({ path: videoPath, kind: 'video' });
 
     const slotMs = clip.timeline.endMs - clip.timeline.startMs;
     const sourceMs = clip.source.endMs - clip.source.startMs;
     if (sourceMs < slotMs) {
       throw new Error('buildFfmpegGraph: source shorter than slot');
     }
+    cursorMs = clip.timeline.endMs;
 
     const incoming = index > 0 ? (transitions[index - 1] ?? null) : null;
     const outgoing = transitions[index] ?? { style: 'hard', durationMs: 0, requested: 'hard' };
+    const incomingFrames = index > 0 ? framesByTransition[index - 1] : undefined;
+    const outgoingFrames = framesByTransition[index];
+    // Slot frames come from the timeline's frame grid, so the sum over all
+    // clips telescopes to exactly `durationMs` worth of frames.
+    const slotFrames = frameAt(clip.timeline.endMs, fps) - frameAt(clip.timeline.startMs, fps);
+    const frames =
+      slotFrames + (incomingFrames?.headFrames ?? 0) + (outgoingFrames?.tailFrames ?? 0);
+    if (frames <= 0) {
+      // A clip shorter than one frame that lands between two grid lines has no
+      // frame of its own; its time is already accounted for by its neighbours.
+      return;
+    }
+
+    const inputIndex = inputs.length;
+    inputs.push({ path: videoPath, kind: 'video' });
     const segment = buildSegment({
       clip,
       inputIndex,
       incoming,
       outgoing,
       canvas: timeline.canvas,
-      pinFps: usesXfade,
+      frames,
     });
-    filterParts.push(`${segment.chain}[v${index}]`);
-    segments.push({ label: `[v${index}]`, lengthMs: segment.lengthMs });
-
-    cursorMs = clip.timeline.endMs;
+    filterParts.push(`${segment.chain}[v${segments.length}]`);
+    segments.push({ label: `[v${segments.length}]`, lengthMs: segment.lengthMs, frames });
+    joinedTransitions.push(outgoing);
+    joinedFrames.push(outgoingFrames ?? { durationFrames: 0, headFrames: 0, tailFrames: 0 });
   });
 
   if (timeline.durationMs - cursorMs > 0) {
     throw new Error('buildFfmpegGraph: timeline gap');
   }
 
-  filterParts.push(...joinSegments(segments, transitions, fps));
+  filterParts.push(...joinSegments(segments, joinedTransitions, joinedFrames, fps));
   filterParts.push(buildAudioFilter(timeline, assets));
 
   const outputArgs = [
@@ -143,7 +198,8 @@ function buildSegment(params: {
   incoming: TimelineTransitionOut | null;
   outgoing: TimelineTransitionOut;
   canvas: TimelineCanvas;
-  pinFps: boolean;
+  /** Exact output frame count this segment is cut to. */
+  frames: number;
 }): { chain: string; lengthMs: number } {
   const { clip, canvas } = params;
   const slotMs = clip.timeline.endMs - clip.timeline.startMs;
@@ -186,10 +242,18 @@ function buildSegment(params: {
       segmentMs: lengthMs,
     }),
   );
-  // Pin both the frame rate and the time base so every operand of an xfade
-  // shares 1/fps; xfade rejects mismatched time bases (F04).
-  if (params.pinFps) filters.push(`fps=${canvas.fps}`, `settb=1/${canvas.fps}`);
-  filters.push('setsar=1');
+  // Put the segment on the output frame grid and cut it to exactly `frames`
+  // frames: `fps` resamples, the clone pad guarantees enough frames exist, the
+  // frame trim removes any surplus (F07). Pinning the time base as well means
+  // every operand of an xfade shares 1/fps; xfade rejects mismatched time bases (F04).
+  filters.push(
+    `fps=${canvas.fps}`,
+    `tpad=stop_mode=clone:stop=${FRAME_PAD}`,
+    `trim=end_frame=${params.frames}`,
+    'setpts=PTS-STARTPTS',
+    `settb=1/${canvas.fps}`,
+    'setsar=1',
+  );
 
   return { chain: `[${params.inputIndex}:v]${filters.join(',')}`, lengthMs };
 }
@@ -214,6 +278,7 @@ function firstParsed<T>(
 function joinSegments(
   segments: readonly Segment[],
   transitions: readonly TimelineTransitionOut[],
+  transitionFrames: readonly TransitionFrames[],
   fps: number,
 ): string[] {
   const ops: { inputs: string; filter: string }[] = [];
@@ -244,25 +309,35 @@ function joinSegments(
       // accumulator can feed a following xfade without a time-base mismatch (F04).
       filter: `concat=n=${parts.length}:v=1:a=0,fps=${fps},settb=1/${fps}`,
     });
-    state.acc = { label, lengthMs: parts.reduce((sum, part) => sum + part.lengthMs, 0) };
+    state.acc = {
+      label,
+      lengthMs: parts.reduce((sum, part) => sum + part.lengthMs, 0),
+      frames: parts.reduce((sum, part) => sum + part.frames, 0),
+    };
   };
 
   segments.forEach((segment, index) => {
     const incoming = index > 0 ? transitions[index - 1] : undefined;
-    if (incoming && isOverlapStyle(incoming.style)) {
+    const incomingFrames = index > 0 ? transitionFrames[index - 1] : undefined;
+    if (incoming && incomingFrames && isOverlapStyle(incoming.style)) {
       flushRun();
       const left = state.acc;
       if (!left) throw new Error('buildFfmpegGraph: xfade with nothing on the left');
-      const durationMs = incoming.durationMs;
-      // The transition occupies the last D ms of the accumulated video: it
-      // starts D/2 before the slot boundary, which sits D/2 before the end.
-      const offsetMs = left.lengthMs - durationMs;
+      // The transition occupies the last D of the accumulated video: it starts
+      // D/2 before the slot boundary, which sits D/2 before the end. Both are
+      // expressed in whole frames so the joined length stays on the grid.
+      const { durationFrames } = incomingFrames;
+      const offsetFrames = left.frames - durationFrames;
       const label = nextLabel();
       ops.push({
         inputs: `${left.label}${segment.label}`,
-        filter: `xfade=transition=${xfadeTransitionName(incoming.style)}:duration=${toSeconds(durationMs)}:offset=${toSeconds(offsetMs)}`,
+        filter: `xfade=transition=${xfadeTransitionName(incoming.style)}:duration=${framesToSeconds(durationFrames, fps)}:offset=${framesToSeconds(offsetFrames, fps)}`,
       });
-      state.acc = { label, lengthMs: left.lengthMs + segment.lengthMs - durationMs };
+      state.acc = {
+        label,
+        lengthMs: left.lengthMs + segment.lengthMs - incoming.durationMs,
+        frames: left.frames + segment.frames - durationFrames,
+      };
       return;
     }
     state.run.push(segment);

@@ -35,6 +35,10 @@ const EnvSchema = z.object({
   VISION_MODEL: z.string().optional(),
   LLM_PROVIDER: z.string().optional(),
   LLM_MODEL: z.string().optional(),
+  // Per-stage overrides for the gateway LLM; each falls back to LLM_MODEL.
+  LLM_MOMENTS_MODEL: z.string().optional(),
+  LLM_NARRATIVE_MODEL: z.string().optional(),
+  LLM_DIRECTOR_MODEL: z.string().optional(),
   // Optional; required at runtime when LLM_PROVIDER=gateway. The AI SDK also reads this from the env.
   AI_GATEWAY_API_KEY: z.string().optional(),
   EMBEDDING_PROVIDER: z.string().optional(),
@@ -61,6 +65,19 @@ export interface ProviderConfig {
   model: string | null;
 }
 
+/** The three LLM calls of the pipeline, each of which may run on its own model. */
+export const LLM_STAGES = ['moments', 'narrative', 'director'] as const;
+export type LLMStage = (typeof LLM_STAGES)[number];
+
+/**
+ * LLM config: `model` is the default for every stage; `stageModels` holds the
+ * `LLM_<STAGE>_MODEL` overrides (`null`/absent means "use `model`"), so the
+ * narrative pass can run on a stronger model than moment suggestion.
+ */
+export interface LLMProviderConfig extends ProviderConfig {
+  stageModels?: Partial<Record<LLMStage, string | null>>;
+}
+
 export interface AppConfig {
   databaseUrl: string;
   testDatabaseUrl: string | null;
@@ -84,7 +101,7 @@ export interface AppConfig {
   providers: {
     transcription: ProviderConfig;
     vision: ProviderConfig;
-    llm: ProviderConfig;
+    llm: LLMProviderConfig;
     embedding: ProviderConfig;
     /** Not a `model-providers` abstraction: passed straight to the Python
      * audio analyzer, mirroring `TRANSCRIPTION_PROVIDER` (spec section 66). */
@@ -137,6 +154,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       llm: {
         kind: parsed.LLM_PROVIDER?.trim() || 'fixture',
         model: parsed.LLM_MODEL?.trim() || null,
+        stageModels: {
+          moments: parsed.LLM_MOMENTS_MODEL?.trim() || null,
+          narrative: parsed.LLM_NARRATIVE_MODEL?.trim() || null,
+          director: parsed.LLM_DIRECTOR_MODEL?.trim() || null,
+        },
       },
       embedding: {
         kind: parsed.EMBEDDING_PROVIDER?.trim() || 'fixture',

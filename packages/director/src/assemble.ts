@@ -48,6 +48,8 @@ export interface AssembleTimelineParams {
   /** Keyed by segmentId — the funnel `MATCH` already persisted for that segment. */
   matches: ReadonlyMap<string, AssembleSegmentMatch>;
   beats: readonly number[];
+  /** Eligible catalog moment ids in preference order, for coverage fallback (see `ResolveCoverageInput`). */
+  catalog?: readonly string[];
 }
 
 export interface AssembledTimeline {
@@ -113,6 +115,7 @@ export function assembleDirectedTimeline(params: AssembleTimelineParams): Assemb
     matches: params.matches,
     moments: params.moments,
     beats: params.beats,
+    catalog: params.catalog,
   });
   const tailIds = segmentTailIds(resolution.clips);
 

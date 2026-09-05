@@ -2,22 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { scoreEditWindow, selectEditWindow } from './highlight';
 
 describe('selectEditWindow', () => {
-  it('uses a 45-second source in full', () => {
+  it('uses a 25-second source in full', () => {
     expect(
       selectEditWindow({
-        trackDurationMs: 45_000,
+        trackDurationMs: 25_000,
         sections: [],
         beats: [],
         downbeats: [],
         energyCurve: [],
         lyrics: [],
       }),
-    ).toMatchObject({ sourceStartMs: 0, sourceEndMs: 45_000, durationMs: 45_000 });
+    ).toMatchObject({ sourceStartMs: 0, sourceEndMs: 25_000, durationMs: 25_000 });
   });
 
-  it('treats exactly 60 seconds as an uncropped full source', () => {
+  it('treats exactly 30 seconds as an uncropped full source', () => {
     const selected = selectEditWindow({
-      trackDurationMs: 60_000,
+      trackDurationMs: 30_000,
       sections: [],
       beats: [],
       downbeats: [],
@@ -26,12 +26,25 @@ describe('selectEditWindow', () => {
     });
     expect(selected).toMatchObject({
       sourceStartMs: 0,
-      sourceEndMs: 60_000,
-      durationMs: 60_000,
+      sourceEndMs: 30_000,
+      durationMs: 30_000,
     });
   });
 
-  it('selects the energetic chorus window from a 120-second source', () => {
+  it('crops a 45-second source to a 30-second window', () => {
+    const selected = selectEditWindow({
+      trackDurationMs: 45_000,
+      sections: [],
+      beats: [],
+      downbeats: [],
+      energyCurve: [],
+      lyrics: [],
+    });
+    expect(selected.durationMs).toBe(30_000);
+    expect(selected.sourceEndMs - selected.sourceStartMs).toBe(30_000);
+  });
+
+  it('selects a 30-second window inside the energetic chorus of a 120-second source', () => {
     const selected = selectEditWindow({
       trackDurationMs: 120_000,
       sections: [
@@ -49,8 +62,9 @@ describe('selectEditWindow', () => {
       ],
       lyrics: [{ startMs: 61_000, endMs: 90_000, text: 'hook and payoff', words: [] }],
     });
-    expect(selected.sourceStartMs).toBe(60_000);
-    expect(selected.sourceEndMs).toBe(120_000);
+    expect(selected.durationMs).toBe(30_000);
+    expect(selected.sourceStartMs).toBeGreaterThanOrEqual(60_000);
+    expect(selected.sourceEndMs).toBeLessThanOrEqual(120_000);
   });
 
   it('falls back deterministically when optional analysis is empty', () => {

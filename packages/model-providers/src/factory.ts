@@ -1,4 +1,5 @@
-import type { AppConfig, ProviderConfig } from '@memetize/shared';
+import type { AppConfig, LLMProviderConfig, LLMStage, ProviderConfig } from '@memetize/shared';
+import { LLM_STAGES } from '@memetize/shared';
 import { FixtureEmbeddingProvider, FixtureLLMProvider, FixtureVisionProvider } from './fixture';
 import { GatewayLLMProvider } from './gateway';
 import { GatewayEmbeddingProvider } from './gateway-embedding';
@@ -97,11 +98,30 @@ function isGatewayModelId(model: string): boolean {
   return slash > 0 && slash < model.length - 1;
 }
 
+/** `LLM_MOMENTS_MODEL`, `LLM_NARRATIVE_MODEL`, `LLM_DIRECTOR_MODEL`. */
+function stageEnvVar(stage: LLMStage): string {
+  return `LLM_${stage.toUpperCase()}_MODEL`;
+}
+
+/**
+ * Per-stage gateway models: only stages with an override are returned, and an
+ * override that is set but malformed fails fast like `LLM_MODEL` would.
+ */
+function resolveStageModels(llm: LLMProviderConfig): Partial<Record<LLMStage, string>> {
+  const models: Partial<Record<LLMStage, string>> = {};
+  for (const stage of LLM_STAGES) {
+    const override = llm.stageModels?.[stage]?.trim();
+    if (override) models[stage] = requireModel(stageEnvVar(stage), override);
+  }
+  return models;
+}
+
 /**
  * Resolves the LLM backend. `fixture` stays the default (no network).
- * `gateway` requires a `provider/model` id and `AI_GATEWAY_API_KEY`.
+ * `gateway` requires a `provider/model` id and `AI_GATEWAY_API_KEY`; each
+ * stage may override the model with `LLM_<STAGE>_MODEL`.
  */
-export function createLLMProvider(llm: ProviderConfig, apiKey?: string | null): LLMProvider {
+export function createLLMProvider(llm: LLMProviderConfig, apiKey?: string | null): LLMProvider {
   if (llm.kind === 'fixture') {
     return new FixtureLLMProvider({
       directorStyles: llm.model?.trim() === 'styled' ? 'styled' : 'plain',
@@ -109,7 +129,10 @@ export function createLLMProvider(llm: ProviderConfig, apiKey?: string | null): 
   }
   if (llm.kind === 'gateway') {
     requireGatewayKey('LLM_PROVIDER', apiKey);
-    return new GatewayLLMProvider({ model: requireModel('LLM_MODEL', llm.model) });
+    return new GatewayLLMProvider({
+      model: requireModel('LLM_MODEL', llm.model),
+      stageModels: resolveStageModels(llm),
+    });
   }
   throw new Error(`unsupported LLM_PROVIDER "${llm.kind}" (only "fixture" and "gateway")`);
 }

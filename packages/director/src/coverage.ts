@@ -19,6 +19,15 @@ export interface ResolveCoverageInput {
   matches: ReadonlyMap<string, AssembleSegmentMatch>;
   moments: ReadonlyMap<string, AssembleMoment>;
   beats: readonly number[];
+  /**
+   * Every eligible (not banned) catalog moment, in preference order, all
+   * present in `moments`. Used only when a segment's own candidates cannot
+   * cover it: a segment's pool is chosen by meaning and may hold only moments
+   * shorter than the span, while the catalog has plenty that fit. Coverage of
+   * the whole window takes precedence over staying inside the pool; a clip
+   * placed this way is recorded as a `catalog fallback` decision.
+   */
+  catalog?: readonly string[];
 }
 
 export interface ResolvedCoverageClip {
@@ -92,6 +101,7 @@ function resolveCoverageOnce(input: ResolveCoverageInput): CoverageResolution {
       minSlotMs,
       lastAssetId,
       windowStartMs: input.window.sourceStartMs,
+      catalog: input.catalog ?? [],
     });
     clips.push(...resolved.clips);
     decisions.push(...resolved.decisions);
@@ -117,6 +127,7 @@ function resolveSegment(
     minSlotMs: number;
     lastAssetId: string | null;
     windowStartMs: number;
+    catalog: readonly string[];
   },
 ): { clips: ResolvedCoverageClip[]; decisions: CoverageDecision[] } {
   const candidates = orderedCandidates(
@@ -124,6 +135,10 @@ function resolveSegment(
     context.pickMomentId,
     context.match,
     context.moments,
+  );
+  const poolIds = new Set(candidates);
+  const catalogCandidates = context.catalog.filter(
+    (momentId) => !poolIds.has(momentId) && context.moments.has(momentId),
   );
   const usedMomentIds = new Set<string>();
   const clips: ResolvedCoverageClip[] = [];
@@ -133,11 +148,10 @@ function resolveSegment(
 
   while (cursor < segment.endMs) {
     const remainder = segment.endMs - cursor;
-    const placed = placeNextClip({
+    const placement = {
       segment,
       cursor,
       remainder,
-      candidates,
       usedMomentIds,
       lastAssetId,
       pickMomentId: context.pickMomentId,
@@ -145,11 +159,25 @@ function resolveSegment(
       beats: context.beats,
       minSlotMs: remainder < context.minSlotMs ? remainder : context.minSlotMs,
       windowStartMs: context.windowStartMs,
-    });
+    };
+    let placed = placeNextClip({ ...placement, candidates });
 
     if (!placed) {
-      const absorbed = absorbRemainder(clips, remainder, context.moments);
-      if (absorbed) break;
+      if (absorbRemainder(clips, remainder, context.moments)) break;
+      // The segment's own pool cannot fill the span: fall back to the eligible
+      // catalog before declaring the catalog insufficient.
+      const fromCatalog = placeNextClip({ ...placement, candidates: catalogCandidates });
+      if (fromCatalog) {
+        placed = {
+          clip: fromCatalog.clip,
+          decision: {
+            ...fromCatalog.decision,
+            reason: `catalog fallback: ${fromCatalog.decision.reason}`,
+          },
+        };
+      }
+    }
+    if (!placed) {
       throw new InsufficientCatalogError(
         `cannot cover segment ${segment.id} remainder ${remainder}ms at ${cursor}ms`,
       );

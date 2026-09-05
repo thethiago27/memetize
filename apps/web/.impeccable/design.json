@@ -246,21 +246,55 @@
       }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display", "purpose": "List-page titles only (Projetos, Biblioteca)." },
-      "headline": { "displayName": "Headline", "purpose": "Editor project title. Truncates; does not wrap the header." },
-      "title": { "displayName": "Title", "purpose": "Section headings inside panels. Tape color, not uppercase." },
-      "body": { "displayName": "Body", "purpose": "UI copy at 15px / 1.45. Ledes cap around 48rem." },
-      "label": { "displayName": "Label", "purpose": "Field labels, small meta, ghost control text." },
-      "mono": { "displayName": "Mono", "purpose": "Timecodes, bpm, versions, clip labels, job ids." }
+      "display": {
+        "displayName": "Display",
+        "purpose": "List-page titles only (Projetos, Biblioteca)."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Editor project title. Truncates; does not wrap the header."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section headings inside panels. Tape color, not uppercase."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "UI copy at 15px / 1.45. Ledes cap around 48rem."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels, small meta, ghost control text."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Timecodes, bpm, versions, clip labels, job ids."
+      }
     },
     "shadows": [],
     "motion": [
-      { "name": "state", "value": "150ms ease", "purpose": "Card border hover and other state changes." },
-      { "name": "toast-rise", "value": "180ms ease-out", "purpose": "Toast entrance. Instant under reduced motion." },
-      { "name": "busy-pulse", "value": "1.2s ease-in-out infinite", "purpose": "Busy status dots and running pipeline chips. Killed under reduced motion." }
+      {
+        "name": "state",
+        "value": "150ms ease",
+        "purpose": "Card border hover and other state changes."
+      },
+      {
+        "name": "toast-rise",
+        "value": "180ms ease-out",
+        "purpose": "Toast entrance. Instant under reduced motion."
+      },
+      {
+        "name": "busy-pulse",
+        "value": "1.2s ease-in-out infinite",
+        "purpose": "Busy status dots and running pipeline chips. Killed under reduced motion."
+      }
     ],
     "breakpoints": [
-      { "name": "editor-stack", "value": "960px", "purpose": "Editor stops fitting the viewport: preview, then strip, then inspector." }
+      {
+        "name": "editor-stack",
+        "value": "960px",
+        "purpose": "Editor stops fitting the viewport: preview, then strip, then inspector."
+      }
     ]
   },
   "components": [
@@ -348,13 +382,41 @@
       "Outline until the one primary fills"
     ],
     "rules": [
-      { "name": "The Afterglow Rule", "body": "Afterglow coral occupies ≤10% of any screen. It is the playhead, the filled primary, the selected clip ring, and the focus outline. If a panel is tinted coral, the mark is spent.", "section": "colors" },
-      { "name": "The Narrative is Data Rule", "body": "Setup, escalation, payoff, and other color clip bars and the legend only. They are never buttons, never wordmarks, never backgrounds.", "section": "colors" },
-      { "name": "The Ink Rule", "body": "Body and labels that must be read sit on ink or tape. Mute is for idle chrome. If a sentence is mute-on-bay, bump it to tape.", "section": "colors" },
-      { "name": "The Numbers Rule", "body": "Outfit never carries a timecode. IBM Plex Mono never carries a heading, a button, or a paragraph.", "section": "typography" },
-      { "name": "The No-Eyebrow Rule", "body": "Section titles are sentence-case Outfit at 1.05rem in tape. Forbidden: tiny uppercase tracked kickers above every block.", "section": "typography" },
-      { "name": "The Rule Rule", "body": "Every edge is 1px solid rule. Hover may shift a card's border to Afterglow coral. No 2px+ side stripes. No ambient umbra.", "section": "elevation" },
-      { "name": "The Well Rule", "body": "Media lives in well: the 9:16 screen, the strip track, empty thumbs. Panels never sit in the well; the well never becomes a card.", "section": "elevation" }
+      {
+        "name": "The Afterglow Rule",
+        "body": "Afterglow coral occupies ≤10% of any screen. It is the playhead, the filled primary, the selected clip ring, and the focus outline. If a panel is tinted coral, the mark is spent.",
+        "section": "colors"
+      },
+      {
+        "name": "The Narrative is Data Rule",
+        "body": "Setup, escalation, payoff, and other color clip bars and the legend only. They are never buttons, never wordmarks, never backgrounds.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink Rule",
+        "body": "Body and labels that must be read sit on ink or tape. Mute is for idle chrome. If a sentence is mute-on-bay, bump it to tape.",
+        "section": "colors"
+      },
+      {
+        "name": "The Numbers Rule",
+        "body": "Outfit never carries a timecode. IBM Plex Mono never carries a heading, a button, or a paragraph.",
+        "section": "typography"
+      },
+      {
+        "name": "The No-Eyebrow Rule",
+        "body": "Section titles are sentence-case Outfit at 1.05rem in tape. Forbidden: tiny uppercase tracked kickers above every block.",
+        "section": "typography"
+      },
+      {
+        "name": "The Rule Rule",
+        "body": "Every edge is 1px solid rule. Hover may shift a card's border to Afterglow coral. No 2px+ side stripes. No ambient umbra.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Well Rule",
+        "body": "Media lives in well: the 9:16 screen, the strip track, empty thumbs. Panels never sit in the well; the well never becomes a card.",
+        "section": "elevation"
+      }
     ],
     "dos": [
       "Do keep Afterglow coral for the playhead, the one filled primary, selection, and focus (2px / 2px offset).",

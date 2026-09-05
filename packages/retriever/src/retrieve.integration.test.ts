@@ -270,4 +270,61 @@ describe.skipIf(!handle)('retrieveForSegment (integration)', () => {
     });
     expect(candidates).toEqual([]);
   });
+
+  it('adds coverage-capable candidates when the semantic top-k is all shorter than the segment', async () => {
+    await seedAsset(db, 'ast_short');
+    await seedAsset(db, 'ast_long');
+    await seedMomentWithMemeText(db, {
+      id: 'mom_short_match',
+      assetId: 'ast_short',
+      description: 'short match',
+      memeText: 'cat falls off the couch',
+    });
+    // A 3000 ms moment about something else entirely.
+    await db.insert(moments).values({
+      id: 'mom_long_other',
+      sceneId: 'scn_ast_long',
+      assetId: 'ast_long',
+      startMs: 0,
+      endMs: 3000,
+      durationMs: 3000,
+      description: 'long other',
+      extractor: 'test',
+      extractorVersion: '1.0.0',
+    });
+    const { vectors, model, modelVersion } = await provider.embed(['man reads a newspaper']);
+    await db.insert(momentEmbeddings).values({
+      id: 'emb_mom_long_other',
+      momentId: 'mom_long_other',
+      assetId: 'ast_long',
+      embeddingType: 'MEME',
+      sourceText: 'man reads a newspaper',
+      embedding: vectors[0] as number[],
+      model,
+      modelVersion,
+    });
+    const segment = {
+      visualIdeas: ['cat falls off the couch'],
+      emotion: 'joy',
+      narrativeFunction: 'payoff',
+    };
+
+    // With a top-1 cut and no coverage requirement, only the short semantic match survives.
+    const plain = await retrieveForSegment(db, config, segment, { limit: 1 });
+    expect(plain.map((c) => c.momentId)).toEqual(['mom_short_match']);
+
+    // Requiring coverage of a 2500 ms segment brings the long moment in, after the cut.
+    const covered = await retrieveForSegment(db, config, segment, {
+      limit: 1,
+      coverDurationMs: 2500,
+    });
+    expect(covered.map((c) => c.momentId)).toEqual(['mom_short_match', 'mom_long_other']);
+
+    // When the pool already covers, nothing extra is added.
+    const already = await retrieveForSegment(db, config, segment, {
+      limit: 1,
+      coverDurationMs: 1000,
+    });
+    expect(already.map((c) => c.momentId)).toEqual(['mom_short_match']);
+  });
 });

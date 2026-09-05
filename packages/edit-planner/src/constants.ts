@@ -1,4 +1,9 @@
-export const MAX_OUTPUT_DURATION_MS = 60_000;
+/**
+ * Longest output the pipeline produces. Chosen as a middle ground: long enough
+ * for a musical hook, short enough that the catalog covers it with strong
+ * clips and the render stays fast.
+ */
+export const MAX_OUTPUT_DURATION_MS = 30_000;
 export const MIN_VISUAL_SLOT_MS = 1_000;
 export const MAX_VISUAL_SLOT_MS = 4_000;
 /**

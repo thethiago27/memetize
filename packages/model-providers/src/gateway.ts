@@ -7,6 +7,7 @@ import {
   NARRATIVE_PROMPT_V2,
   NARRATIVE_PROMPT_VERSION,
 } from '@memetize/prompts';
+import type { LLMStage } from '@memetize/shared';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import type {
@@ -79,14 +80,27 @@ const NarrativeSchema = z.object({
  * fails the structured-output parse, and provenance (model, version, prompt) is
  * returned with every result.
  */
+export interface GatewayLLMOptions {
+  /** Default gateway model id (`creator/model`) for every stage. */
+  model: string;
+  /** Per-stage overrides; a missing stage uses `model`. */
+  stageModels?: Partial<Record<LLMStage, string>>;
+}
+
 export class GatewayLLMProvider implements LLMProvider {
   readonly name = GATEWAY_NAME;
 
-  constructor(private readonly options: { model: string }) {}
+  constructor(private readonly options: GatewayLLMOptions) {}
+
+  /** The model a stage runs on; provenance records this id, not the default. */
+  modelFor(stage: LLMStage): string {
+    return this.options.stageModels?.[stage] ?? this.options.model;
+  }
 
   async suggestMoments(input: MomentSuggestInput): Promise<MomentSuggestResult> {
+    const model = this.modelFor('moments');
     const { object } = await generateObject({
-      model: this.options.model,
+      model,
       schema: MomentsSchema,
       system: MOMENTS_PROMPT_V1,
       prompt: JSON.stringify({
@@ -101,14 +115,15 @@ export class GatewayLLMProvider implements LLMProvider {
     return {
       moments,
       extractor: GATEWAY_NAME,
-      extractorVersion: gatewayModelVersion(this.options.model),
+      extractorVersion: gatewayModelVersion(model),
       promptVersion: MOMENTS_PROMPT_VERSION,
     };
   }
 
   async analyzeNarrative(input: NarrativeAnalyzeInput): Promise<NarrativeAnalyzeResult> {
+    const model = this.modelFor('narrative');
     const { object } = await generateObject({
-      model: this.options.model,
+      model,
       schema: NarrativeSchema,
       system: NARRATIVE_PROMPT_V2,
       prompt: JSON.stringify({
@@ -124,14 +139,15 @@ export class GatewayLLMProvider implements LLMProvider {
     return {
       segments,
       extractor: GATEWAY_NAME,
-      extractorVersion: gatewayModelVersion(this.options.model),
+      extractorVersion: gatewayModelVersion(model),
       promptVersion: NARRATIVE_PROMPT_VERSION,
     };
   }
 
   async directTimeline(input: DirectTimelineInput): Promise<DirectTimelineResult> {
+    const model = this.modelFor('director');
     const { object } = await generateObject({
-      model: this.options.model,
+      model,
       schema: DirectorPicksSchema,
       system: DIRECTOR_PROMPT_V4,
       prompt: JSON.stringify({
@@ -148,7 +164,7 @@ export class GatewayLLMProvider implements LLMProvider {
     return {
       picks,
       director: GATEWAY_NAME,
-      directorVersion: gatewayModelVersion(this.options.model),
+      directorVersion: gatewayModelVersion(model),
       promptVersion: DIRECTOR_PROMPT_VERSION,
     };
   }

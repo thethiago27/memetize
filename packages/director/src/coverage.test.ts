@@ -194,4 +194,48 @@ describe('resolveCoverage', () => {
       }),
     ).toThrowError(InsufficientCatalogError);
   });
+
+  it('falls back to the eligible catalog when the segment pool cannot cover it', () => {
+    // The real case: a 1553 ms segment whose ten retrieved candidates top out at
+    // 1500 ms, while the catalog holds longer moments the retriever never offered.
+    const resolution = resolveCoverage({
+      window: { sourceStartMs: 118_747, sourceEndMs: 120_300 },
+      segments: [{ id: 'nar_k62', startMs: 118_747, endMs: 120_300 }],
+      picks: [{ segmentId: 'nar_k62', momentId: 'mom_1500' }],
+      matches: matchMap('nar_k62', ['mom_1500', 'mom_1420']),
+      moments: new Map([
+        ['mom_1500', { assetId: 'ast_a', startMs: 0, endMs: 1_500, durationMs: 1_500 }],
+        ['mom_1420', { assetId: 'ast_b', startMs: 0, endMs: 1_420, durationMs: 1_420 }],
+        ['mom_catalog', { assetId: 'ast_c', startMs: 0, endMs: 2_400, durationMs: 2_400 }],
+        [
+          'mom_catalog_same_asset',
+          { assetId: 'ast_a', startMs: 0, endMs: 3_000, durationMs: 3_000 },
+        ],
+      ]),
+      beats: [],
+      catalog: ['mom_catalog_same_asset', 'mom_catalog', 'mom_1500', 'mom_1420'],
+    });
+    expect(resolution.clips).toHaveLength(1);
+    expect(resolution.clips[0]?.timeline).toEqual({ startMs: 0, endMs: 1_553 });
+    expect(resolution.decisions[0]?.reason).toMatch(/^catalog fallback/);
+    // Pool candidates are exhausted first; only then does the catalog step in.
+    expect(['mom_catalog', 'mom_catalog_same_asset']).toContain(resolution.clips[0]?.momentId);
+  });
+
+  it('still throws when even the catalog has nothing long enough', () => {
+    expect(() =>
+      resolveCoverage({
+        window: { sourceStartMs: 0, sourceEndMs: 1_553 },
+        segments: [{ id: 'nar_1', startMs: 0, endMs: 1_553 }],
+        picks: [],
+        matches: matchMap('nar_1', ['mom_1500']),
+        moments: new Map([
+          ['mom_1500', { assetId: 'ast_a', startMs: 0, endMs: 1_500, durationMs: 1_500 }],
+          ['mom_1200', { assetId: 'ast_b', startMs: 0, endMs: 1_200, durationMs: 1_200 }],
+        ]),
+        beats: [],
+        catalog: ['mom_1200'],
+      }),
+    ).toThrow(InsufficientCatalogError);
+  });
 });

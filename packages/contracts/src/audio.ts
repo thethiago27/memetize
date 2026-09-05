@@ -142,7 +142,7 @@ export type EditWindowSelection = z.infer<typeof EditWindowSelection>;
 
 /** Bounds for an editor-chosen window (manual-window spec). The upper bound mirrors `MAX_OUTPUT_DURATION_MS`. */
 export const MANUAL_WINDOW_MIN_MS = 5_000;
-export const MANUAL_WINDOW_MAX_MS = 60_000;
+export const MANUAL_WINDOW_MAX_MS = 30_000;
 
 /**
  * Editor-chosen source window. The track-length check lives in the API and

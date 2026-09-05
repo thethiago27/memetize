@@ -12,6 +12,15 @@ export const DURATION_DRIFT_MS = 100;
  * allowed to drift more than the video before it counts as a truncated stream.
  */
 export const AUDIO_DRIFT_MS = 300;
+/**
+ * A video stream may end before the audio without failing the render: the
+ * frame-grid cut keeps clips exact, but source files that end before the
+ * moment the catalog recorded still lose frames, and a slightly early video
+ * end is acceptable output. Below this fraction of the timeline the video is
+ * considered truncated and the render is rejected (a 1 s video under 60 s of
+ * audio still fails).
+ */
+export const VIDEO_MIN_COVERAGE = 0.8;
 export const RENDERER_NAME = 'ffmpeg';
 export const RENDERER_VERSION = '1.0.0';
 

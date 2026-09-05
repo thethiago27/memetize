@@ -134,4 +134,29 @@ describe('validateOutput', () => {
     const result = validateOutput(probe(), timeline(4000));
     expect(result).toEqual({ valid: true, warnings: [] });
   });
+
+  it('tolerates a video stream that ends somewhat before the audio, as a warning', () => {
+    // 58867 ms of video under 60 s of audio: a real render whose sources ended
+    // early. Accepted (98% coverage) with a DURATION_DRIFT warning.
+    const result = validateOutput(
+      probe({ durationMs: 60_000, videoDurationMs: 58_867, audioDurationMs: 60_000 }),
+      timeline(60_000),
+    );
+    expect(result.valid).toBe(true);
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ code: 'DURATION_DRIFT', durationMs: 1133 }),
+    );
+    // Below the coverage floor it is a truncated render, not a tolerable shortfall.
+    const truncated = validateOutput(
+      probe({ durationMs: 60_000, videoDurationMs: 45_000, audioDurationMs: 60_000 }),
+      timeline(60_000),
+    );
+    expect(truncated.valid).toBe(false);
+    // A video longer than the tolerance is never accepted silently.
+    const longer = validateOutput(
+      probe({ durationMs: 60_000, videoDurationMs: 61_000, audioDurationMs: 60_000 }),
+      timeline(60_000),
+    );
+    expect(longer.valid).toBe(false);
+  });
 });

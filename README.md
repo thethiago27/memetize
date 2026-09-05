@@ -35,8 +35,10 @@ a `providers:` line, so a simulated analysis is never mistaken for a real one.
   frames with a multimodal model. Frame paths are resolved against the repo
   root, so the API may run from `apps/api` (`pnpm studio`).
 - `LLM_PROVIDER=gateway` + `LLM_MODEL=<creator/model>` drives moment
-  suggestion, narrative analysis and the Director. Provenance records the model:
-  `extractorVersion` / `directorVersion` are `1.0.0/<creator/model>`.
+  suggestion, narrative analysis and the Director. `LLM_MOMENTS_MODEL`,
+  `LLM_NARRATIVE_MODEL` and `LLM_DIRECTOR_MODEL` override the model for one
+  stage (empty falls back to `LLM_MODEL`). Provenance records the model that
+  ran: `extractorVersion` / `directorVersion` are `1.0.0/<creator/model>`.
 - `EMBEDDING_PROVIDER=gateway` + `EMBEDDING_MODEL=<creator/model>` embeds
   moments and feedback. The request pins the catalog's vector width (384), and
   the vector space id (`model@384d/unit`) is stored as `modelVersion`, so
@@ -118,15 +120,17 @@ pnpm cli project reprocess prj_... --from narrative
 
 ## Output window
 
-- Tracks of **60,000 ms or less** use the full source.
-- Longer tracks select one continuous, deterministic **60,000 ms** window (`structural-highlight` v1.0.0).
+- Tracks of **30,000 ms or less** use the full source.
+- Longer tracks select one continuous, deterministic **30,000 ms** window (`structural-highlight` v1.0.0). The manual window in the Studio is bounded the same way (5 to 30 seconds).
 - The timeline clock always starts at zero. Audio trim uses the absolute source range.
 
 ## Continuous coverage
 
 Narrative planning covers the whole window, including instrumental gaps. The Director resolves every span into usable clips. Shared cuts snap to beats without opening gaps. Source duration always equals the slot duration.
 
-If the catalog cannot cover a minimum visual slot, the pipeline stops with `INSUFFICIENT_CATALOG` instead of rendering black, freeze-frames, or loops. Add more or longer source videos and reprocess from narrative.
+A segment's candidates are chosen by meaning, so they may all be shorter than the segment (a finer-grained moment extractor makes this common for short segments). Two safeguards keep the whole window coverable with the material already in the library: `MATCH` keeps at least two candidates long enough to cover the segment in each ranked list (a duration-filtered second retrieval pass when the semantic top-k has none), and the Director's coverage resolver falls back to the eligible catalog — best quality, then longest, never a banned moment — when a segment's own pool cannot fill a span, recording the clip as a `catalog fallback` decision in `director.json`.
+
+Only when even the whole catalog cannot cover a minimum visual slot does the pipeline stop with `INSUFFICIENT_CATALOG` instead of rendering black, freeze-frames, or loops. Add more or longer source videos and reprocess from narrative.
 
 ## Feedback and editorial memory
 
@@ -161,7 +165,7 @@ The report (top-1, top-3, MRR for chosen moments; rejected-still-first rate) is 
 
 ## Render
 
-The renderer rejects empty, gapped, source-short timelines, a timeline whose duration disagrees with the selected edit window, and transitions the time model below cannot honor. Video segments join with `concat` for hard cuts and fades and with `xfade` for crossfades and whips; audio is one track with `atrim` + `asetpts=PTS-STARTPTS` and fades only when the selected window does not start at 0 or does not reach the end of the track. Output is 1080×1920@30 h264/aac. `render.json` records wall-time metrics (`validationMs`, `graphBuildMs`, `ffmpegMs`, `probeMs`, clip count, unique sources).
+The renderer rejects empty, gapped, source-short timelines, a timeline whose duration disagrees with the selected edit window, and transitions the time model below cannot honor. The output is validated with ffprobe: resolution, fps, codecs, container duration and each stream's coverage must match the timeline. A video stream that ends somewhat before the audio (sources that end before the moment the catalog recorded) is accepted with a `DURATION_DRIFT` warning as long as it covers at least 80% of the timeline; anything shorter, unknown coverage, or a stream starting late is rejected. Video segments join with `concat` for hard cuts and fades and with `xfade` for crossfades and whips; audio is one track with `atrim` + `asetpts=PTS-STARTPTS` and fades only when the selected window does not start at 0 or does not reach the end of the track. Output is 1080×1920@30 h264/aac. `render.json` records wall-time metrics (`validationMs`, `graphBuildMs`, `ffmpegMs`, `probeMs`, clip count, unique sources).
 
 ## Cut styles
 
@@ -179,7 +183,7 @@ The Director picks, per segment, how its main clip is styled and how the segment
 | `speed_up` | `setpts=PTS/1.25` | `slot × 0.25` of spare source after the clip |
 | `slow_down` | `setpts=PTS/0.8` | nothing |
 
-Time model: slots stay contiguous and never overlap. A transition is metadata on the boundary, centered on it; each side extends its rendered segment by half the duration (a *handle*), and `xfade` consumes exactly that much, so the output length never changes. Every transition is capped at a third of the smaller neighboring slot.
+Time model: every clip segment is cut to an exact number of output frames on the timeline's frame grid (a `trim` by seconds would drop up to one frame per cut and leave the video shorter than the audio), and xfade offsets are whole frames. Slots stay contiguous and never overlap. A transition is metadata on the boundary, centered on it; each side extends its rendered segment by half the duration (a *handle*), and `xfade` consumes exactly that much, so the output length never changes. Every transition is capped at a third of the smaller neighboring slot.
 
 Downgrades: `crossfade` → `dip_black` → `hard`; `whip` → `hard`; `flash` and `dip_black` shrink to their minimum, then `hard`; `hold` shrinks, then none; `speed_up` → none. A swap in the Studio re-resolves the whole timeline so a new moment never leaves a transition without a handle. The Studio shows the resolved style on the strip and in the Inspector; editing it by hand is a later increment.
 

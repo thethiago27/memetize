@@ -87,6 +87,19 @@ describe('GatewayLLMProvider.directTimeline', () => {
     expect(result.promptVersion).toBe(DIRECTOR_PROMPT_VERSION);
   });
 
+  it('runs on the director stage model and records it as provenance', async () => {
+    generateObjectMock.mockResolvedValue({ object: { picks: [] } } as never);
+    const provider = new GatewayLLMProvider({
+      model: 'anthropic/claude-sonnet-4.5',
+      stageModels: { director: 'anthropic/claude-opus-5', narrative: 'anthropic/claude-fable-5.1' },
+    });
+    const result = await provider.directTimeline(directorInput());
+    expect(generateObjectMock.mock.calls[0]?.[0]).toMatchObject({
+      model: 'anthropic/claude-opus-5',
+    });
+    expect(result.directorVersion).toBe('1.0.0/anthropic/claude-opus-5');
+  });
+
   it('sends an empty memory when the caller offers none', async () => {
     generateObjectMock.mockResolvedValue({ object: { picks: [] } } as never);
     const provider = new GatewayLLMProvider({ model: 'anthropic/claude-sonnet-4.5' });
@@ -162,8 +175,30 @@ describe('GatewayLLMProvider narrative and moments', () => {
       lyrics: [{ startMs: 0, endMs: 1000, text: 'a line' }],
     });
     expect(result.extractor).toBe('gateway');
+    expect(result.extractorVersion).toBe('1.0.0/anthropic/claude-sonnet-4.5');
     expect(result.segments).toHaveLength(1);
     expect(generateObjectMock).toHaveBeenCalledOnce();
+  });
+
+  it('routes analyzeNarrative to its stage model while moments keep the default', async () => {
+    generateObjectMock.mockResolvedValue({ object: { segments: [] } } as never);
+    const provider = new GatewayLLMProvider({
+      model: 'anthropic/claude-opus-5',
+      stageModels: { narrative: 'anthropic/claude-fable-5.1' },
+    });
+    const result = await provider.analyzeNarrative({
+      durationMs: 1000,
+      sourceStartMs: 0,
+      sourceEndMs: 1000,
+      sections: [],
+      energyCurve: [],
+      lyrics: [],
+    });
+    expect(generateObjectMock.mock.calls[0]?.[0]).toMatchObject({
+      model: 'anthropic/claude-fable-5.1',
+    });
+    expect(result.extractorVersion).toBe('1.0.0/anthropic/claude-fable-5.1');
+    expect(provider.modelFor('moments')).toBe('anthropic/claude-opus-5');
   });
 
   it('runs suggestMoments through the SDK with real provenance (F01)', async () => {

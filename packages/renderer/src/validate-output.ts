@@ -1,6 +1,6 @@
 import type { RenderValidation, RenderWarning } from '@memetize/contracts';
 import type { Timeline } from '@memetize/timeline';
-import { AUDIO_DRIFT_MS, DURATION_DRIFT_MS } from './constants';
+import { AUDIO_DRIFT_MS, DURATION_DRIFT_MS, VIDEO_MIN_COVERAGE } from './constants';
 import type { OutputProbe } from './types';
 
 /**
@@ -71,8 +71,15 @@ export function validateOutput(probe: OutputProbe, timeline: Timeline): RenderVa
       return { valid: false, warnings };
     }
     if (!streamCoversTimeline(stream.durationMs, timeline.durationMs, stream.toleranceMs)) {
+      // A video that ends somewhat before the audio is accepted with a warning;
+      // one shorter than the coverage floor (or longer than tolerance) is not.
+      const shortfall = timeline.durationMs - stream.durationMs;
+      const tolerated =
+        stream.kind === 'video' &&
+        shortfall > 0 &&
+        stream.durationMs >= timeline.durationMs * VIDEO_MIN_COVERAGE;
       warnings.push(streamWarning(stream.kind, stream.durationMs, timeline.durationMs));
-      return { valid: false, warnings };
+      if (!tolerated) return { valid: false, warnings };
     }
     if (stream.startMs !== null && Math.abs(stream.startMs) > stream.toleranceMs) {
       warnings.push(startOffsetWarning(stream.kind, stream.startMs));

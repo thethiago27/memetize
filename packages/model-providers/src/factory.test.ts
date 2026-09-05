@@ -59,6 +59,39 @@ describe('createLLMProvider', () => {
     ).toThrow(/LLM_MODEL.*provider\/model/);
   });
 
+  it('runs every stage on LLM_MODEL when no stage override is set', () => {
+    const provider = createLLMProvider(
+      { kind: 'gateway', model: GATEWAY_MODEL, stageModels: { narrative: null } },
+      'gw_test',
+    ) as GatewayLLMProvider;
+    expect(provider.modelFor('moments')).toBe(GATEWAY_MODEL);
+    expect(provider.modelFor('narrative')).toBe(GATEWAY_MODEL);
+    expect(provider.modelFor('director')).toBe(GATEWAY_MODEL);
+  });
+
+  it('routes a stage to its LLM_<STAGE>_MODEL override and the rest to LLM_MODEL', () => {
+    const provider = createLLMProvider(
+      {
+        kind: 'gateway',
+        model: GATEWAY_MODEL,
+        stageModels: { narrative: 'anthropic/claude-fable-5.1', director: '  ' },
+      },
+      'gw_test',
+    ) as GatewayLLMProvider;
+    expect(provider.modelFor('narrative')).toBe('anthropic/claude-fable-5.1');
+    expect(provider.modelFor('moments')).toBe(GATEWAY_MODEL);
+    expect(provider.modelFor('director')).toBe(GATEWAY_MODEL);
+  });
+
+  it('throws when a stage override is not provider/model', () => {
+    expect(() =>
+      createLLMProvider(
+        { kind: 'gateway', model: GATEWAY_MODEL, stageModels: { director: 'claude-opus-5' } },
+        'gw_test',
+      ),
+    ).toThrow(/LLM_DIRECTOR_MODEL.*provider\/model/);
+  });
+
   it('throws when gateway is missing an API key', () => {
     expect(() => createLLMProvider({ kind: 'gateway', model: GATEWAY_MODEL })).toThrow(
       /AI_GATEWAY_API_KEY/,

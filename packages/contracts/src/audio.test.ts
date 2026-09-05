@@ -54,13 +54,13 @@ describe('audio pipeline contracts', () => {
     expect(NarrativeSegment.safeParse({ ...base, literalness: 1.2 }).success).toBe(false);
   });
 
-  it('bounds a manual window between 5 and 60 seconds', () => {
+  it('bounds a manual window between 5 and 30 seconds', () => {
     const ok = (sourceStartMs: number, sourceEndMs: number) =>
       ManualWindowInput.safeParse({ sourceStartMs, sourceEndMs }).success;
     expect(ok(10_000, 15_000)).toBe(true);
-    expect(ok(10_000, 70_000)).toBe(true);
+    expect(ok(10_000, 40_000)).toBe(true);
     expect(ok(10_000, 14_999)).toBe(false);
-    expect(ok(10_000, 70_001)).toBe(false);
+    expect(ok(10_000, 40_001)).toBe(false);
     expect(ok(-1, 20_000)).toBe(false);
     expect(ok(20_000, 10_000)).toBe(false);
     expect(ok(10_000.5, 20_000)).toBe(false);

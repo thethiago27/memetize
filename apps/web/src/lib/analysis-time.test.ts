@@ -150,7 +150,7 @@ describe('linesWithin / windowProblem', () => {
 
   it('names the rule a draft breaks', () => {
     expect(windowProblem({ startMs: 0, endMs: 4999 }, 100_000)).toBe('Mínimo de 5 segundos');
-    expect(windowProblem({ startMs: 0, endMs: 60_001 }, 100_000)).toBe('Máximo de 60 segundos');
+    expect(windowProblem({ startMs: 0, endMs: 30_001 }, 100_000)).toBe('Máximo de 30 segundos');
     expect(windowProblem({ startMs: 10, endMs: 10 }, 100_000)).toBe(
       'O fim precisa vir depois do início',
     );
