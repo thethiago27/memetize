@@ -217,6 +217,10 @@ importers:
       '@memetize/timeline':
         specifier: workspace:*
         version: link:../timeline
+    devDependencies:
+      '@memetize/director':
+        specifier: workspace:*
+        version: link:../director
 
   packages/evaluation:
     dependencies:

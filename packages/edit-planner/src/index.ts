@@ -5,6 +5,7 @@ export {
   MAX_OUTPUT_DURATION_MS,
   MAX_VISUAL_SLOT_MS,
   MIN_VISUAL_SLOT_MS,
+  TRANSITION_HANDLE_RESERVE_MS,
 } from './constants';
 export {
   type CoverageSuggestion,

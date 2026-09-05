@@ -1,5 +1,5 @@
 import type { DirectorPickInput } from '@memetize/contracts';
-import { MIN_VISUAL_SLOT_MS } from '@memetize/edit-planner';
+import { MIN_VISUAL_SLOT_MS, TRANSITION_HANDLE_RESERVE_MS } from '@memetize/edit-planner';
 import { clipId } from '@memetize/shared';
 import type { AssembleMoment, AssembleSegment, AssembleSegmentMatch } from './assemble';
 
@@ -246,6 +246,12 @@ function placeNextClip(params: {
     if (takeMs < params.minSlotMs && takeMs !== params.remainder) continue;
 
     const timelineStart = params.cursor - params.windowStartMs;
+    // Center the take within the moment so an overlapping transition has a
+    // source handle on each side (F05). Reserve nothing when the moment is
+    // exactly slot-sized, so tight moments still downgrade as before.
+    const spareRoom = Math.max(0, available - takeMs);
+    const headReserve = Math.min(TRANSITION_HANDLE_RESERVE_MS, Math.floor(spareRoom / 2));
+    const sourceStartMs = moment.startMs + headReserve;
     const clip: Omit<ResolvedCoverageClip, 'role'> = {
       id: clipId(),
       momentId: pick.momentId,
@@ -253,8 +259,8 @@ function placeNextClip(params: {
       timeline: { startMs: timelineStart, endMs: timelineStart + takeMs },
       source: {
         assetId: moment.assetId,
-        startMs: moment.startMs,
-        endMs: moment.startMs + takeMs,
+        startMs: sourceStartMs,
+        endMs: sourceStartMs + takeMs,
       },
     };
     const role: CoverageDecision['role'] =
@@ -341,9 +347,10 @@ function absorbRemainder(
   if (!previous || remainder <= 0) return false;
   const moment = moments.get(previous.momentId);
   if (!moment) return false;
-  const used = previous.source.endMs - previous.source.startMs;
-  const unused = momentDuration(moment) - used;
-  if (unused < remainder) return false;
+  // Room after the take's end, accounting for any reserved head margin.
+  const momentEndMs = moment.startMs + momentDuration(moment);
+  const unusedTail = momentEndMs - previous.source.endMs;
+  if (unusedTail < remainder) return false;
   previous.timeline.endMs += remainder;
   previous.source.endMs += remainder;
   return true;

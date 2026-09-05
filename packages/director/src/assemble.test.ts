@@ -83,7 +83,7 @@ describe('assembleTimeline', () => {
     expect(timeline.durationMs).toBe(2_000);
   });
 
-  it('cuts the source to the segment length when the moment is longer than the segment', () => {
+  it('cuts the source to the segment length and reserves a transition handle (F05)', () => {
     const moments = new Map<string, AssembleMoment>([['mom_long', moment('ast_1', 1_000, 5_000)]]);
     const timeline = assembleTimeline({
       ...baseParams,
@@ -95,7 +95,9 @@ describe('assembleTimeline', () => {
       matches: new Map(),
     });
 
-    expect(timeline.clips[0]?.source).toEqual({ assetId: 'ast_1', startMs: 1_000, endMs: 2_200 });
+    // 2800ms of spare room: coverage reserves the 250ms handle head margin, so
+    // the 1200ms take starts at moment.startMs + 250 and leaves tail room too.
+    expect(timeline.clips[0]?.source).toEqual({ assetId: 'ast_1', startMs: 1_250, endMs: 2_450 });
   });
 
   it('orders clips by timeline.startMs regardless of pick order', () => {
