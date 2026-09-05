@@ -3,13 +3,7 @@ import { dirname, extname } from 'node:path';
 import { LyricsInput } from '@memetize/contracts';
 import { JobFailure } from '@memetize/job-system';
 import type { JobHandler } from '@memetize/orchestrator';
-import {
-  audioFile,
-  lyricsDebugFile,
-  maybeEnqueueNarrative,
-  replaceLyrics,
-  resolveStorage,
-} from '@memetize/projects';
+import { audioFile, lyricsDebugFile, replaceLyrics, resolveStorage } from '@memetize/projects';
 import { ensureDir } from '@memetize/shared';
 import { formatLrc, parseLrc, parseTextLines, segmentsToLyricLines } from './parse';
 import { isMlxTranscriptionProvider, transcribeProjectAudio } from './transcribe';
@@ -102,7 +96,7 @@ export function createLyricsHandler(): JobHandler {
     await ensureDir(dirname(lrcFile.absolute));
     await writeFile(lrcFile.absolute, formatLrc(persisted.lines), 'utf8');
 
-    await maybeEnqueueNarrative(ctx.db, projectId, 'LYRICS');
+    // NARRATIVE fan-in is enqueued from the orchestrator's post-completion hook (F10).
 
     ctx.logger.info('lyrics_completed', {
       projectId,

@@ -4,12 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { AudioAnalyzeInput, AudioAnalyzeOutput, WorkerResult } from '@memetize/contracts';
 import { JobFailure } from '@memetize/job-system';
 import type { JobHandler } from '@memetize/orchestrator';
-import {
-  audioDebugFile,
-  maybeEnqueueNarrative,
-  replaceAudioAnalysis,
-  resolveStorage,
-} from '@memetize/projects';
+import { audioDebugFile, replaceAudioAnalysis, resolveStorage } from '@memetize/projects';
 import { ensureDir, runPythonWorker } from '@memetize/shared';
 
 /** Python project root (this file lives at workers/audio-analyzer/src/handler.ts). */
@@ -102,7 +97,8 @@ export function createAudioAnalyzeHandler(): JobHandler {
     await ensureDir(dirname(debugFile.absolute));
     await writeFile(debugFile.absolute, JSON.stringify(output, null, 2));
 
-    await maybeEnqueueNarrative(ctx.db, projectId, 'AUDIO_ANALYZE');
+    // The NARRATIVE fan-in barrier now runs from the orchestrator's
+    // post-completion hook, so both siblings are seen as COMPLETED (F10).
 
     ctx.logger.info('audio_analyze_completed', {
       durationMs,

@@ -1,8 +1,8 @@
 import { createDatabase, type Database, type JobRow } from '@memetize/database';
-import { getAsset, setAssetStatus } from '@memetize/media-catalog';
 import { isGenerationActive } from '@memetize/job-system';
+import { getAsset, maybeEnqueueVisionAnalysis, setAssetStatus } from '@memetize/media-catalog';
 import { Orchestrator, ResourceScheduler } from '@memetize/orchestrator';
-import { getProject, setProjectStatus } from '@memetize/projects';
+import { getProject, maybeEnqueueNarrative, setProjectStatus } from '@memetize/projects';
 import { type AppConfig, createLogger, type Logger, loadConfig } from '@memetize/shared';
 import { buildRegistry } from './registry';
 
@@ -38,8 +38,22 @@ export function createAppRuntime(options: CreateAppRuntimeOptions = {}): AppRunt
     scheduler: new ResourceScheduler(config.resources),
     logger,
     onJobFailed: (job) => propagateEntityFailure(db, job),
+    onJobCompleted: (job) => evaluateBarriers(db, job),
   });
   return { config, db, logger, orchestrator, close: owned.close };
+}
+
+/**
+ * Evaluates the fan-in barriers after a sibling job completes (F10). Runs from
+ * the orchestrator's post-completion hook, so completion state is committed and
+ * the last sibling reliably enqueues the downstream step exactly once.
+ */
+async function evaluateBarriers(db: Database, job: JobRow): Promise<void> {
+  if (job.type === 'AUDIO_ANALYZE' || job.type === 'LYRICS') {
+    await maybeEnqueueNarrative(db, job.entityId, job.type);
+  } else if (job.type === 'FRAME_EXTRACT' || job.type === 'TRANSCRIPT') {
+    await maybeEnqueueVisionAnalysis(db, job.entityId, job.type);
+  }
 }
 
 /**

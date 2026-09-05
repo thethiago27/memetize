@@ -7,7 +7,7 @@ export function getJob(db: Database, id: string): Promise<JobRow | undefined> {
   return db.query.jobs.findFirst({ where: eq(jobs.id, id) });
 }
 
-export function listJobsForEntity(db: Database, entityId: string): Promise<JobRow[]> {
+export function listJobsForEntity(db: Executor, entityId: string): Promise<JobRow[]> {
   return db.query.jobs.findMany({
     where: eq(jobs.entityId, entityId),
     orderBy: asc(jobs.createdAt),

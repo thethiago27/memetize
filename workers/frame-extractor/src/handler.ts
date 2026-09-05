@@ -1,12 +1,6 @@
 import { FrameExtractInput } from '@memetize/contracts';
 import { JobFailure } from '@memetize/job-system';
-import {
-  frameFile,
-  listScenes,
-  maybeEnqueueVisionAnalysis,
-  resolveStorage,
-  updateSceneFrames,
-} from '@memetize/media-catalog';
+import { frameFile, listScenes, resolveStorage, updateSceneFrames } from '@memetize/media-catalog';
 import type { JobHandler } from '@memetize/orchestrator';
 import { extractFrame } from './extract';
 import { sampleFrameTimestamps } from './sample';
@@ -51,7 +45,7 @@ export function createFrameExtractHandler(): JobHandler {
       );
     }
 
-    await maybeEnqueueVisionAnalysis(ctx.db, assetId, 'FRAME_EXTRACT');
+    // VISION_ANALYZE fan-in is enqueued from the orchestrator's post-completion hook (F10).
 
     ctx.logger.info('frame_extract_completed', { sceneCount: scenes.length, frameCount });
     return { sceneCount: scenes.length, frameCount };

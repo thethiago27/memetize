@@ -29,6 +29,12 @@ export interface OrchestratorOptions {
    * the wiring maps the job's entity to the right status update.
    */
   onJobFailed?: (job: JobRow, error: { code: string; message: string }) => Promise<void>;
+  /**
+   * Called after a job is durably marked COMPLETED, so the app can evaluate
+   * fan-in barriers against committed completion state (F10). Running this after
+   * completion — not inside the handler — is what makes the barrier race-free.
+   */
+  onJobCompleted?: (job: JobRow) => Promise<void>;
 }
 
 export interface RunOutcome {
@@ -94,7 +100,11 @@ export class Orchestrator {
 
     const fail = async (code: string, message: string, retryable: boolean): Promise<RunOutcome> => {
       const failed = await failJob(db, job.id, { code, message, retryable }, leaseToken);
-      const outcome: RunOutcome = { job: failed ?? job, status: 'FAILED', error: { code, message } };
+      const outcome: RunOutcome = {
+        job: failed ?? job,
+        status: 'FAILED',
+        error: { code, message },
+      };
       // Only propagate to the entity when this attempt actually recorded the
       // failure (still held the lease) and reached a terminal FAILED state.
       if (failed?.status === 'FAILED' && this.options.onJobFailed) {
@@ -121,11 +131,14 @@ export class Orchestrator {
       logger.info('job_started');
       // Heartbeat: renew the lease well before it expires so a long FFmpeg/Python
       // step keeps ownership; losing it means another worker reclaimed the job.
-      const heartbeat = setInterval(() => {
-        void renewLease(db, job.id, leaseToken, leaseMs).then((held) => {
-          if (!held) logger.warn('job_lease_lost');
-        });
-      }, Math.max(5_000, Math.floor(leaseMs / 4)));
+      const heartbeat = setInterval(
+        () => {
+          void renewLease(db, job.id, leaseToken, leaseMs).then((held) => {
+            if (!held) logger.warn('job_lease_lost');
+          });
+        },
+        Math.max(5_000, Math.floor(leaseMs / 4)),
+      );
       if (typeof heartbeat.unref === 'function') heartbeat.unref();
 
       try {
@@ -145,6 +158,16 @@ export class Orchestrator {
           return { job, status: 'FAILED', error: { code: 'LEASE_LOST', message } };
         }
         logger.info('job_completed', { processingTimeMs: Date.now() - startedAt });
+        // Evaluate fan-in barriers against committed completion state (F10).
+        if (this.options.onJobCompleted) {
+          try {
+            await this.options.onJobCompleted(done);
+          } catch (hookError) {
+            logger.error('job_completed_hook_error', {
+              message: hookError instanceof Error ? hookError.message : String(hookError),
+            });
+          }
+        }
         return { job: done, status: 'COMPLETED', result };
       } catch (error) {
         const code = error instanceof JobFailure ? error.code : 'UNHANDLED_ERROR';
@@ -190,7 +213,11 @@ export class Orchestrator {
     const { db } = this.options;
     const finalized = await reconcileExpiredLeases(db);
     for (const job of finalized) {
-      this.logger.warn('job_reconciled', { jobId: job.id, worker: job.type, entityId: job.entityId });
+      this.logger.warn('job_reconciled', {
+        jobId: job.id,
+        worker: job.type,
+        entityId: job.entityId,
+      });
       if (this.options.onJobFailed) {
         const full = await getJob(db, job.id);
         if (full) {

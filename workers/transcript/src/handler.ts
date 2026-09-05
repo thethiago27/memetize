@@ -1,12 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { TranscriptInput, TranscriptOutput, WorkerResult } from '@memetize/contracts';
 import { JobFailure } from '@memetize/job-system';
-import {
-  assetFile,
-  maybeEnqueueVisionAnalysis,
-  replaceTranscript,
-  resolveStorage,
-} from '@memetize/media-catalog';
+import { assetFile, replaceTranscript, resolveStorage } from '@memetize/media-catalog';
 import type { JobHandler } from '@memetize/orchestrator';
 import { runPythonWorker } from '@memetize/shared';
 import { extractAudio } from './audio';
@@ -94,7 +89,7 @@ export function createTranscriptHandler(): JobHandler {
       segments: output.segments,
     });
 
-    await maybeEnqueueVisionAnalysis(ctx.db, assetId, 'TRANSCRIPT');
+    // VISION_ANALYZE fan-in is enqueued from the orchestrator's post-completion hook (F10).
 
     ctx.logger.info('transcript_persisted', { segmentCount: persisted.length });
     return {
