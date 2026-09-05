@@ -52,7 +52,24 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install JS dependencies
-        run: pnpm install --frozen-lockfile
+        # Same policy as `.cursor/install.sh`: esbuild's lifecycle script is
+        # ignored on purpose (prebuilt binary). `strictDepBuilds: false` in
+        # pnpm-workspace.yaml makes this exit 0; keep the swallow as a backstop
+        # if a pnpm upgrade reintroduces ERR_PNPM_IGNORED_BUILDS as fatal.
+        run: |
+          set +e
+          log="$(mktemp)"
+          pnpm install --frozen-lockfile >"$log" 2>&1
+          status=$?
+          cat "$log"
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+          if grep -q "ERR_PNPM_IGNORED_BUILDS" "$log"; then
+            echo "Continuing past the expected ignored esbuild build scripts."
+            exit 0
+          fi
+          exit "$status"
 
       - name: Sync Python workers
         run: pnpm py:sync
