@@ -132,6 +132,49 @@ describe('resolveCoverage', () => {
     expect(result.decisions[0]).toMatchObject({ momentId: 'mom_cover', role: 'fallback' });
   });
 
+  it('covers a 4000ms segment with two 2000ms moments despite adverse beats (F02)', () => {
+    // Beats at 0/1500/3000 snap a beat-aware pass to 1500+1500 and strand
+    // 1000 ms, but the two moments cover the span outright without snapping.
+    const result = resolveCoverage({
+      window: { sourceStartMs: 0, sourceEndMs: 4_000 },
+      segments: [{ id: 'nar_1', startMs: 0, endMs: 4_000 }],
+      picks: [],
+      matches: matchMap('nar_1', ['mom_a', 'mom_b']),
+      moments: new Map([
+        ['mom_a', { assetId: 'ast_a', startMs: 0, endMs: 2_000, durationMs: 2_000 }],
+        ['mom_b', { assetId: 'ast_b', startMs: 0, endMs: 2_000, durationMs: 2_000 }],
+      ]),
+      beats: [0, 1_500, 3_000],
+    });
+    expect(result.clips.map((clip) => clip.timeline)).toEqual([
+      { startMs: 0, endMs: 2_000 },
+      { startMs: 2_000, endMs: 4_000 },
+    ]);
+    // Every clip stays within its source and the fallback reason is annotated.
+    expect(
+      result.clips.every(
+        (clip) =>
+          clip.source.endMs - clip.source.startMs === clip.timeline.endMs - clip.timeline.startMs,
+      ),
+    ).toBe(true);
+    expect(result.decisions.every((d) => d.reason.includes('retry without beat snap'))).toBe(true);
+  });
+
+  it('still fails when a single 2000ms moment cannot cover a 4000ms segment (F02)', () => {
+    expect(() =>
+      resolveCoverage({
+        window: { sourceStartMs: 0, sourceEndMs: 4_000 },
+        segments: [{ id: 'nar_1', startMs: 0, endMs: 4_000 }],
+        picks: [],
+        matches: matchMap('nar_1', ['mom_only']),
+        moments: new Map([
+          ['mom_only', { assetId: 'ast_only', startMs: 0, endMs: 2_000, durationMs: 2_000 }],
+        ]),
+        beats: [0, 1_500, 3_000],
+      }),
+    ).toThrow(InsufficientCatalogError);
+  });
+
   it('throws when no moment can cover the minimum slot', () => {
     expect(() => resolveCoverage(insufficientFixture())).toThrow(InsufficientCatalogError);
   });

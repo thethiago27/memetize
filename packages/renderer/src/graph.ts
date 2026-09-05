@@ -95,7 +95,7 @@ export function buildFfmpegGraph(timeline: Timeline, assets: ResolvedAssets): Ff
     throw new Error('buildFfmpegGraph: timeline gap');
   }
 
-  filterParts.push(...joinSegments(segments, transitions));
+  filterParts.push(...joinSegments(segments, transitions, fps));
   filterParts.push(buildAudioFilter(timeline, assets));
 
   const outputArgs = [
@@ -186,7 +186,9 @@ function buildSegment(params: {
       segmentMs: lengthMs,
     }),
   );
-  if (params.pinFps) filters.push(`fps=${canvas.fps}`);
+  // Pin both the frame rate and the time base so every operand of an xfade
+  // shares 1/fps; xfade rejects mismatched time bases (F04).
+  if (params.pinFps) filters.push(`fps=${canvas.fps}`, `settb=1/${canvas.fps}`);
   filters.push('setsar=1');
 
   return { chain: `[${params.inputIndex}:v]${filters.join(',')}`, lengthMs };
@@ -212,6 +214,7 @@ function firstParsed<T>(
 function joinSegments(
   segments: readonly Segment[],
   transitions: readonly TimelineTransitionOut[],
+  fps: number,
 ): string[] {
   const ops: { inputs: string; filter: string }[] = [];
   const state: { acc: Segment | null; run: Segment[]; labels: number } = {
@@ -237,7 +240,9 @@ function joinSegments(
     const label = nextLabel();
     ops.push({
       inputs: parts.map((part) => part.label).join(''),
-      filter: `concat=n=${parts.length}:v=1:a=0`,
+      // concat resets the time base (to 1/1000000); restore 1/fps so the
+      // accumulator can feed a following xfade without a time-base mismatch (F04).
+      filter: `concat=n=${parts.length}:v=1:a=0,fps=${fps},settb=1/${fps}`,
     });
     state.acc = { label, lengthMs: parts.reduce((sum, part) => sum + part.lengthMs, 0) };
   };

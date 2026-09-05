@@ -91,7 +91,18 @@ function resolveClipStyle(
   const requested = clip.direction.clipStyle;
   const slotMs = clip.timeline.endMs - clip.timeline.startMs;
   const plain: ClipShape = { factor: 1, consumedSourceMs: slotMs, freezesTail: false };
-  const withoutStyle = { ...clip, effects: clip.effects.filter((effect) => !isCutEffect(effect)) };
+  // Normalize the clip back to its canonical base source ([startMs, startMs+slot])
+  // before deriving any style, so re-resolving a timeline is idempotent (F03):
+  // a prior speed-up must not compound onto an already-expanded source.endMs.
+  const baseEndMs = clip.source.startMs + slotMs;
+  if (clip.source.startMs < bounds.startMs || baseEndMs > bounds.endMs) {
+    throw new Error(`SOURCE_OUT_OF_BOUNDS: ${clip.id}`);
+  }
+  const withoutStyle: TimelineClip = {
+    ...clip,
+    source: { ...clip.source, endMs: baseEndMs },
+    effects: clip.effects.filter((effect) => !isCutEffect(effect)),
+  };
 
   if (requested === 'none') {
     return { clip: withoutStyle, shape: plain, decision: null };
@@ -120,9 +131,11 @@ function resolveClipStyle(
   }
 
   if (requested === 'speed_up') {
-    const extraMs = Math.ceil(slotMs * (SPEED_UP_FACTOR - 1));
-    const spareMs = bounds.endMs - clip.source.endMs;
-    if (spareMs < extraMs) {
+    // Consumed source is derived from the canonical slot, never added onto a
+    // previous result, so resolve(resolve(x)) == resolve(x).
+    const consumedSourceMs = Math.ceil(slotMs * SPEED_UP_FACTOR);
+    const endMs = clip.source.startMs + consumedSourceMs;
+    if (endMs > bounds.endMs) {
       return {
         clip: withoutStyle,
         shape: plain,
@@ -133,10 +146,10 @@ function resolveClipStyle(
     return {
       clip: {
         ...withoutStyle,
-        source: { ...clip.source, endMs: clip.source.endMs + extraMs },
+        source: { ...withoutStyle.source, endMs },
         effects: [...withoutStyle.effects, effect],
       },
-      shape: { factor: SPEED_UP_FACTOR, consumedSourceMs: slotMs + extraMs, freezesTail: false },
+      shape: { factor: SPEED_UP_FACTOR, consumedSourceMs, freezesTail: false },
       decision: clipDecision(clip.id, requested, 'speed_up', slotMs),
     };
   }

@@ -44,7 +44,37 @@ export interface CoverageResolution {
   decisions: CoverageDecision[];
 }
 
+/**
+ * Resolves coverage, retrying once without beat snapping when the beat-aware
+ * pass declares the catalog insufficient (F02).
+ *
+ * Beat snapping can leave an unabsorbable tail even when the available material
+ * would cover the segment outright (e.g. two 2000 ms moments on a 4000 ms
+ * segment with beats at 0/1500/3000 snap to 1500+1500 and strand 1000 ms).
+ * Coverage must take precedence over the preference for landing on a beat, so we
+ * fall back to a beat-free pass before giving up. `resolveCoverageOnce` keeps its
+ * clip lists local, so the abandoned attempt never publishes partial clips; a
+ * catalog that genuinely cannot cover the span still throws from the retry.
+ */
 export function resolveCoverage(input: ResolveCoverageInput): CoverageResolution {
+  try {
+    return resolveCoverageOnce(input);
+  } catch (error) {
+    if (!(error instanceof InsufficientCatalogError) || input.beats.length === 0) {
+      throw error;
+    }
+    const fallback = resolveCoverageOnce({ ...input, beats: [] });
+    return {
+      ...fallback,
+      decisions: fallback.decisions.map((decision) => ({
+        ...decision,
+        reason: `${decision.reason}; coverage retry without beat snap`,
+      })),
+    };
+  }
+}
+
+function resolveCoverageOnce(input: ResolveCoverageInput): CoverageResolution {
   const windowMs = input.window.sourceEndMs - input.window.sourceStartMs;
   const minSlotMs = windowMs > 0 && windowMs < MIN_VISUAL_SLOT_MS ? windowMs : MIN_VISUAL_SLOT_MS;
   const pickBySegment = new Map(input.picks.map((pick) => [pick.segmentId, pick.momentId]));

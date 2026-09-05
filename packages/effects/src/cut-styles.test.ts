@@ -369,6 +369,52 @@ describe('resolveCutStyles: interactions', () => {
     });
   });
 
+  it('is idempotent: re-resolving a resolved timeline yields the same result (F03)', () => {
+    // slot 0-2000, source 0-2000, bounds 0-3100, speed_up. The consumed source
+    // must settle at 2500 and stay there no matter how many times we re-resolve.
+    const { timeline, context } = build([
+      {
+        id: 'a',
+        timeline: { startMs: 0, endMs: 2000 },
+        source: { startMs: 0, endMs: 2000 },
+        bounds: { startMs: 0, endMs: 3100 },
+        direction: { clipStyle: 'speed_up' },
+      },
+    ]);
+    const first = resolveCutStyles(timeline, context);
+    const second = resolveCutStyles(first.timeline, context);
+    const third = resolveCutStyles(second.timeline, context);
+    expect(second).toEqual(first);
+    expect(third).toEqual(first);
+    expect(first.timeline.clips[0]?.source.endMs).toBe(2500);
+  });
+
+  it('restores the base source when the intent switches back to none (F03)', () => {
+    const speedUp = build([
+      {
+        id: 'a',
+        timeline: { startMs: 0, endMs: 2000 },
+        source: { startMs: 0, endMs: 2000 },
+        bounds: { startMs: 0, endMs: 3100 },
+        direction: { clipStyle: 'speed_up' },
+      },
+    ]);
+    const sped = resolveCutStyles(speedUp.timeline, speedUp.context);
+    expect(sped.timeline.clips[0]?.source.endMs).toBe(2500);
+
+    // Feed the expanded timeline back in with the intent flipped to 'none'.
+    const flipped: Timeline = {
+      ...sped.timeline,
+      clips: sped.timeline.clips.map((entry) => ({
+        ...entry,
+        direction: { ...entry.direction, clipStyle: 'none' },
+      })),
+    };
+    const result = resolveCutStyles(flipped, speedUp.context);
+    expect(result.timeline.clips[0]?.source.endMs).toBe(2000);
+    expect(result.timeline.clips[0]?.effects).toEqual([]);
+  });
+
   it('never moves slots, is deterministic, and produces a parseable timeline', () => {
     const { timeline, context } = pair('whip', [
       { direction: { clipStyle: 'hold', transitionOut: 'whip' } },

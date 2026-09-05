@@ -83,7 +83,7 @@ describe('buildFfmpegGraph', () => {
     const tl = timeline({ durationMs: 3000, clips });
     const graph = buildFfmpegGraph(tl, assetsFor(clips));
 
-    expect(graph.filterComplex).toMatch(/concat=n=2:v=1:a=0\[vout\]/);
+    expect(graph.filterComplex).toMatch(/concat=n=2:v=1:a=0,fps=30,settb=1\/30\[vout\]/);
   });
 
   it('throws when the timeline is empty, gapped, or source-short', () => {
@@ -260,7 +260,8 @@ describe('buildFfmpegGraph: cut styles', () => {
     ];
     const graph = buildFfmpegGraph(timeline({ durationMs: 5000, clips }), assetsFor(clips));
 
-    expect(graph.filterComplex).toContain('[v0][v1]concat=n=2:v=1:a=0[acc1]');
+    // The concat that feeds an xfade must restore the 1/fps time base (F04).
+    expect(graph.filterComplex).toContain('[v0][v1]concat=n=2:v=1:a=0,fps=30,settb=1/30[acc1]');
     // Accumulated 1000 + 2000 + 100 handle = 3100 ms; offset = 3100 - 200.
     expect(graph.filterComplex).toContain(
       '[acc1][v2]xfade=transition=slideleft:duration=0.200:offset=2.900[vout]',
@@ -287,7 +288,7 @@ describe('buildFfmpegGraph: cut styles', () => {
     expect(graph.filterComplex).toContain('fade=t=in:st=0:d=0.150:color=black');
     expect(graph.filterComplex).toContain('fade=t=out:st=1.950:d=0.050:color=white');
     expect(graph.filterComplex).toContain('fade=t=in:st=0:d=0.050:color=white');
-    expect(graph.filterComplex).toContain('concat=n=3:v=1:a=0[vout]');
+    expect(graph.filterComplex).toContain('concat=n=3:v=1:a=0,fps=30,settb=1/30[vout]');
     expect(graph.filterComplex).not.toContain('xfade');
   });
 
