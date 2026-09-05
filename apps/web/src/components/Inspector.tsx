@@ -6,6 +6,7 @@ import {
   type TimelineClip,
 } from '../lib/api';
 import { describeCut, functionColor, functionLabel } from '../lib/labels';
+import type { EditorActions } from '../lib/use-editor-actions';
 import { Thumb } from './Thumb';
 
 export function Inspector({
@@ -13,7 +14,7 @@ export function Inspector({
   segment,
   moments,
   shortlist,
-  busy,
+  actions,
   onThumb,
   onSwap,
   onBan,
@@ -22,7 +23,7 @@ export function Inspector({
   segment: NarrativeSegmentRow | undefined;
   moments: Record<string, MomentSummary>;
   shortlist: ShortlistEntry[];
-  busy: string | null;
+  actions: EditorActions;
   onThumb: (kind: 'CLIP_UP' | 'CLIP_DOWN') => void;
   onSwap: (momentId: string) => void;
   onBan: (momentId: string) => void;
@@ -78,18 +79,18 @@ export function Inspector({
               <button
                 className="btn btn-sm"
                 type="button"
-                disabled={busy !== null}
+                disabled={actions.isBusy('up')}
                 onClick={() => onThumb('CLIP_UP')}
               >
-                {busy === 'up' ? 'Salvando…' : 'Funcionou'}
+                {actions.isBusy('up') ? 'Salvando…' : 'Funcionou'}
               </button>
               <button
                 className="btn btn-sm btn-danger"
                 type="button"
-                disabled={busy !== null}
+                disabled={actions.isBusy('down')}
                 onClick={() => onThumb('CLIP_DOWN')}
               >
-                {busy === 'down' ? 'Salvando…' : 'Não funcionou'}
+                {actions.isBusy('down') ? 'Salvando…' : 'Não funcionou'}
               </button>
             </div>
           </div>
@@ -133,19 +134,19 @@ export function Inspector({
                       <button
                         className="btn btn-sm btn-primary"
                         type="button"
-                        disabled={busy !== null}
+                        disabled={actions.timelineLocked}
                         onClick={() => onSwap(entry.momentId)}
                       >
-                        {busy === `swap-${entry.momentId}` ? 'Trocando…' : 'Usar'}
+                        {actions.isBusy(`swap:${entry.momentId}`) ? 'Trocando…' : 'Usar'}
                       </button>
                     )}
                     <button
                       className="btn btn-sm btn-ghost"
                       type="button"
-                      disabled={busy !== null}
+                      disabled={actions.isBusy(`ban:${entry.momentId}`)}
                       onClick={() => onBan(entry.momentId)}
                     >
-                      Banir
+                      {actions.isBusy(`ban:${entry.momentId}`) ? 'Banindo…' : 'Banir'}
                     </button>
                   </div>
                 </div>

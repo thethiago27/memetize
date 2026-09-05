@@ -1,23 +1,50 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bay: #0b0d12;
+  --color-panel: #141822;
+  --color-panel-2: #1b2130;
+  --color-rule: #2c3345;
+  --color-signal: #ff4d6d;
+  --color-signal-ink: #1a0610;
+  --color-tape: #c4c9d6;
+  --color-cut: #ff6b4a;
+  --color-ok: #3dce8e;
+  --color-ink: #eef1f8;
+  --color-mute: #8b93a7;
+  --color-fn-setup: #5b8def;
+  --color-fn-escalation: #f0a04b;
+  --color-fn-payoff: #e24b7a;
+  --color-fn-other: #7d8899;
+  --font-sans: var(--font-body), "Outfit", sans-serif;
+}
+
 :root {
-  --bay: #14110e;
-  --panel: #1f1a15;
-  --panel-2: #27211b;
-  --rule: #372f27;
-  --amber: #e4a227;
-  --amber-ink: #1a1206;
-  --tape: #cbb591;
-  --cut: #c4432a;
-  --ok: #6fb571;
-  --busy: #e4a227;
-  --ink: #f3ede3;
-  --mute: #a99480;
-  --fn-setup: #4f8fd6;
-  --fn-escalation: #d68b2e;
-  --fn-payoff: #d64f6a;
-  --fn-other: #7c8a9a;
+  --bay: var(--color-bay);
+  --panel: var(--color-panel);
+  --panel-2: var(--color-panel-2);
+  --rule: var(--color-rule);
+  --signal: var(--color-signal);
+  --signal-ink: var(--color-signal-ink);
+  --amber: var(--color-signal);
+  --amber-ink: var(--color-signal-ink);
+  --tape: var(--color-tape);
+  --cut: var(--color-cut);
+  --ok: var(--color-ok);
+  --busy: var(--color-signal);
+  --ink: var(--color-ink);
+  --mute: var(--color-mute);
+  --fn-setup: var(--color-fn-setup);
+  --fn-escalation: var(--color-fn-escalation);
+  --fn-payoff: var(--color-fn-payoff);
+  --fn-other: var(--color-fn-other);
   --radius: 8px;
   --space: 8px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --strip-h: 84px;
+  --playhead: var(--signal);
+  --mast-h: 58px;
+  --well: #07080c;
 }
 
 * {
@@ -33,7 +60,8 @@ body {
 }
 
 body {
-  font-family: var(--font-body), "IBM Plex Sans", sans-serif;
+  --font-slate: var(--font-body);
+  font-family: var(--font-body), "Outfit", sans-serif;
   font-size: 15px;
   line-height: 1.45;
 }
@@ -78,7 +106,9 @@ p {
   align-items: center;
   justify-content: space-between;
   gap: calc(var(--space) * 3);
-  padding: calc(var(--space) * 1.5) calc(var(--space) * 3);
+  padding: 0 calc(var(--space) * 3);
+  height: var(--mast-h);
+  box-sizing: border-box;
   border-bottom: 1px solid var(--rule);
   background: var(--panel);
   position: sticky;
@@ -93,11 +123,10 @@ p {
 }
 
 .wordmark {
-  font-family: var(--font-slate), "Barlow Condensed", sans-serif;
-  font-weight: 800;
+  font-family: var(--font-slate), "Outfit", sans-serif;
+  font-weight: 700;
   font-size: 1.5rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: -0.02em;
 }
 
 .wordmark span {
@@ -141,11 +170,11 @@ p {
 }
 
 .headline {
-  font-family: var(--font-slate), "Barlow Condensed", sans-serif;
+  font-family: var(--font-slate), "Outfit", sans-serif;
   font-size: clamp(1.8rem, 3vw, 2.6rem);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  line-height: 1.05;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
   text-wrap: balance;
   overflow-wrap: anywhere;
 }
@@ -156,10 +185,9 @@ p {
 }
 
 .section-title {
-  font-family: var(--font-slate), "Barlow Condensed", sans-serif;
+  font-family: var(--font-slate), "Outfit", sans-serif;
   font-size: 1.05rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 600;
   color: var(--tape);
 }
 
@@ -230,13 +258,13 @@ p {
   border-radius: var(--radius);
   padding: var(--space) calc(var(--space) * 1.5);
   color: var(--amber);
-  background: rgba(228, 162, 39, 0.06);
+  background: color-mix(in srgb, var(--signal) 6%, transparent);
 }
 
 .notice[data-tone="bad"] {
   border-color: var(--cut);
   color: var(--ink);
-  background: rgba(196, 67, 42, 0.1);
+  background: color-mix(in srgb, var(--cut) 10%, transparent);
 }
 
 .empty {
@@ -264,7 +292,7 @@ p {
 }
 
 .btn:hover:not(:disabled) {
-  background: rgba(228, 162, 39, 0.1);
+  background: color-mix(in srgb, var(--signal) 10%, transparent);
 }
 
 .btn:disabled {
@@ -278,7 +306,7 @@ p {
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #f0b23a;
+  background: color-mix(in srgb, var(--signal) 86%, white);
 }
 
 .btn-danger {
@@ -287,7 +315,7 @@ p {
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: rgba(196, 67, 42, 0.12);
+  background: color-mix(in srgb, var(--cut) 12%, transparent);
 }
 
 .btn-ghost {
@@ -389,7 +417,7 @@ p {
 .thumb {
   width: 100%;
   aspect-ratio: 16 / 9;
-  background: #0d0b09;
+  background: var(--well);
   border-radius: 6px;
   overflow: hidden;
   display: grid;
@@ -449,7 +477,7 @@ p {
 
 .dropzone[data-over="true"] {
   border-color: var(--amber);
-  background: rgba(228, 162, 39, 0.06);
+  background: color-mix(in srgb, var(--signal) 6%, transparent);
 }
 
 /* Dialog */
@@ -568,32 +596,99 @@ p {
 }
 
 /* Editor */
-.editor {
+/* The editor fits the viewport (editor-transport spec): a compact header
+   line, the pipeline line, a body with the preview beside a scrolling
+   inspector, and the strip pinned at the bottom. The tabs follow below and
+   the page scrolls to them. */
+.editor-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
-  gap: calc(var(--space) * 2);
-  align-items: start;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: calc(var(--space) * 1.5);
+  height: calc(100dvh - var(--mast-h) - var(--space) * 6);
+  min-height: 560px;
 }
 
-@media (max-width: 960px) {
-  .editor {
-    grid-template-columns: 1fr;
-  }
-  .stepper {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
+.editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--space) * 2);
+  flex-wrap: wrap;
+}
+
+.editor-head-main {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space) * 1.5);
+  min-width: 0;
+  flex: 1;
+}
+
+.headline-sm {
+  font-size: 1.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 28ch;
+  flex-shrink: 0;
+}
+
+/* The meta line gives way before the title and the status do. */
+.editor-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.pipeline-line {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space) * 2);
+  flex-wrap: wrap;
+}
+
+.notice-inline {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+}
+
+.editor-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.7fr);
+  gap: calc(var(--space) * 2);
+  min-height: 0;
+}
+
+.editor-body > .inspector-area {
+  min-height: 0;
+  display: grid;
+}
+
+.editor-body > .inspector-area > .panel {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .preview {
-  display: grid;
-  gap: calc(var(--space) * 1.5);
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+}
+
+/* The screen takes whatever height is left and keeps 9:16, shrinking on
+   width when the column is narrow; `cq*` units read the wrapper's box. */
+.screen-fit {
+  container-type: size;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
 }
 
 .screen {
-  width: min(100%, 320px);
-  margin: 0 auto;
+  height: min(100cqh, calc(100cqw * 16 / 9));
   aspect-ratio: 9 / 16;
-  background: #0b0908;
+  background: var(--well);
   border-radius: 12px;
   border: 1px solid var(--rule);
   overflow: hidden;
@@ -617,22 +712,32 @@ p {
   padding: calc(var(--space) * 2);
 }
 
-.strip {
-  display: flex;
-  gap: 3px;
+.strip-surface {
+  position: relative;
   width: 100%;
-  height: 76px;
+  touch-action: none;
+  user-select: none;
+  cursor: ew-resize;
+}
+
+.strip {
+  position: relative;
+  width: 100%;
+  height: var(--strip-h);
+  border-radius: 4px;
+  background: var(--well);
 }
 
 .clip {
-  position: relative;
-  flex-basis: 0;
-  min-width: 26px;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  box-sizing: border-box;
   border: 0;
   padding: 0;
   border-radius: 4px;
   overflow: hidden;
-  background: #0d0b09 center / cover no-repeat;
+  background: var(--well) center / cover no-repeat;
   color: var(--ink);
   outline-offset: -2px;
   cursor: pointer;
@@ -659,7 +764,7 @@ p {
 }
 
 .clip[data-playing="true"]::after {
-  background: linear-gradient(to top, rgba(228, 162, 39, 0.45), rgba(0, 0, 0, 0.1));
+  background: linear-gradient(to top, color-mix(in srgb, var(--signal) 45%, transparent), rgba(0, 0, 0, 0.1));
 }
 
 .clip-label {
@@ -678,10 +783,15 @@ p {
 
 /* Cut styles: a thin marker on a boundary whose transition is not a hard cut. */
 .cut-marker {
-  flex: 0 0 6px;
-  align-self: stretch;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  margin-left: -3px;
+  z-index: 2;
   border-radius: 3px;
   background: var(--mute);
+  pointer-events: none;
 }
 
 .cut-marker[data-style="dip_black"] {
@@ -715,9 +825,127 @@ p {
 }
 
 .ruler {
-  display: flex;
-  justify-content: space-between;
+  position: relative;
+  height: 22px;
   color: var(--mute);
+  font-size: 0.68rem;
+}
+
+.ruler .tick {
+  position: absolute;
+  bottom: 0;
+  height: 6px;
+  border-left: 1px solid var(--mute);
+}
+
+.ruler .tick[data-label="true"] {
+  height: 10px;
+}
+
+.ruler .tick-label {
+  position: absolute;
+  top: -14px;
+  left: 3px;
+  white-space: nowrap;
+}
+
+.ruler .downbeat {
+  position: absolute;
+  bottom: 0;
+  height: 4px;
+  border-left: 1px solid var(--rule);
+}
+
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  z-index: 3;
+  background: var(--playhead);
+  pointer-events: none;
+}
+
+.playhead-handle {
+  position: absolute;
+  top: 10px;
+  left: -5px;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 8px solid var(--playhead);
+}
+
+.clip[data-narrow="true"] .clip-label,
+.clip[data-narrow="true"] .clip-fx {
+  display: none;
+}
+
+/* Transport bar under the preview */
+.transport {
+  display: grid;
+  gap: var(--space);
+}
+
+.transport-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+  flex-wrap: wrap;
+}
+
+.transport-clock {
+  font-variant-numeric: tabular-nums;
+  color: var(--tape);
+}
+
+.transport-clip {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transport-range {
+  width: 100%;
+  accent-color: var(--amber);
+}
+
+/* Storyboard preview */
+.screen[data-storyboard="true"] .storyboard-frame {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.storyboard-overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: grid;
+  gap: 4px;
+  padding: calc(var(--space) * 1.5);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0));
+  color: var(--ink);
+}
+
+.narrative-row {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.narrative-row[data-selected="true"] {
+  box-shadow: inset 2px 0 0 var(--amber);
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
 }
 
 .legend {
@@ -855,7 +1083,7 @@ p {
 
 .frame[data-picked="true"] {
   outline-color: var(--cut);
-  background: rgba(196, 67, 42, 0.12);
+  background: color-mix(in srgb, var(--cut) 12%, transparent);
 }
 
 .frame[data-gone="true"] {
@@ -868,7 +1096,7 @@ p {
   height: 54px;
   object-fit: cover;
   border-radius: 4px;
-  background: #0d0b09;
+  background: var(--well);
   display: block;
 }
 
@@ -1155,4 +1383,60 @@ p {
 .analysis .window-editor .input {
   width: 96px;
   padding: 4px 8px;
+}
+
+/* Pipeline chips: one line of dot + label instead of the eight-column bars. */
+.stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--space) * 1.5);
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+}
+
+.step-bar {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* Below 960px the editor stops fitting the viewport and stacks. */
+@media (max-width: 960px) {
+  .editor-shell {
+    height: auto;
+    min-height: 0;
+  }
+  /* Preview, then strip, then inspector: the body dissolves into the shell
+     grid so the strip can sit between its two children. */
+  .editor-body {
+    display: contents;
+  }
+  .editor-body > .preview {
+    order: 1;
+  }
+  .editor-shell > .strip-area {
+    order: 2;
+  }
+  .editor-body > .inspector-area {
+    order: 3;
+  }
+  .editor-body > .inspector-area > .panel {
+    overflow: visible;
+    max-height: none;
+  }
+  .screen-fit {
+    container-type: normal;
+  }
+  .screen {
+    height: auto;
+    width: min(100%, 320px);
+  }
+  .preview {
+    grid-template-rows: auto auto;
+  }
 }

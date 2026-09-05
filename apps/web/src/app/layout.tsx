@@ -1,19 +1,14 @@
 import type { Metadata } from 'next';
-import { Barlow_Condensed, Figtree, IBM_Plex_Mono } from 'next/font/google';
+import { IBM_Plex_Mono, Outfit } from 'next/font/google';
 import Link from 'next/link';
 import { ApiLamp } from '../components/ApiLamp';
 import { Nav } from '../components/Nav';
 import { ToastProvider } from '../components/Toast';
 import './globals.css';
 
-const slate = Barlow_Condensed({
+const body = Outfit({
   subsets: ['latin'],
-  weight: ['600', '800'],
-  variable: '--font-slate',
-});
-
-const body = Figtree({
-  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-body',
 });
 
@@ -31,7 +26,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
-      <body className={`${slate.variable} ${body.variable} ${mono.variable}`}>
+      <body className={`${body.variable} ${mono.variable}`}>
         <ToastProvider>
           <div className="shell">
             <header className="mast">

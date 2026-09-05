@@ -1,0 +1,385 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-02T21:25:00.000-04:00",
+  "title": "Design System: Memetize Studio",
+  "extensions": {
+    "colorMeta": {
+      "signal": {
+        "role": "primary",
+        "displayName": "Afterglow coral",
+        "canonical": "oklch(67.9% 0.213 14.7)",
+        "tonalRamp": [
+          "oklch(18% 0.213 14.7)",
+          "oklch(28% 0.213 14.7)",
+          "oklch(38% 0.213 14.7)",
+          "oklch(48% 0.213 14.7)",
+          "oklch(58% 0.213 14.7)",
+          "oklch(70% 0.213 14.7)",
+          "oklch(82% 0.160 14.7)",
+          "oklch(94% 0.080 14.7)"
+        ]
+      },
+      "signal-ink": {
+        "role": "primary",
+        "displayName": "Signal ink",
+        "canonical": "oklch(16.2% 0.040 350.4)",
+        "tonalRamp": [
+          "oklch(18% 0.040 350.4)",
+          "oklch(28% 0.040 350.4)",
+          "oklch(38% 0.040 350.4)",
+          "oklch(48% 0.040 350.4)",
+          "oklch(58% 0.040 350.4)",
+          "oklch(70% 0.040 350.4)",
+          "oklch(82% 0.040 350.4)",
+          "oklch(94% 0.040 350.4)"
+        ]
+      },
+      "cut": {
+        "role": "secondary",
+        "displayName": "Cut orange",
+        "canonical": "oklch(70.7% 0.187 34.1)",
+        "tonalRamp": [
+          "oklch(18% 0.187 34.1)",
+          "oklch(28% 0.187 34.1)",
+          "oklch(38% 0.187 34.1)",
+          "oklch(48% 0.187 34.1)",
+          "oklch(58% 0.187 34.1)",
+          "oklch(70% 0.187 34.1)",
+          "oklch(82% 0.140 34.1)",
+          "oklch(94% 0.070 34.1)"
+        ]
+      },
+      "ok": {
+        "role": "neutral",
+        "displayName": "Ok",
+        "canonical": "oklch(76.0% 0.153 159.7)",
+        "tonalRamp": [
+          "oklch(18% 0.153 159.7)",
+          "oklch(28% 0.153 159.7)",
+          "oklch(38% 0.153 159.7)",
+          "oklch(48% 0.153 159.7)",
+          "oklch(58% 0.153 159.7)",
+          "oklch(70% 0.153 159.7)",
+          "oklch(82% 0.110 159.7)",
+          "oklch(94% 0.050 159.7)"
+        ]
+      },
+      "bay": {
+        "role": "neutral",
+        "displayName": "Graphite bay",
+        "canonical": "oklch(15.9% 0.011 268.0)",
+        "tonalRamp": [
+          "oklch(18% 0.011 268.0)",
+          "oklch(28% 0.011 268.0)",
+          "oklch(38% 0.011 268.0)",
+          "oklch(48% 0.011 268.0)",
+          "oklch(58% 0.011 268.0)",
+          "oklch(70% 0.011 268.0)",
+          "oklch(82% 0.011 268.0)",
+          "oklch(94% 0.011 268.0)"
+        ]
+      },
+      "well": {
+        "role": "neutral",
+        "displayName": "Well",
+        "canonical": "oklch(13.5% 0.009 272.5)",
+        "tonalRamp": [
+          "oklch(18% 0.009 272.5)",
+          "oklch(28% 0.009 272.5)",
+          "oklch(38% 0.009 272.5)",
+          "oklch(48% 0.009 272.5)",
+          "oklch(58% 0.009 272.5)",
+          "oklch(70% 0.009 272.5)",
+          "oklch(82% 0.009 272.5)",
+          "oklch(94% 0.009 272.5)"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panel",
+        "canonical": "oklch(21.0% 0.021 267.6)",
+        "tonalRamp": [
+          "oklch(18% 0.021 267.6)",
+          "oklch(28% 0.021 267.6)",
+          "oklch(38% 0.021 267.6)",
+          "oklch(48% 0.021 267.6)",
+          "oklch(58% 0.021 267.6)",
+          "oklch(70% 0.021 267.6)",
+          "oklch(82% 0.021 267.6)",
+          "oklch(94% 0.021 267.6)"
+        ]
+      },
+      "panel-2": {
+        "role": "neutral",
+        "displayName": "Panel 2",
+        "canonical": "oklch(24.9% 0.030 267.4)",
+        "tonalRamp": [
+          "oklch(18% 0.030 267.4)",
+          "oklch(28% 0.030 267.4)",
+          "oklch(38% 0.030 267.4)",
+          "oklch(48% 0.030 267.4)",
+          "oklch(58% 0.030 267.4)",
+          "oklch(70% 0.030 267.4)",
+          "oklch(82% 0.030 267.4)",
+          "oklch(94% 0.030 267.4)"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "oklch(32.3% 0.034 268.0)",
+        "tonalRamp": [
+          "oklch(18% 0.034 268.0)",
+          "oklch(28% 0.034 268.0)",
+          "oklch(38% 0.034 268.0)",
+          "oklch(48% 0.034 268.0)",
+          "oklch(58% 0.034 268.0)",
+          "oklch(70% 0.034 268.0)",
+          "oklch(82% 0.034 268.0)",
+          "oklch(94% 0.034 268.0)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(95.8% 0.010 267.4)",
+        "tonalRamp": [
+          "oklch(18% 0.010 267.4)",
+          "oklch(28% 0.010 267.4)",
+          "oklch(38% 0.010 267.4)",
+          "oklch(48% 0.010 267.4)",
+          "oklch(58% 0.010 267.4)",
+          "oklch(70% 0.010 267.4)",
+          "oklch(82% 0.010 267.4)",
+          "oklch(94% 0.010 267.4)"
+        ]
+      },
+      "tape": {
+        "role": "neutral",
+        "displayName": "Tape",
+        "canonical": "oklch(83.6% 0.019 269.1)",
+        "tonalRamp": [
+          "oklch(18% 0.019 269.1)",
+          "oklch(28% 0.019 269.1)",
+          "oklch(38% 0.019 269.1)",
+          "oklch(48% 0.019 269.1)",
+          "oklch(58% 0.019 269.1)",
+          "oklch(70% 0.019 269.1)",
+          "oklch(82% 0.019 269.1)",
+          "oklch(94% 0.019 269.1)"
+        ]
+      },
+      "mute": {
+        "role": "neutral",
+        "displayName": "Mute",
+        "canonical": "oklch(66.3% 0.031 268.2)",
+        "tonalRamp": [
+          "oklch(18% 0.031 268.2)",
+          "oklch(28% 0.031 268.2)",
+          "oklch(38% 0.031 268.2)",
+          "oklch(48% 0.031 268.2)",
+          "oklch(58% 0.031 268.2)",
+          "oklch(70% 0.031 268.2)",
+          "oklch(82% 0.031 268.2)",
+          "oklch(94% 0.031 268.2)"
+        ]
+      },
+      "fn-setup": {
+        "role": "tertiary",
+        "displayName": "Setup",
+        "canonical": "oklch(65.5% 0.156 262.5)",
+        "tonalRamp": [
+          "oklch(18% 0.156 262.5)",
+          "oklch(28% 0.156 262.5)",
+          "oklch(38% 0.156 262.5)",
+          "oklch(48% 0.156 262.5)",
+          "oklch(58% 0.156 262.5)",
+          "oklch(70% 0.156 262.5)",
+          "oklch(82% 0.110 262.5)",
+          "oklch(94% 0.050 262.5)"
+        ]
+      },
+      "fn-escalation": {
+        "role": "tertiary",
+        "displayName": "Escalation",
+        "canonical": "oklch(77.0% 0.138 64.7)",
+        "tonalRamp": [
+          "oklch(18% 0.138 64.7)",
+          "oklch(28% 0.138 64.7)",
+          "oklch(38% 0.138 64.7)",
+          "oklch(48% 0.138 64.7)",
+          "oklch(58% 0.138 64.7)",
+          "oklch(70% 0.138 64.7)",
+          "oklch(82% 0.100 64.7)",
+          "oklch(94% 0.050 64.7)"
+        ]
+      },
+      "fn-payoff": {
+        "role": "tertiary",
+        "displayName": "Payoff",
+        "canonical": "oklch(63.4% 0.189 5.4)",
+        "tonalRamp": [
+          "oklch(18% 0.189 5.4)",
+          "oklch(28% 0.189 5.4)",
+          "oklch(38% 0.189 5.4)",
+          "oklch(48% 0.189 5.4)",
+          "oklch(58% 0.189 5.4)",
+          "oklch(70% 0.189 5.4)",
+          "oklch(82% 0.140 5.4)",
+          "oklch(94% 0.070 5.4)"
+        ]
+      },
+      "fn-other": {
+        "role": "tertiary",
+        "displayName": "Other",
+        "canonical": "oklch(62.4% 0.029 259.0)",
+        "tonalRamp": [
+          "oklch(18% 0.029 259.0)",
+          "oklch(28% 0.029 259.0)",
+          "oklch(38% 0.029 259.0)",
+          "oklch(48% 0.029 259.0)",
+          "oklch(58% 0.029 259.0)",
+          "oklch(70% 0.029 259.0)",
+          "oklch(82% 0.029 259.0)",
+          "oklch(94% 0.029 259.0)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "List-page titles only (Projetos, Biblioteca)." },
+      "headline": { "displayName": "Headline", "purpose": "Editor project title. Truncates; does not wrap the header." },
+      "title": { "displayName": "Title", "purpose": "Section headings inside panels. Tape color, not uppercase." },
+      "body": { "displayName": "Body", "purpose": "UI copy at 15px / 1.45. Ledes cap around 48rem." },
+      "label": { "displayName": "Label", "purpose": "Field labels, small meta, ghost control text." },
+      "mono": { "displayName": "Mono", "purpose": "Timecodes, bpm, versions, clip labels, job ids." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "state", "value": "150ms ease", "purpose": "Card border hover and other state changes." },
+      { "name": "toast-rise", "value": "180ms ease-out", "purpose": "Toast entrance. Instant under reduced motion." },
+      { "name": "busy-pulse", "value": "1.2s ease-in-out infinite", "purpose": "Busy status dots and running pipeline chips. Killed under reduced motion." }
+    ],
+    "breakpoints": [
+      { "name": "editor-stack", "value": "960px", "purpose": "Editor stops fitting the viewport: preview, then strip, then inspector." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one filled action in a cluster: Renderizar, Criar projeto, Novo projeto.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Renderizar</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--color-signal, #ff4d6d); color: var(--color-signal-ink, #1a0610); border: 1px solid var(--color-signal, #ff4d6d); border-radius: 8px; padding: 7px 14px; font: 600 15px/1.2 Outfit, sans-serif; cursor: pointer; white-space: nowrap; } .ds-btn-primary:hover:not(:disabled) { background: #ff6e88; } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-signal, #ff4d6d); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined Afterglow action when it is not the one primary.",
+      "html": "<button class=\"ds-btn-secondary\" type=\"button\">Gerar timeline</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--color-signal, #ff4d6d); border: 1px solid var(--color-signal, #ff4d6d); border-radius: 8px; padding: 7px 14px; font: 600 15px/1.2 Outfit, sans-serif; cursor: pointer; white-space: nowrap; } .ds-btn-secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--color-signal, #ff4d6d) 10%, transparent); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--color-signal, #ff4d6d); outline-offset: 2px; } .ds-btn-secondary:disabled { opacity: 0.45; cursor: not-allowed; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Low-emphasis control: Cancelar, back-of-cluster actions.",
+      "html": "<button class=\"ds-btn-ghost\" type=\"button\">Cancelar</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--color-tape, #c4c9d6); border: 1px solid transparent; border-radius: 8px; padding: 7px 14px; font: 600 15px/1.2 Outfit, sans-serif; cursor: pointer; white-space: nowrap; } .ds-btn-ghost:hover:not(:disabled) { background: var(--color-panel-2, #1b2130); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--color-signal, #ff4d6d); outline-offset: 2px; } .ds-btn-ghost:disabled { opacity: 0.45; cursor: not-allowed; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Destructive outline: Excluir, Banir. Never a filled orange.",
+      "html": "<button class=\"ds-btn-danger\" type=\"button\">Excluir</button>",
+      "css": ".ds-btn-danger { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--color-cut, #ff6b4a); border: 1px solid var(--color-cut, #ff6b4a); border-radius: 8px; padding: 7px 14px; font: 600 15px/1.2 Outfit, sans-serif; cursor: pointer; white-space: nowrap; } .ds-btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--color-cut, #ff6b4a) 12%, transparent); } .ds-btn-danger:focus-visible { outline: 2px solid var(--color-signal, #ff4d6d); outline-offset: 2px; } .ds-btn-danger:disabled { opacity: 0.45; cursor: not-allowed; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Bay well inside a panel. Labels sit in tape above the field.",
+      "html": "<label class=\"ds-field\">Letra sincronizada<input class=\"ds-input\" type=\"text\" placeholder=\"opcional\" /></label>",
+      "css": ".ds-field { display: grid; gap: 6px; font: 0.85rem/1.2 Outfit, sans-serif; color: var(--color-tape, #c4c9d6); } .ds-input { background: var(--color-bay, #0b0d12); color: var(--color-ink, #eef1f8); border: 1px solid var(--color-rule, #2c3345); border-radius: 8px; padding: 8px 10px; font: 400 15px/1.45 Outfit, sans-serif; width: 100%; } .ds-input::placeholder { color: var(--color-mute, #8b93a7); } .ds-input:focus-visible { outline: 2px solid var(--color-signal, #ff4d6d); outline-offset: 2px; }"
+    },
+    {
+      "name": "Mast Navigation",
+      "kind": "nav",
+      "refersTo": "nav-active",
+      "description": "Sticky 58px bar. Wordmark plus Projetos / Biblioteca. Active sits in a panel-2 well.",
+      "html": "<header class=\"ds-mast\"><a class=\"ds-wordmark\" href=\"/\">Meme<span>tize</span></a><nav class=\"ds-nav\"><a href=\"/\">Projetos</a><a class=\"ds-nav-active\" href=\"/library\">Biblioteca</a></nav></header>",
+      "css": ".ds-mast { display: flex; align-items: center; justify-content: space-between; height: 58px; padding: 0 24px; background: var(--color-panel, #141822); border-bottom: 1px solid var(--color-rule, #2c3345); } .ds-wordmark { font: 700 1.5rem/1 Outfit, sans-serif; letter-spacing: -0.02em; color: var(--color-ink, #eef1f8); text-decoration: none; } .ds-wordmark span { color: var(--color-signal, #ff4d6d); } .ds-nav { display: flex; gap: 16px; } .ds-nav a { padding: 6px 10px; border-radius: 8px; color: var(--color-mute, #8b93a7); font: 600 15px/1.2 Outfit, sans-serif; text-decoration: none; } .ds-nav a:hover { color: var(--color-ink, #eef1f8); } .ds-nav a:focus-visible { outline: 2px solid var(--color-signal, #ff4d6d); outline-offset: 2px; } .ds-nav-active { color: var(--color-ink, #eef1f8) !important; background: var(--color-panel-2, #1b2130); }"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "pill",
+      "description": "Pipeline and asset status. Dot carries tone; the pill stays graphite.",
+      "html": "<span class=\"ds-pill\" data-tone=\"ok\">Timeline pronta</span>",
+      "css": ".ds-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font: 600 0.78rem/1.2 Outfit, sans-serif; letter-spacing: 0.02em; border: 1px solid var(--color-rule, #2c3345); color: var(--color-tape, #c4c9d6); background: var(--color-panel-2, #1b2130); white-space: nowrap; } .ds-pill::before { content: \"\"; width: 7px; height: 7px; border-radius: 50%; background: var(--color-mute, #8b93a7); } .ds-pill[data-tone=\"ok\"]::before { background: var(--color-ok, #3dce8e); } .ds-pill[data-tone=\"busy\"]::before { background: var(--color-signal, #ff4d6d); } .ds-pill[data-tone=\"bad\"] { border-color: var(--color-cut, #ff6b4a); color: var(--color-ink, #eef1f8); } .ds-pill[data-tone=\"bad\"]::before { background: var(--color-cut, #ff6b4a); }"
+    },
+    {
+      "name": "Project Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Linked project or asset tile. Hover shifts the 1px rule to Afterglow; no shadow.",
+      "html": "<a class=\"ds-card\" href=\"/projects/1\"><span class=\"ds-card-kicker\">render v3</span><strong class=\"ds-card-title\">drop-chorus.mp3</strong><span class=\"ds-card-meta\">música 03:12 · saída 01:00 · timeline v2</span></a>",
+      "css": ".ds-card { display: grid; gap: 8px; background: var(--color-panel, #141822); border: 1px solid var(--color-rule, #2c3345); border-radius: 8px; padding: 12px; color: var(--color-ink, #eef1f8); text-decoration: none; font: 400 15px/1.45 Outfit, sans-serif; transition: border-color 150ms ease; } .ds-card:hover { border-color: var(--color-signal, #ff4d6d); } .ds-card:focus-visible { outline: 2px solid var(--color-signal, #ff4d6d); outline-offset: 2px; } .ds-card-kicker { font: 400 0.8rem/1.4 \"IBM Plex Mono\", ui-monospace, monospace; color: var(--color-mute, #8b93a7); } .ds-card-title { font-weight: 600; overflow-wrap: anywhere; } .ds-card-meta { font: 400 0.8rem/1.4 \"IBM Plex Mono\", ui-monospace, monospace; color: var(--color-mute, #8b93a7); }"
+    },
+    {
+      "name": "9:16 Screen",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "The object of work. Well fill, 12px corners, 1px rule. Storyboard and render share this frame.",
+      "html": "<div class=\"ds-screen\"><span class=\"ds-screen-empty\">Ainda não há render</span></div>",
+      "css": ".ds-screen { width: 180px; aspect-ratio: 9 / 16; background: var(--well, #07080c); border-radius: 12px; border: 1px solid var(--color-rule, #2c3345); overflow: hidden; display: grid; place-items: center; } .ds-screen-empty { color: var(--color-mute, #8b93a7); font: 400 0.85rem/1.45 Outfit, sans-serif; text-align: center; padding: 16px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Afterglow Bay",
+    "overview": "Studio is a night bay: cool graphite, dense but quiet, one coral mark for where you are. You sit in it to review a planned cut, not to decorate a room. The surface is the work — a 9:16 screen, a strip, a playhead — and the chrome stays off that object.\n\nPersonality is calm, precise, technical. Outfit carries every label in Portuguese. IBM Plex Mono is reserved for time, versions, and ids. Numbers appear when they earn their place. There is no performance around the cut.\n\nThis system explicitly rejects Premiere and DaVinci Resolve's professional cockpit of four hundred panels. Steal the strip and the clock from Resolve; do not steal the rest of the room.",
+    "keyCharacteristics": [
+      "Graphite bay, not cinema black and not SaaS navy",
+      "Afterglow coral used as a mark, never as a wash",
+      "One strip, one clock; preview and playhead agree",
+      "1px rules for depth; no drop shadows",
+      "Outline until the one primary fills"
+    ],
+    "rules": [
+      { "name": "The Afterglow Rule", "body": "Afterglow coral occupies ≤10% of any screen. It is the playhead, the filled primary, the selected clip ring, and the focus outline. If a panel is tinted coral, the mark is spent.", "section": "colors" },
+      { "name": "The Narrative is Data Rule", "body": "Setup, escalation, payoff, and other color clip bars and the legend only. They are never buttons, never wordmarks, never backgrounds.", "section": "colors" },
+      { "name": "The Ink Rule", "body": "Body and labels that must be read sit on ink or tape. Mute is for idle chrome. If a sentence is mute-on-bay, bump it to tape.", "section": "colors" },
+      { "name": "The Numbers Rule", "body": "Outfit never carries a timecode. IBM Plex Mono never carries a heading, a button, or a paragraph.", "section": "typography" },
+      { "name": "The No-Eyebrow Rule", "body": "Section titles are sentence-case Outfit at 1.05rem in tape. Forbidden: tiny uppercase tracked kickers above every block.", "section": "typography" },
+      { "name": "The Rule Rule", "body": "Every edge is 1px solid rule. Hover may shift a card's border to Afterglow coral. No 2px+ side stripes. No ambient umbra.", "section": "elevation" },
+      { "name": "The Well Rule", "body": "Media lives in well: the 9:16 screen, the strip track, empty thumbs. Panels never sit in the well; the well never becomes a card.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep Afterglow coral for the playhead, the one filled primary, selection, and focus (2px / 2px offset).",
+      "Do stack graphite as bay → panel → panel-2, and drop media into the well.",
+      "Do draw every edge with a 1px rule line.",
+      "Do put time, versions, and ids in IBM Plex Mono; everything else in Outfit.",
+      "Do keep one strip and one clock. Preview and playhead must agree about what you are watching.",
+      "Do write every label, empty state, error, and toast in Portuguese.",
+      "Do kill animation and transition under prefers-reduced-motion: reduce.",
+      "Do use narrative hues only on clip bars and the legend."
+    ],
+    "donts": [
+      "Don't build Premiere and DaVinci Resolve's professional cockpit of four hundred panels.",
+      "Don't steal the rest of the room from Resolve — steal the strip and the clock only.",
+      "Don't use drop shadows, including 0 10px 30px rgba(0, 0, 0, 0.35) on dialogs or toasts.",
+      "Don't pair a 1px border with a wide soft shadow.",
+      "Don't use border-left or border-right greater than 1px as a colored stripe (toasts, quotes, selected rows).",
+      "Don't wash a panel, page, or card in Afterglow coral.",
+      "Don't use narrative-function colors as brand, buttons, or wordmarks.",
+      "Don't set body copy in mute on bay.",
+      "Don't nest cards inside cards.",
+      "Don't round surfaces past 12px (the screen). Controls stay at 8px; pills are the only full-round shape.",
+      "Don't introduce a second display font, gradient text, or glassmorphism.",
+      "Don't add uppercase tracked eyebrows above sections.",
+      "Don't animate layout or choreograph page load. Motion is state (busy pulse, toast rise, 150ms border) or it is nothing."
+    ]
+  }
+}

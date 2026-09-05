@@ -72,7 +72,7 @@ export const api = {
     request<{ ok: boolean }>(`/v1/projects/${id}/generate`, { method: 'POST' }),
   render: (id: string) => request<{ ok: boolean }>(`/v1/projects/${id}/render`, { method: 'POST' }),
   swapClip: (projectId: string, clipId: string, momentId: string) =>
-    request<{ timeline: { version: number } }>(`/v1/projects/${projectId}/clips/${clipId}/swap`, {
+    request<{ timeline: TimelineVersion }>(`/v1/projects/${projectId}/clips/${clipId}/swap`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ momentId }),
@@ -235,6 +235,24 @@ export interface TimelineClip {
   reason: { segmentId: string; semanticScore: number; finalScore: number };
 }
 
+/** How the project's music lines up with the output clock (timeline `audio`). */
+export interface TimelineAudio {
+  path: string;
+  timelineStartMs: number;
+  sourceStartMs: number;
+}
+
+export interface TimelineData {
+  durationMs: number;
+  audio: TimelineAudio;
+  clips: TimelineClip[];
+}
+
+export interface TimelineVersion {
+  version: number;
+  data: TimelineData;
+}
+
 export interface ShortlistEntry {
   momentId: string;
   assetId: string;
@@ -288,7 +306,7 @@ export interface ProjectDetail {
   lyrics: LyricsRow | null;
   narrative: NarrativeSegmentRow[];
   matches: { segmentId: string; shortlist: ShortlistEntry[] }[];
-  timeline: { version: number; data: { durationMs: number; clips: TimelineClip[] } } | null;
+  timeline: TimelineVersion | null;
   render: RenderRow | null;
   renders: RenderRow[];
   jobs: ProjectJob[];

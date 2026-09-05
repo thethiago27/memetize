@@ -10,6 +10,7 @@ export function latestJobByType(jobs: ProjectJob[]): Map<string, ProjectJob> {
   return latest;
 }
 
+/** One chip per pipeline step: a state dot and the step name, on a single line. */
 export function Stepper({ jobs }: { jobs: ProjectJob[] }) {
   const latest = latestJobByType(jobs);
   return (
@@ -18,7 +19,7 @@ export function Stepper({ jobs }: { jobs: ProjectJob[] }) {
         const job = latest.get(step.type);
         const state = job?.status ?? 'NONE';
         return (
-          <div
+          <span
             key={step.type}
             className="step"
             data-state={state}
@@ -28,9 +29,9 @@ export function Stepper({ jobs }: { jobs: ProjectJob[] }) {
                 : `${step.label}: ainda não rodou`
             }
           >
-            <div className="step-bar" />
+            <span className="step-bar" />
             <span className="step-label">{step.label}</span>
-          </div>
+          </span>
         );
       })}
     </section>

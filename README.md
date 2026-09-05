@@ -20,7 +20,7 @@ pnpm db:migrate
 pnpm py:sync
 ```
 
-Start Studio (API on `:8787`, web on `:3000`). The web UI is in Portuguese: **Projetos** (home, editor per project) and **Biblioteca** (asset catalog).
+Start Studio (API on `:8787`, web on `:3000`). The web UI is in Portuguese: **Projetos** (home, editor per project) and **Biblioteca** (asset catalog). The editor plays the latest render when it matches the timeline; otherwise it plays a storyboard (the project's music plus one thumbnail per clip) so cuts can be reviewed before rendering. Scrub on the strip or the slider, click a clip to inspect it, and swap candidates from the inspector.
 
 ```bash
 pnpm studio

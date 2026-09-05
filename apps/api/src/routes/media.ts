@@ -1,4 +1,4 @@
-import { createReadStream, existsSync } from 'node:fs';
+import { createReadStream, existsSync, statSync } from 'node:fs';
 import { extname, resolve, sep } from 'node:path';
 import type { AppRuntime } from '@memetize/runtime';
 import type { FastifyInstance } from 'fastify';
@@ -57,6 +57,53 @@ export function registerMediaRoutes(app: FastifyInstance, runtime: AppRuntime): 
       return sendError(reply, 404, 'NOT_FOUND', `file not found: ${relative}`);
     }
     const type = CONTENT_TYPE[extname(absolute).toLowerCase()] ?? 'application/octet-stream';
+    const size = statSync(absolute).size;
+    reply.header('accept-ranges', 'bytes');
+
+    // Browsers seek inside <video>/<audio> only when the server honors byte
+    // ranges; without this every seek restarts the download from zero.
+    const range = parseRange(request.headers.range, size);
+    if (range === 'invalid') {
+      reply.header('content-range', `bytes */${size}`);
+      return sendError(reply, 416, 'RANGE_NOT_SATISFIABLE', 'requested range not satisfiable');
+    }
+    if (range) {
+      reply
+        .code(206)
+        .header('content-range', `bytes ${range.start}-${range.end}/${size}`)
+        .header('content-length', range.end - range.start + 1);
+      return reply
+        .type(type)
+        .send(createReadStream(absolute, { start: range.start, end: range.end }));
+    }
+    reply.header('content-length', size);
     return reply.type(type).send(createReadStream(absolute));
   });
+}
+
+/**
+ * One `bytes=start-end` range against a file size: `null` when the header is
+ * absent, `'invalid'` when nothing in it can be served. Multi-range requests
+ * fall back to the whole file, which browsers accept.
+ */
+export function parseRange(
+  header: string | undefined,
+  size: number,
+): { start: number; end: number } | null | 'invalid' {
+  if (!header) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match) return null;
+  const [, startText, endText] = match;
+  if (startText === '' && endText === '') return 'invalid';
+  if (size === 0) return 'invalid';
+  if (startText === '') {
+    // Suffix range: the last N bytes.
+    const suffix = Number(endText);
+    if (suffix === 0) return 'invalid';
+    return { start: Math.max(0, size - suffix), end: size - 1 };
+  }
+  const start = Number(startText);
+  const end = endText === '' ? size - 1 : Math.min(Number(endText), size - 1);
+  if (start >= size || start > end) return 'invalid';
+  return { start, end };
 }

@@ -55,7 +55,7 @@ export function AnalysisPanel({
   lyrics,
   editWindow,
   manualWindow,
-  playheadMs,
+  positionMs,
   locked,
   onSeek,
   onSetWindow,
@@ -65,7 +65,8 @@ export function AnalysisPanel({
   lyrics: LyricsRow | null;
   editWindow: EditWindowRow | null;
   manualWindow: ManualWindow | null;
-  playheadMs: number | null;
+  /** The transport's output position (editor-transport spec). */
+  positionMs: number;
   /** True while jobs run or another action is in flight: no window changes. */
   locked: boolean;
   onSeek: (outputMs: number) => void;
@@ -84,8 +85,7 @@ export function AnalysisPanel({
   const durationMs = audio?.durationMs ?? 0;
   const lines = lyrics?.lines ?? [];
   const beats = useMemo(() => thin(audio?.beats ?? [], MAX_BEATS), [audio]);
-  const sourcePlayheadMs =
-    playheadMs !== null && editWindow ? toSource(playheadMs, editWindow) : null;
+  const sourcePlayheadMs = editWindow ? toSource(positionMs, editWindow) : null;
   const currentLine = sourcePlayheadMs !== null ? lineAt(lines, sourcePlayheadMs) : null;
   const selecting = draft !== null;
 

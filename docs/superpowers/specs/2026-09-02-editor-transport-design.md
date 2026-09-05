@@ -14,7 +14,7 @@ This is the first of three editor increments chosen on 2026-09-02:
 2. Hand-editing cut styles in the Inspector (contract in `2026-09-01-cut-styles-design.md`, "Contract for increment 2").
 3. Timeline tools: boundary trim, source slip, keyboard shortcuts, strip zoom.
 
-The API and the pipeline do not change. The timeline document already carries `audio.path`, `audio.sourceStartMs` and `audio.timelineStartMs`, which is all the storyboard needs.
+The pipeline does not change. The timeline document already carries `audio.path`, `audio.sourceStartMs` and `audio.timelineStartMs`, which is all the storyboard needs. The API changes in one place: `GET /v1/media/*` honors HTTP `Range` requests (`Accept-Ranges: bytes`, `206 Partial Content`, `416` when unsatisfiable). Without it browsers cannot seek inside a `<video>` or `<audio>`: seeking past the buffer restarts the download from zero and playback snaps back to the start.
 
 ## Problems being fixed
 
@@ -27,21 +27,25 @@ The API and the pipeline do not change. The timeline document already carries `a
 
 ## Layout
 
-The editor body keeps two columns above 960px and gains a full-width row for the strip:
+The editor fits the viewport, so the preview and the strip are always on screen together. A 9:16 preview at a fixed width pushed the strip below the fold on every laptop screen.
 
 ```
-+---------------------------+------------------+
-|  Preview (9:16)           |  Inspector       |
-|  TransportBar             |                  |
-+---------------------------+------------------+
-|  Ruler                                       |
-|  TimelineStrip                               |
-+----------------------------------------------+
-|  Tabs: Narrativa | Análise | Renders | ...   |
-+----------------------------------------------+
++--------------------------------------------------+
+| ← MP3 ● Concluído  03:27 · 112 bpm · trecho … · timeline v14 · render v5   Avaliar ★★★★★ [Gerar timeline] [Renderizar] Excluir |
+| ● Áudio ● Letra ● Narrativa ● Match ● Direção ● Timing ● Efeitos ● Render   (notices only when they apply) |
++-----------------------------+--------------------+
+|  Preview, sized to the      |  Inspector         |
+|  height that is left        |  (scrolls)         |
+|  TransportBar               |                    |
++-----------------------------+--------------------+
+|  Ruler + TimelineStrip (pinned)                  |
++--------------------------------------------------+
+|  Tabs: Narrativa | Análise | Renders | …  (page scrolls to them) |
 ```
 
-`.editor` becomes a grid with `grid-template-areas`: `"preview inspector" "strip strip"`. Under 960px the areas stack: preview, strip, inspector. The tabs panel follows as today.
+`.editor-shell` is a grid with rows `auto auto minmax(0, 1fr) auto` and `height: calc(100dvh - mast - page padding)`, minimum 560px. The header is one line (`.editor-head`): back arrow, title, status pill, and a meta line that gives way before the title does; rating and actions on the right. The pipeline line (`.pipeline-line`) shows the eight steps as dot-and-label chips and, only when they apply, the failed-step and stale-render notices inline. The edit window moves into the header meta ("trecho mm:ss–mm:ss"). `.editor-body` holds the preview beside the inspector, which scrolls inside the row (`min-height: 0; overflow-y: auto`). The preview's screen keeps 9:16 and takes the height left in its column: the wrapper is a size container and the screen's height is `min(100cqh, 100cqw × 16 / 9)`. The strip row sits under the body. The tabs panel follows the shell in normal flow.
+
+Under 960px the shell stops fitting the viewport: `.editor-body` becomes `display: contents` and `order` puts preview, strip, inspector in that sequence; the inspector stops scrolling.
 
 ## Components
 
@@ -78,8 +82,11 @@ interface Transport {
   play(): void;
   pause(): void;
   toggle(): void;
-  seek(ms: number): void;  // clamps to [0, durationMs]
+  seek(ms: number): void;  // clamps to [0, durationMs]; moves the media element too
+  scrub(ms: number): void; // moves only the clock, for the middle of a drag
   mediaRef: RefObject<HTMLMediaElement | null>; // the element this transport drives
+  attachMedia(element: HTMLMediaElement | null): void; // callback ref; seeks the element to positionMs on mount
+  onEnded(): void;
 }
 ```
 
@@ -115,7 +122,7 @@ outputDownbeats(downbeatsMs, editWindow, durationMs): number[]
 - **Measurement.** `apps/web/src/lib/use-element-width.ts` returns the element's content width through a `ResizeObserver`. Every clip is absolutely positioned with `left = msToPx(startMs)` and `width = msToPx(slotMs)`. There is no minimum width. Clips narrower than 40px render only the function color bar and the thumbnail; the timecode label and the effect badge are hidden.
 - **Ruler.** A row above the strip. `rulerTicks` returns a tick every 5 s with `label: true` every 10 s; when `widthPx / (durationMs / 10_000)` is under 56px, labels move to every 20 s. Downbeats from `audio.downbeats`, mapped by `outputDownbeats` through `editWindow.sourceStartMs`, draw as 1px marks in the lower half of the ruler.
 - **Playhead.** A 2px `--playhead` line spanning ruler and strip with a small triangular handle inside the ruler, positioned at `msToPx(positionMs)`.
-- **Scrub.** `pointerdown` on the ruler or the strip captures the pointer, pauses the transport, and seeks to `pxToMs`. `pointermove` keeps seeking. `pointerup` releases capture; if the pointer moved less than 3px since `pointerdown`, the gesture counts as a click and selects `clipAt(ms)`.
+- **Scrub.** `pointerdown` on the ruler or the strip captures the pointer, pauses the transport, and calls `transport.scrub(pxToMs)`, which moves only the clock: the playhead and the storyboard follow it, the media element does not. `pointermove` keeps scrubbing. `pointerup` releases capture and calls `transport.seek`, which is the one media seek of the gesture; seeking a `<video>` on every pointer move stalls it. If the pointer moved less than 3px since `pointerdown`, the gesture counts as a click and selects `clipAt(ms)` instead.
 - **Clips stay `<button>`s** for keyboard users: Tab reaches them, Enter or Space selects. Their own `click` handler is suppressed when the strip's pointer handling already consumed the gesture, so a click never selects twice.
 - **Cut markers.** A non-`hard` `transitionOut` draws as a 6px overlay centered on the boundary between the clip and the next one, with the same `data-style` variants as today. Markers no longer take horizontal space.
 - **Legend.** The narrative-function legend stays under the strip.
@@ -187,9 +194,13 @@ New:
 - `apps/web/src/components/editor/TimelineStrip.tsx` (moved from `components/`)
 - `apps/web/src/components/editor/EditorTabs.tsx`, `NarrativeTab.tsx`, `RendersTab.tsx`, `MemoryTab.tsx`, `JobsTab.tsx`
 
+- `apps/api/src/routes/media.test.ts` (`parseRange`)
+
 Changed:
 
+- `apps/api/src/routes/media.ts` (`Range` support, `parseRange`)
 - `apps/web/src/app/projects/[id]/page.tsx` (orchestrator)
+- `apps/web/src/components/Stepper.tsx` (dot-and-label chips on one line)
 - `apps/web/src/components/AnalysisPanel.tsx` (transport inputs)
 - `apps/web/src/lib/api.ts`: `ProjectDetail.timeline.data` gains `audio: { path; sourceStartMs; timelineStartMs }`, which the API already returns.
 - `apps/web/src/app/globals.css`: `.editor` grid areas, ruler, playhead, absolute clips, transport bar, storyboard overlay.
@@ -198,7 +209,7 @@ Removed: `apps/web/src/components/TimelineStrip.tsx`.
 
 ## Out of scope
 
-Boundary trim, source slip, strip zoom, keyboard shortcuts beyond focusable controls, cut-style editing, server-sent events, per-position frames inside a clip, and any API change.
+Boundary trim, source slip, strip zoom, keyboard shortcuts beyond focusable controls, cut-style editing, server-sent events, per-position frames inside a clip, and any API change beyond `Range` support on `/v1/media/*`.
 
 ## Testing
 
