@@ -35,6 +35,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   real,
   text,
   timestamp,
@@ -58,6 +59,17 @@ export const jobs = pgTable(
     maxAttempts: integer('max_attempts').notNull().default(3),
     inputHash: text('input_hash').notNull(),
     workerVersion: text('worker_version').notNull(),
+    // Crash recovery (F08): a claimed job carries a random lease token and an
+    // expiry. A worker renews the expiry while it runs; a RUNNING job whose
+    // lease has expired is reclaimable. Completion/failure are conditioned on
+    // still holding the token, so a stale attempt can never publish.
+    leaseToken: text('lease_token'),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    // Immutable generation identity (F10/F11): ties a job to the generation it
+    // was enqueued for and the logical step within it, so "latest" reads and
+    // fan-in barriers cannot cross generations. Null on legacy rows.
+    generationId: text('generation_id'),
+    stepKey: text('step_key'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     startedAt: timestamp('started_at', { withTimezone: true }),
     completedAt: timestamp('completed_at', { withTimezone: true }),
@@ -75,10 +87,41 @@ export const jobs = pgTable(
     // Supports the claim query: PENDING ordered by priority DESC, created_at.
     index('jobs_claim_idx').on(table.status, table.priority, table.createdAt),
     index('jobs_entity_idx').on(table.entityId),
+    // One job per (entity, generation, logical step): a fan-in continuation
+    // enqueued twice collapses to one row (F10).
+    uniqueIndex('jobs_generation_step_key')
+      .on(table.entityId, table.generationId, table.stepKey)
+      .where(sql`generation_id is not null and step_key is not null`),
     check(
       'jobs_status_check',
       sql`${table.status} in ('PENDING','RUNNING','COMPLETED','FAILED','CANCELLED')`,
     ),
+  ],
+);
+
+/**
+ * Per-entity coordination record (F09). Serializes commands on a project/asset
+ * (`SELECT ... FOR UPDATE` on this row) and holds the monotonic counters used to
+ * reserve timeline/render versions atomically, the currently active generation,
+ * and the constraints revision that bans bump (F13). Exactly one row per entity,
+ * created with the entity.
+ */
+export const entityExecution = pgTable(
+  'entity_execution',
+  {
+    entityKind: text('entity_kind').notNull(),
+    entityId: text('entity_id').notNull(),
+    activeGenerationId: text('active_generation_id'),
+    currentTimelineVersion: integer('current_timeline_version').notNull().default(0),
+    nextRenderVersion: integer('next_render_version').notNull().default(1),
+    nextTimelineVersion: integer('next_timeline_version').notNull().default(1),
+    nextWindowVersion: integer('next_window_version').notNull().default(1),
+    constraintsRevision: integer('constraints_revision').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.entityKind, table.entityId] }),
+    check('entity_execution_kind_check', sql`${table.entityKind} in ('project','asset')`),
   ],
 );
 
@@ -501,6 +544,8 @@ export type RenderRow = typeof renders.$inferSelect;
 export type NewRenderRow = typeof renders.$inferInsert;
 export type EditWindowRow = typeof editWindows.$inferSelect;
 export type NewEditWindowRow = typeof editWindows.$inferInsert;
+export type EntityExecutionRow = typeof entityExecution.$inferSelect;
+export type NewEntityExecutionRow = typeof entityExecution.$inferInsert;
 
 /**
  * Editorial memory (editorial-memory spec): one append-only row per swap,

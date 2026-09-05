@@ -5,6 +5,13 @@ import { ensureDir } from '@memetize/shared';
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * Ceiling for a single normalize ffmpeg invocation (F08). A hung encode must
+ * not pin a worker slot forever; the process is killed and the job fails
+ * (retryable via the orchestrator's attempt budget).
+ */
+const FFMPEG_TIMEOUT_MS = 10 * 60_000;
+
 export interface NormalizeParams {
   /** Absolute path to the untouched original. */
   originalPath: string;
@@ -18,6 +25,7 @@ async function runFfmpeg(args: string[]): Promise<void> {
   try {
     await execFileAsync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', ...args], {
       maxBuffer: 32 * 1024 * 1024,
+      timeout: FFMPEG_TIMEOUT_MS,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

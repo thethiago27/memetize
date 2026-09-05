@@ -5,8 +5,18 @@ const port = Number.parseInt(process.env.API_PORT ?? '8787', 10);
 const runtime = createAppRuntime();
 const app = await buildApi(runtime);
 
+// Recover jobs abandoned by a previous crash before serving (F08).
+const reconciled = await runtime.orchestrator.reconcile();
+if (reconciled > 0) runtime.logger.warn('startup_reconciled_jobs', { count: reconciled });
+
+let shuttingDown = false;
 const shutdown = async () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  // Stop accepting HTTP, stop new claims, let in-flight jobs commit/fail
+  // cleanly (their lease still guards the write), then close the pool.
   await app.close();
+  await runtime.orchestrator.shutdown();
   await runtime.close();
   process.exit(0);
 };

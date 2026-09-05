@@ -99,6 +99,13 @@
       "when": 1788385774291,
       "tag": "0013_manual_window",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788629579969,
+      "tag": "0014_lumpy_husk",
+      "breakpoints": true
     }
   ]
 }

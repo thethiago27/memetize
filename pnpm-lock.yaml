@@ -419,12 +419,18 @@ importers:
       '@memetize/frame-extractor':
         specifier: workspace:*
         version: link:../../workers/frame-extractor
+      '@memetize/job-system':
+        specifier: workspace:*
+        version: link:../job-system
       '@memetize/lyrics':
         specifier: workspace:*
         version: link:../../workers/lyrics
       '@memetize/matching':
         specifier: workspace:*
         version: link:../../workers/matching
+      '@memetize/media-catalog':
+        specifier: workspace:*
+        version: link:../media-catalog
       '@memetize/moment-extractor':
         specifier: workspace:*
         version: link:../../workers/moment-extractor
@@ -434,6 +440,9 @@ importers:
       '@memetize/orchestrator':
         specifier: workspace:*
         version: link:../orchestrator
+      '@memetize/projects':
+        specifier: workspace:*
+        version: link:../projects
       '@memetize/renderer-worker':
         specifier: workspace:*
         version: link:../../workers/renderer

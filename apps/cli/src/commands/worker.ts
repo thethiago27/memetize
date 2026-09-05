@@ -17,6 +17,9 @@ export function registerWorkerCommands(program: Command): void {
     .action(async (options: RunOptions) => {
       const ctx = await buildContext();
       try {
+        // Recover jobs abandoned by a previous crash before processing (F08).
+        const reconciled = await ctx.orchestrator.reconcile();
+        if (reconciled > 0) process.stdout.write(`Reconciled ${reconciled} abandoned job(s).\n`);
         if (options.once) {
           const outcome = await ctx.orchestrator.runOnce({ entityId: options.entity });
           if (!outcome) {
