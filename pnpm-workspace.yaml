@@ -9,5 +9,8 @@ onlyBuiltDependencies:
 # pnpm's pre-run verification treats ignored build scripts as fatal; esbuild's
 # binary ships via its platform optional dependency, so skip the gate.
 verifyDepsBeforeRun: false
+# pnpm 11 exits 1 with ERR_PNPM_IGNORED_BUILDS when a listed package is not
+# allowed to run scripts. We want the prebuilt esbuild binary, not a compile.
+strictDepBuilds: false
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: false
