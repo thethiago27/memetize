@@ -38,9 +38,18 @@ export function toNarrativeSegmentRows(
   }));
 }
 
+/** Stable identity for a segment within a project: its exact interval + kind. */
+function segmentKey(startMs: number, endMs: number, sourceKind: string): string {
+  return `${startMs}:${endMs}:${sourceKind}`;
+}
+
 /**
  * Idempotently persists narrative segments: existing rows for the project
  * are replaced wholesale (spec section 4.2), mirroring `replaceMoments`.
+ *
+ * A re-run that reproduces the exact same segment interval reuses that segment's
+ * id (F12), so strict rejections keyed by `projectId:segmentId` survive
+ * reprocessing; only segments whose boundaries changed get fresh ids.
  */
 export async function replaceNarrativeSegments(
   db: Database,
@@ -48,9 +57,25 @@ export async function replaceNarrativeSegments(
 ): Promise<NarrativeSegmentRow[]> {
   const rows = toNarrativeSegmentRows(params);
   return db.transaction(async (tx) => {
+    const existing = await tx.query.narrativeSegments.findMany({
+      where: eq(narrativeSegments.projectId, params.projectId),
+    });
+    const idByInterval = new Map(
+      existing.map((segment) => [
+        segmentKey(segment.startMs, segment.endMs, segment.sourceKind),
+        segment.id,
+      ]),
+    );
+    const preserved = rows.map((row) => {
+      const stableId = idByInterval.get(
+        segmentKey(row.startMs, row.endMs, row.sourceKind ?? 'LYRIC'),
+      );
+      return stableId ? { ...row, id: stableId } : row;
+    });
+
     await tx.delete(narrativeSegments).where(eq(narrativeSegments.projectId, params.projectId));
-    if (rows.length === 0) return [];
-    return tx.insert(narrativeSegments).values(rows).returning();
+    if (preserved.length === 0) return [];
+    return tx.insert(narrativeSegments).values(preserved).returning();
   });
 }
 
