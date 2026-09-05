@@ -1,0 +1,67 @@
+name: integration
+
+# Integration gate (F15): runs the DB/FFmpeg/Python-backed suites with a real
+# PostgreSQL+pgvector so that a broken migration or a skipped mandatory case
+# fails CI instead of silently turning into a skip. REQUIRE_INTEGRATION_TESTS=1
+# makes a missing TEST_DATABASE_URL a hard error (see packages/database/src/testing.ts).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: memetize
+          POSTGRES_PASSWORD: memetize
+          POSTGRES_DB: memetize_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U memetize"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      REQUIRE_INTEGRATION_TESTS: '1'
+      TEST_DATABASE_URL: postgres://memetize:memetize@localhost:5432/memetize_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Sync Python workers
+        run: pnpm py:sync
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Integration tests (gate)
+        run: pnpm test:integration
+
+      - name: Python worker tests
+        run: pnpm py:test
