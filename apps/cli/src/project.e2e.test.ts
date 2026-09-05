@@ -65,6 +65,7 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('project pipeline (e
       storageDirRelative: 'storage',
       resources: { CPU_LIGHT: 4, CPU_HEAVY: 1, GPU: 1, IO: 4, RENDER: 1 },
       embeddingDimensions: 384,
+      providerMode: 'demo',
       providers: {
         transcription: { kind: 'fixture', model: null },
         vision: { kind: 'fixture', model: null },

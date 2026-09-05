@@ -133,7 +133,25 @@ describe('GatewayLLMProvider narrative and moments', () => {
     generateObjectMock.mockReset();
   });
 
-  it('delegates analyzeNarrative to the fixture without calling the SDK', async () => {
+  it('runs analyzeNarrative through the SDK with real provenance (F01)', async () => {
+    generateObjectMock.mockResolvedValue({
+      object: {
+        segments: [
+          {
+            startMs: 0,
+            endMs: 1000,
+            lyrics: 'a line',
+            meaning: 'm',
+            emotion: 'joy',
+            narrativeFunction: 'setup',
+            visualIdeas: [],
+            literalness: 0.5,
+            ironyPotential: 0.5,
+            energy: 0.5,
+          },
+        ],
+      },
+    } as never);
     const provider = new GatewayLLMProvider({ model: 'anthropic/claude-sonnet-4.5' });
     const result = await provider.analyzeNarrative({
       durationMs: 1000,
@@ -143,12 +161,17 @@ describe('GatewayLLMProvider narrative and moments', () => {
       energyCurve: [],
       lyrics: [{ startMs: 0, endMs: 1000, text: 'a line' }],
     });
-    expect(result.extractor).toBe('fixture');
+    expect(result.extractor).toBe('gateway');
     expect(result.segments).toHaveLength(1);
-    expect(generateObjectMock).not.toHaveBeenCalled();
+    expect(generateObjectMock).toHaveBeenCalledOnce();
   });
 
-  it('delegates suggestMoments to the fixture without calling the SDK', async () => {
+  it('runs suggestMoments through the SDK with real provenance (F01)', async () => {
+    generateObjectMock.mockResolvedValue({
+      object: {
+        moments: [{ startMs: 0, endMs: 1000, description: 'a moment', metadata: {} }],
+      },
+    } as never);
     const provider = new GatewayLLMProvider({ model: 'anthropic/claude-sonnet-4.5' });
     const result = await provider.suggestMoments({
       sceneId: 'scn_1',
@@ -166,8 +189,8 @@ describe('GatewayLLMProvider narrative and moments', () => {
       },
       transcript: [],
     });
-    expect(result.extractor).toBe('fixture');
+    expect(result.extractor).toBe('gateway');
     expect(result.moments).toHaveLength(1);
-    expect(generateObjectMock).not.toHaveBeenCalled();
+    expect(generateObjectMock).toHaveBeenCalledOnce();
   });
 });

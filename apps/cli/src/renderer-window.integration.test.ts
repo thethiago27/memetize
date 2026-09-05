@@ -22,6 +22,7 @@ const config: AppConfig = {
   storageDirRelative: 'storage',
   resources: { CPU_LIGHT: 1, CPU_HEAVY: 1, GPU: 1, IO: 1, RENDER: 1 },
   embeddingDimensions: 384,
+  providerMode: 'demo',
   providers: {
     transcription: { kind: 'fixture', model: null },
     vision: { kind: 'fixture', model: null },

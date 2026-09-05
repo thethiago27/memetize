@@ -1,6 +1,6 @@
 import type { AppConfig, ProviderConfig } from '@memetize/shared';
 import { describe, expect, it } from 'vitest';
-import { createLLMProvider, createProviders } from './factory';
+import { createLLMProvider, createProviders, describeProviders } from './factory';
 import { FixtureLLMProvider } from './fixture';
 import { GatewayLLMProvider } from './gateway';
 
@@ -16,6 +16,7 @@ function appConfig(llm: ProviderConfig, apiKey?: string | null): AppConfig {
     resources: { CPU_LIGHT: 4, CPU_HEAVY: 1, GPU: 1, IO: 4, RENDER: 1 },
     embeddingDimensions: 384,
     aiGatewayApiKey: apiKey ?? null,
+    providerMode: 'demo',
     providers: {
       transcription: { kind: 'fixture', model: null },
       vision: { kind: 'fixture', model: null },
@@ -90,5 +91,19 @@ describe('createProviders', () => {
     expect(() =>
       createProviders(appConfig({ kind: 'gateway', model: GATEWAY_MODEL }, null)),
     ).toThrow(/AI_GATEWAY_API_KEY/);
+  });
+
+  it('refuses a fixture capability in production mode (F01)', () => {
+    const config = {
+      ...appConfig({ kind: 'fixture', model: null }),
+      providerMode: 'production' as const,
+    };
+    expect(() => createProviders(config)).toThrow(/CAPABILITY_NOT_READY/);
+  });
+
+  it('reports which capabilities are real vs fixture (F01)', () => {
+    const config = appConfig({ kind: 'gateway', model: GATEWAY_MODEL }, 'gw_test');
+    const diag = describeProviders(config);
+    expect(diag).toEqual({ mode: 'demo', vision: 'fixture', llm: 'real', embedding: 'fixture' });
   });
 });

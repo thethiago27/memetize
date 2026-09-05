@@ -41,6 +41,9 @@ const EnvSchema = z.object({
   EMBEDDING_MODEL: z.string().optional(),
   AUDIO_PROVIDER: z.string().optional(),
   AUDIO_MODEL: z.string().optional(),
+  // Provider mode (F01): 'demo' allows fixture providers; 'production' requires
+  // every model-provider capability to be a real (non-fixture) implementation.
+  PROVIDER_MODE: z.enum(['demo', 'production']).default('demo'),
 });
 
 /**
@@ -76,6 +79,8 @@ export interface AppConfig {
    * Required when `providers.llm.kind === 'gateway'`.
    */
   aiGatewayApiKey?: string | null;
+  /** 'demo' allows fixture providers; 'production' requires real ones (F01). */
+  providerMode: 'demo' | 'production';
   providers: {
     transcription: ProviderConfig;
     vision: ProviderConfig;
@@ -119,6 +124,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     },
     embeddingDimensions: EMBEDDING_DIMENSIONS,
     aiGatewayApiKey: parsed.AI_GATEWAY_API_KEY?.trim() || null,
+    providerMode: parsed.PROVIDER_MODE,
     providers: {
       transcription: {
         kind: parsed.TRANSCRIPTION_PROVIDER?.trim() || 'fixture',

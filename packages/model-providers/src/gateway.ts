@@ -1,8 +1,14 @@
 import { DirectorPick } from '@memetize/contracts';
-import { DIRECTOR_PROMPT_V4, DIRECTOR_PROMPT_VERSION } from '@memetize/prompts';
+import {
+  DIRECTOR_PROMPT_V4,
+  DIRECTOR_PROMPT_VERSION,
+  MOMENTS_PROMPT_V1,
+  MOMENTS_PROMPT_VERSION,
+  NARRATIVE_PROMPT_V2,
+  NARRATIVE_PROMPT_VERSION,
+} from '@memetize/prompts';
 import { generateObject } from 'ai';
 import { z } from 'zod';
-import { FixtureLLMProvider } from './fixture';
 import type {
   DirectTimelineInput,
   DirectTimelineResult,
@@ -25,23 +31,93 @@ export const DirectorPicksSchema = z.object({
   picks: z.array(DirectorPick),
 });
 
+const MomentsSchema = z.object({
+  moments: z.array(
+    z.object({
+      startMs: z.number().int().nonnegative(),
+      endMs: z.number().int().nonnegative(),
+      description: z.string(),
+      primaryEmotion: z.string().nullable().default(null),
+      emotionIntensity: z.number().min(0).max(1).nullable().default(null),
+      visualEnergy: z.number().min(0).max(1).nullable().default(null),
+      qualityScore: z.number().min(0).max(1).nullable().default(null),
+      metadata: z.record(z.string(), z.unknown()).default({}),
+    }),
+  ),
+});
+
+const NarrativeSchema = z.object({
+  segments: z.array(
+    z.object({
+      startMs: z.number().int().nonnegative(),
+      endMs: z.number().int().nonnegative(),
+      lyrics: z.string(),
+      meaning: z.string(),
+      emotion: z.string(),
+      narrativeFunction: z.string(),
+      visualIdeas: z.array(z.string()).default([]),
+      literalness: z.number().min(0).max(1),
+      ironyPotential: z.number().min(0).max(1),
+      energy: z.number().min(0).max(1),
+    }),
+  ),
+});
+
 /**
- * LLM provider that routes `directTimeline` through the Vercel AI Gateway
- * via the AI SDK. `analyzeNarrative` and `suggestMoments` stay on the
- * fixture so ingest/MATCH never spend tokens in this increment.
+ * LLM provider that routes every capability — moment suggestion, narrative
+ * analysis, and timeline direction — through the Vercel AI Gateway via the AI
+ * SDK (F01). Each reply is parsed against a closed schema so an invalid shape
+ * fails the structured-output parse, and provenance (model, version, prompt) is
+ * returned with every result.
  */
 export class GatewayLLMProvider implements LLMProvider {
   readonly name = GATEWAY_NAME;
-  private readonly fixture = new FixtureLLMProvider();
 
   constructor(private readonly options: { model: string }) {}
 
-  suggestMoments(input: MomentSuggestInput): Promise<MomentSuggestResult> {
-    return this.fixture.suggestMoments(input);
+  async suggestMoments(input: MomentSuggestInput): Promise<MomentSuggestResult> {
+    const { object } = await generateObject({
+      model: this.options.model,
+      schema: MomentsSchema,
+      system: MOMENTS_PROMPT_V1,
+      prompt: JSON.stringify({
+        sceneId: input.sceneId,
+        startMs: input.startMs,
+        endMs: input.endMs,
+        vision: input.vision,
+        transcript: input.transcript,
+      }),
+    });
+    const { moments } = MomentsSchema.parse(object);
+    return {
+      moments,
+      extractor: GATEWAY_NAME,
+      extractorVersion: GATEWAY_VERSION,
+      promptVersion: MOMENTS_PROMPT_VERSION,
+    };
   }
 
-  analyzeNarrative(input: NarrativeAnalyzeInput): Promise<NarrativeAnalyzeResult> {
-    return this.fixture.analyzeNarrative(input);
+  async analyzeNarrative(input: NarrativeAnalyzeInput): Promise<NarrativeAnalyzeResult> {
+    const { object } = await generateObject({
+      model: this.options.model,
+      schema: NarrativeSchema,
+      system: NARRATIVE_PROMPT_V2,
+      prompt: JSON.stringify({
+        durationMs: input.durationMs,
+        sourceStartMs: input.sourceStartMs,
+        sourceEndMs: input.sourceEndMs,
+        sections: input.sections,
+        energyCurve: input.energyCurve,
+        lyrics: input.lyrics,
+      }),
+    });
+    const { segments } = NarrativeSchema.parse(object);
+    return {
+      segments,
+      extractor: GATEWAY_NAME,
+      extractorVersion: GATEWAY_VERSION,
+      promptVersion: NARRATIVE_PROMPT_VERSION,
+    };
   }
 
   async directTimeline(input: DirectTimelineInput): Promise<DirectTimelineResult> {

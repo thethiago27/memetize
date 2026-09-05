@@ -1,6 +1,8 @@
 import type { AppConfig, ProviderConfig } from '@memetize/shared';
 import { FixtureEmbeddingProvider, FixtureLLMProvider, FixtureVisionProvider } from './fixture';
 import { GatewayLLMProvider } from './gateway';
+import { GatewayEmbeddingProvider } from './gateway-embedding';
+import { GatewayVisionProvider } from './gateway-vision';
 import type { EmbeddingProvider, LLMProvider, VisionProvider } from './types';
 
 export interface Providers {
@@ -9,23 +11,84 @@ export interface Providers {
   embedding: EmbeddingProvider;
 }
 
+/** Which capabilities run on real models vs. the deterministic fixtures (F01). */
+export interface ProviderDiagnostics {
+  mode: 'demo' | 'production';
+  vision: 'real' | 'fixture';
+  llm: 'real' | 'fixture';
+  embedding: 'real' | 'fixture';
+}
+
+type ProviderMode = 'demo' | 'production';
+
+function modeOf(kind: string): 'real' | 'fixture' {
+  return kind === 'fixture' ? 'fixture' : 'real';
+}
+
 /**
- * Builds providers from `AppConfig` (spec section 20). Real providers
- * (anthropic, openai, gateway, ...) are opt-in via `VISION_PROVIDER`/
- * `LLM_PROVIDER`/`EMBEDDING_PROVIDER` and get added here as they're
- * implemented; workers never construct a provider themselves.
+ * In production mode every capability must be real: a fixture provider is
+ * refused with CAPABILITY_NOT_READY so a demo build can never masquerade as a
+ * real one (F01). Demo mode allows fixtures.
+ */
+function assertReady(mode: ProviderMode, capability: string, kind: string): void {
+  if (mode === 'production' && modeOf(kind) === 'fixture') {
+    throw new Error(`CAPABILITY_NOT_READY: ${capability} is still a fixture in production mode`);
+  }
+}
+
+/**
+ * Builds providers from `AppConfig` (spec section 20). Real providers route
+ * through the AI Gateway (`gateway`); `fixture` stays the default. Workers never
+ * construct a provider themselves. See `describeProviders` for which capabilities
+ * are real vs. simulated.
  */
 export function createProviders(config: AppConfig): Providers {
+  const mode = config.providerMode;
+  assertReady(mode, 'vision', config.providers.vision.kind);
+  assertReady(mode, 'llm', config.providers.llm.kind);
+  assertReady(mode, 'embedding', config.providers.embedding.kind);
   return {
-    vision: createVisionProvider(config.providers.vision.kind),
+    vision: createVisionProvider(config.providers.vision, config.aiGatewayApiKey),
     llm: createLLMProvider(config.providers.llm, config.aiGatewayApiKey),
-    embedding: createEmbeddingProvider(config.providers.embedding.kind, config.embeddingDimensions),
+    embedding: createEmbeddingProvider(
+      config.providers.embedding,
+      config.embeddingDimensions,
+      config.aiGatewayApiKey,
+    ),
   };
 }
 
-function createVisionProvider(kind: string): VisionProvider {
-  if (kind === 'fixture') return new FixtureVisionProvider();
-  throw new Error(`unsupported VISION_PROVIDER "${kind}" (only "fixture" is implemented so far)`);
+/** Reports, without constructing them, which capabilities are real (F01). */
+export function describeProviders(config: AppConfig): ProviderDiagnostics {
+  return {
+    mode: config.providerMode,
+    vision: modeOf(config.providers.vision.kind),
+    llm: modeOf(config.providers.llm.kind),
+    embedding: modeOf(config.providers.embedding.kind),
+  };
+}
+
+function requireGatewayKey(capability: string, apiKey?: string | null): void {
+  if (!apiKey?.trim()) {
+    throw new Error(`AI_GATEWAY_API_KEY is required when ${capability} uses the gateway`);
+  }
+}
+
+function requireModel(capability: string, model: string | null): string {
+  const trimmed = model?.trim() ?? '';
+  if (!isGatewayModelId(trimmed)) {
+    throw new Error(`${capability} model must be a gateway model id (provider/model)`);
+  }
+  return trimmed;
+}
+
+function createVisionProvider(vision: ProviderConfig, apiKey?: string | null): VisionProvider {
+  if (vision.kind === 'fixture') return new FixtureVisionProvider();
+  if (vision.kind === 'gateway') {
+    requireGatewayKey('VISION_PROVIDER', apiKey);
+    return new GatewayVisionProvider(requireModel('VISION_MODEL', vision.model));
+  }
+  throw new Error(`unsupported VISION_PROVIDER "${vision.kind}" (only "fixture" and "gateway")`);
 }
 
 /** `creator/model-name`, e.g. `anthropic/claude-sonnet-4.5`. */
@@ -45,25 +108,26 @@ export function createLLMProvider(llm: ProviderConfig, apiKey?: string | null): 
     });
   }
   if (llm.kind === 'gateway') {
-    const model = llm.model?.trim() ?? '';
-    if (!isGatewayModelId(model)) {
-      throw new Error(
-        'LLM_MODEL must be a gateway model id (provider/model) when LLM_PROVIDER=gateway',
-      );
-    }
-    if (!apiKey?.trim()) {
-      throw new Error('AI_GATEWAY_API_KEY is required when LLM_PROVIDER=gateway');
-    }
-    return new GatewayLLMProvider({ model });
+    requireGatewayKey('LLM_PROVIDER', apiKey);
+    return new GatewayLLMProvider({ model: requireModel('LLM_MODEL', llm.model) });
   }
-  throw new Error(
-    `unsupported LLM_PROVIDER "${llm.kind}" (only "fixture" and "gateway" are implemented so far)`,
-  );
+  throw new Error(`unsupported LLM_PROVIDER "${llm.kind}" (only "fixture" and "gateway")`);
 }
 
-function createEmbeddingProvider(kind: string, dimensions: number): EmbeddingProvider {
-  if (kind === 'fixture') return new FixtureEmbeddingProvider(dimensions);
+function createEmbeddingProvider(
+  embedding: ProviderConfig,
+  dimensions: number,
+  apiKey?: string | null,
+): EmbeddingProvider {
+  if (embedding.kind === 'fixture') return new FixtureEmbeddingProvider(dimensions);
+  if (embedding.kind === 'gateway') {
+    requireGatewayKey('EMBEDDING_PROVIDER', apiKey);
+    return new GatewayEmbeddingProvider(
+      dimensions,
+      requireModel('EMBEDDING_MODEL', embedding.model),
+    );
+  }
   throw new Error(
-    `unsupported EMBEDDING_PROVIDER "${kind}" (only "fixture" is implemented so far)`,
+    `unsupported EMBEDDING_PROVIDER "${embedding.kind}" (only "fixture" and "gateway")`,
   );
 }
