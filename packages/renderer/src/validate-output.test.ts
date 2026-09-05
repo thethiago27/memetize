@@ -13,16 +13,19 @@ function timeline(durationMs: number): Timeline {
 }
 
 function probe(overrides: Partial<OutputProbe> = {}): OutputProbe {
+  const durationMs = overrides.durationMs ?? 4000;
   return {
     exists: true,
-    durationMs: 4000,
+    durationMs,
     width: 1080,
     height: 1920,
     fpsMilli: 30000,
     videoCodec: 'h264',
     audioCodec: 'aac',
-    videoDurationMs: null,
-    audioDurationMs: null,
+    videoDurationMs: durationMs,
+    audioDurationMs: durationMs,
+    videoStartMs: 0,
+    audioStartMs: 0,
     ...overrides,
   };
 }
@@ -54,7 +57,10 @@ describe('validateOutput', () => {
   });
 
   it('is valid with no warnings when a small drift is within tolerance', () => {
-    const result = validateOutput(probe({ durationMs: 4080 }), timeline(4000));
+    const result = validateOutput(
+      probe({ durationMs: 4080, videoDurationMs: 4080, audioDurationMs: 4080 }),
+      timeline(4000),
+    );
     expect(result.valid).toBe(true);
     expect(result.warnings.some((w) => w.code === 'DURATION_DRIFT')).toBe(false);
   });
@@ -83,6 +89,37 @@ describe('validateOutput', () => {
     );
     expect(result.valid).toBe(false);
     expect(result.warnings.some((w) => w.message?.includes('video stream'))).toBe(true);
+  });
+
+  it('rejects a container whose stream coverage is unknown instead of assuming it (F07)', () => {
+    const result = validateOutput(
+      probe({ durationMs: 60_000, videoDurationMs: null, audioDurationMs: null }),
+      timeline(60_000),
+    );
+    expect(result.valid).toBe(false);
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ code: 'STREAM_COVERAGE_UNKNOWN' }),
+    );
+    // A known video but unknown audio is just as unproven.
+    const audioUnknown = validateOutput(
+      probe({ durationMs: 60_000, videoDurationMs: 60_000, audioDurationMs: null }),
+      timeline(60_000),
+    );
+    expect(audioUnknown.valid).toBe(false);
+  });
+
+  it('rejects a stream that starts later than the tolerance (F07)', () => {
+    const result = validateOutput(
+      probe({ durationMs: 4000, videoStartMs: 500, audioStartMs: 0 }),
+      timeline(4000),
+    );
+    expect(result.valid).toBe(false);
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ code: 'STREAM_START_OFFSET' }),
+    );
+    // Encoder priming inside the audio tolerance is fine; an unknown start is not held against it.
+    expect(validateOutput(probe({ audioStartMs: 40 }), timeline(4000)).valid).toBe(true);
+    expect(validateOutput(probe({ audioStartMs: null }), timeline(4000)).valid).toBe(true);
   });
 
   it('is valid when both streams cover the timeline', () => {

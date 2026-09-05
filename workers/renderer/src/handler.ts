@@ -8,13 +8,14 @@ import { JobFailure } from '@memetize/job-system';
 import { getAsset, probeVideo } from '@memetize/media-catalog';
 import type { JobHandler } from '@memetize/orchestrator';
 import {
+  getEditWindowByVersion,
   getLatestEditWindow,
-  getLatestTimeline,
   getProjectAudio,
   insertRender,
   renderDebugFile,
   renderDir,
   renderFile,
+  resolveSourceTimeline,
   resolveStorage,
   setProjectStatus,
 } from '@memetize/projects';
@@ -30,7 +31,7 @@ import {
 } from '@memetize/renderer';
 import { ensureDir } from '@memetize/shared';
 import { chooseRenderSource } from './source';
-import { allocateRenderTarget } from './target';
+import { allocateRenderTarget, cleanupOrphanRenderAttempts } from './target';
 
 const execFileAsync = promisify(execFile);
 
@@ -39,6 +40,13 @@ const execFileAsync = promisify(execFile);
  * `Timeline` into an actual MP4. No AI, no `model-providers` import — only
  * FFmpeg/ffprobe. `DIRECTOR` never enqueues this job; only `project render`
  * (via `renderProject`/`reprocessProject`) does.
+ *
+ * Inputs are pinned (F11): the job names the timeline version and edit window
+ * version it must render, and a missing pinned row fails the job instead of
+ * silently rendering "latest". Publication is atomic (F08/F09): the render row,
+ * the move of the validated file to its version-named path, the project status
+ * and the job completion commit in one transaction under the project lock, only
+ * while this attempt still owns the job and its generation is still active.
  */
 export function createRenderHandler(): JobHandler {
   return async (ctx) => {
@@ -46,20 +54,38 @@ export function createRenderHandler(): JobHandler {
     if (!parsed.success) {
       throw new JobFailure('INVALID_INPUT', parsed.error.message, false);
     }
-    const { projectId, profile } = parsed.data;
+    const { projectId, profile, sourceTimelineVersion, editWindowVersion } = parsed.data;
 
     await setProjectStatus(ctx.db, projectId, 'RENDERING');
 
-    const timelineVersion = await getLatestTimeline(ctx.db, projectId);
+    const source = await resolveSourceTimeline(ctx.db, projectId, sourceTimelineVersion);
+    const timelineVersion = source.row;
     if (!timelineVersion) {
-      throw new JobFailure('RENDER_NO_TIMELINE', `project ${projectId} has no timeline yet`, false);
+      throw source.pinned
+        ? new JobFailure(
+            'RENDER_STALE_SOURCE',
+            `project ${projectId} no longer has timeline v${sourceTimelineVersion}`,
+            false,
+          )
+        : new JobFailure('RENDER_NO_TIMELINE', `project ${projectId} has no timeline yet`, false);
     }
     const timeline = timelineVersion.data;
+
+    const editWindow =
+      editWindowVersion !== undefined
+        ? await getEditWindowByVersion(ctx.db, projectId, editWindowVersion)
+        : await getLatestEditWindow(ctx.db, projectId);
+    if (editWindowVersion !== undefined && !editWindow) {
+      throw new JobFailure(
+        'RENDER_STALE_SOURCE',
+        `project ${projectId} no longer has edit window v${editWindowVersion}`,
+        false,
+      );
+    }
 
     // Validate before touching any media: a stale or broken timeline must
     // fail here, not as a missing-asset error further down.
     const validationStarted = performance.now();
-    const editWindow = await getLatestEditWindow(ctx.db, projectId);
     const timelineValidation = validateTimeline(timeline, {
       expectedDurationMs: editWindow?.durationMs,
       expectedWindowStartMs: editWindow?.sourceStartMs,
@@ -131,11 +157,17 @@ export function createRenderHandler(): JobHandler {
 
     // Render to an exclusive temp file so two concurrent renders never share a
     // destination; the published, version-named path is only chosen atomically
-    // when the render row is inserted, then the temp file is moved into place (F09).
-    await ensureDir(renderDir(ctx.config, projectId).absolute);
-    const target = await allocateRenderTarget(renderDir(ctx.config, projectId).absolute);
-    const args = toFfmpegArgs(graph, target.encodingPath);
+    // when the render row is inserted (F09). Orphans of earlier crashed attempts
+    // are swept first.
+    const rendersDirectory = renderDir(ctx.config, projectId).absolute;
+    await ensureDir(rendersDirectory);
+    const orphansRemoved = await cleanupOrphanRenderAttempts(rendersDirectory);
+    if (orphansRemoved > 0) ctx.logger.warn('render_orphans_removed', { orphansRemoved });
+    const target = await allocateRenderTarget(rendersDirectory);
+    const discardAttempt = () =>
+      rm(target.directory, { recursive: true, force: true }).catch(() => undefined);
 
+    const args = toFfmpegArgs(graph, target.encodingPath);
     const ffmpegStarted = performance.now();
     try {
       await execFileAsync('ffmpeg', args, {
@@ -143,7 +175,7 @@ export function createRenderHandler(): JobHandler {
         timeout: Math.max(120_000, timeline.durationMs * 4),
       });
     } catch (error) {
-      await rm(target.directory, { recursive: true, force: true }).catch(() => undefined);
+      await discardAttempt();
       const message = error instanceof Error ? error.message : String(error);
       throw new JobFailure('RENDER_FFMPEG_ERROR', `ffmpeg failed: ${message}`, false);
     }
@@ -154,13 +186,17 @@ export function createRenderHandler(): JobHandler {
     const probeMs = performance.now() - probeStarted;
     const outputValidation = validateOutput(probe, timeline);
     if (!outputValidation.valid) {
-      await rm(target.directory, { recursive: true, force: true }).catch(() => undefined);
+      await discardAttempt();
       throw new JobFailure(
         'RENDER_OUTPUT_INVALID',
-        `rendered file failed validation: ${JSON.stringify(probe)}`,
+        `rendered file failed validation: ${JSON.stringify({ probe, warnings: outputValidation.warnings })}`,
         false,
       );
     }
+
+    // The encode is validated: park it as `ready.mp4` so only a proven artifact
+    // can ever be moved to a published path.
+    await rename(target.encodingPath, target.readyPath);
 
     const warnings: RenderWarning[] = [
       ...timelineValidation.warnings,
@@ -168,26 +204,45 @@ export function createRenderHandler(): JobHandler {
     ];
     const validation = { valid: true, warnings };
 
-    const persisted = await insertRender(ctx.db, {
-      projectId,
-      timelineVersion: timelineVersion.version,
-      pathForVersion: (version) => renderFile(ctx.config, projectId, version).relative,
-      durationMs: probe.durationMs,
-      width: probe.width,
-      height: probe.height,
-      fps: Math.round(probe.fpsMilli / 1000),
-      videoCodec: probe.videoCodec ?? 'unknown',
-      audioCodec: probe.audioCodec ?? 'unknown',
-      renderer: RENDERER_NAME,
-      rendererVersion: RENDERER_VERSION,
-      validation,
-    });
-
-    // Publish: move the validated temp encode to its reserved version path, then
-    // drop the scratch directory. Same filesystem, so the rename is atomic.
-    const publishedAbsolute = resolveStorage(ctx.config, persisted.path);
-    await rename(target.encodingPath, publishedAbsolute);
-    await rm(target.directory, { recursive: true, force: true }).catch(() => undefined);
+    let result: Record<string, unknown>;
+    try {
+      result = await ctx.publish(async ({ tx }) => {
+        const persisted = await insertRender(tx, {
+          projectId,
+          timelineVersion: timelineVersion.version,
+          pathForVersion: (version) => renderFile(ctx.config, projectId, version).relative,
+          durationMs: probe.durationMs,
+          width: probe.width,
+          height: probe.height,
+          fps: Math.round(probe.fpsMilli / 1000),
+          videoCodec: probe.videoCodec ?? 'unknown',
+          audioCodec: probe.audioCodec ?? 'unknown',
+          renderer: RENDERER_NAME,
+          rendererVersion: RENDERER_VERSION,
+          validation,
+          // Same filesystem, so the move is atomic; it runs before commit, so a
+          // committed row always has its file in place (F09).
+          publishFile: (row) => rename(target.readyPath, resolveStorage(ctx.config, row.path)),
+        });
+        await setProjectStatus(tx, projectId, 'COMPLETED');
+        return {
+          projectId,
+          version: persisted.version,
+          path: persisted.path,
+          durationMs: persisted.durationMs,
+          warningCount: warnings.length,
+          timelineVersion: timelineVersion.version,
+          editWindowVersion: editWindow?.version ?? null,
+          profile,
+        };
+      });
+    } catch (error) {
+      // Lease lost, generation superseded, or a failed publish: the validated
+      // file is an orphan now; drop it and let the orchestrator record the outcome.
+      await discardAttempt();
+      throw error;
+    }
+    await discardAttempt();
 
     const performanceMetrics = {
       validationMs,
@@ -205,11 +260,15 @@ export function createRenderHandler(): JobHandler {
       JSON.stringify(
         {
           projectId,
+          generationId: ctx.job.generationId,
+          renderVersion: result.version,
           timelineVersion: timelineVersion.version,
+          editWindowVersion: editWindow?.version ?? null,
           profile,
           sourceOrigins: [...sourceOrigins],
           args,
           graph,
+          probe,
           validation,
           performance: performanceMetrics,
         },
@@ -218,24 +277,16 @@ export function createRenderHandler(): JobHandler {
       ),
     );
 
-    await setProjectStatus(ctx.db, projectId, 'COMPLETED');
-
     ctx.logger.info('render_completed', {
       projectId,
-      version: persisted.version,
-      path: persisted.path,
+      version: result.version,
+      path: result.path,
       profile,
       sourceOrigins: [...sourceOrigins],
       warningCount: warnings.length,
     });
 
-    return {
-      projectId,
-      version: persisted.version,
-      path: persisted.path,
-      durationMs: persisted.durationMs,
-      warningCount: warnings.length,
-    };
+    return result;
   };
 }
 
@@ -248,6 +299,8 @@ const BROKEN_PROBE: Omit<OutputProbe, 'exists'> = {
   audioCodec: null,
   videoDurationMs: null,
   audioDurationMs: null,
+  videoStartMs: null,
+  audioStartMs: null,
 };
 
 /**

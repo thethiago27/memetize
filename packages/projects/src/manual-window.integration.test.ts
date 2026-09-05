@@ -101,7 +101,7 @@ describe.skipIf(!handle)('manual edit window (integration)', () => {
     expect(selection.score).toBeGreaterThanOrEqual(0);
   });
 
-  it('setManualWindow stores the pick, drops downstream jobs, and enqueues a fresh NARRATIVE', async () => {
+  it('setManualWindow stores the pick, cancels pending downstream jobs, and enqueues a fresh NARRATIVE', async () => {
     const projectId = 'prj_mw_set';
     await seedProject(projectId);
     const { job: director } = await enqueueJob(db, {
@@ -121,9 +121,12 @@ describe.skipIf(!handle)('manual edit window (integration)', () => {
     expect(project?.manualWindowEndMs).toBe(75_000);
 
     const jobs = await listJobsForEntity(db, projectId);
-    expect(jobs.find((job) => job.id === director.id)).toBeUndefined();
-    expect(jobs.filter((job) => job.type === 'NARRATIVE')).toHaveLength(1);
-    expect(jobs.find((job) => job.type === 'NARRATIVE')?.status).toBe('PENDING');
+    // The pending DIRECTOR is superseded (history kept), NARRATIVE runs in the new generation.
+    expect(jobs.find((job) => job.id === director.id)?.status).toBe('CANCELLED');
+    const narrative = jobs.filter((job) => job.type === 'NARRATIVE');
+    expect(narrative).toHaveLength(1);
+    expect(narrative[0]?.status).toBe('PENDING');
+    expect(narrative[0]?.generationId).toBeTruthy();
   });
 
   it('rejects a window past the track, too short, or before audio analysis exists', async () => {
@@ -155,7 +158,9 @@ describe.skipIf(!handle)('manual edit window (integration)', () => {
     expect(project?.manualWindowStartMs).toBeNull();
     expect(project?.manualWindowEndMs).toBeNull();
     const jobs = await listJobsForEntity(db, projectId);
-    expect(jobs.filter((job) => job.type === 'NARRATIVE')).toHaveLength(1);
+    // set + clear: the first NARRATIVE (never run) is cancelled, the second is pending.
+    const narrative = jobs.filter((job) => job.type === 'NARRATIVE');
+    expect(narrative.map((job) => job.status)).toEqual(['CANCELLED', 'PENDING']);
   });
 
   it('refuses both operations while a job is RUNNING', async () => {

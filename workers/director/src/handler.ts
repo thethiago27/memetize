@@ -8,6 +8,7 @@ import {
   aggregateFeedback,
   buildExamples,
   buildLessons,
+  getConstraintsRevision,
   listActiveBans,
   listFeedbackEvents,
 } from '@memetize/feedback';
@@ -95,6 +96,7 @@ export function createDirectorHandler(): JobHandler {
     // DIRECTOR and reuses the persisted shortlist/ranked without re-running MATCH,
     // so a moment banned after MATCH would otherwise reappear. `listActiveBans`
     // already folds direct bans, asset bans, and excluded ranges into momentIds.
+    const constraintsRevision = await getConstraintsRevision(ctx.db);
     const bans = await listActiveBans(ctx.db);
     const { momentRows, momentById, matches } = filterBannedCandidates(
       allMomentRows,
@@ -227,15 +229,50 @@ export function createDirectorHandler(): JobHandler {
     }
 
     const { timeline, decisions } = assembled;
-    const persisted = await insertTimelineVersion(ctx.db, {
-      projectId,
-      data: timeline,
-      director: suggestion.director,
-      directorVersion: suggestion.directorVersion,
-      promptVersion: suggestion.promptVersion,
-    });
 
-    await ctx.enqueue({ type: 'TIMING', entityId: projectId, input: { projectId } });
+    // Publish atomically (F08/F09/F10/F13): under the project lock, only while
+    // this attempt owns the job and its generation is current. The constraints
+    // revision read before the model call is compared here; if a ban landed while
+    // the model was thinking, the assembled clips are re-checked against the
+    // current bans and a banned pick aborts the publication with a retryable
+    // failure so the next attempt plans with the new constraints.
+    const result = await ctx.publish(async ({ tx, enqueue }) => {
+      const revisionNow = await getConstraintsRevision(tx);
+      if (revisionNow !== constraintsRevision) {
+        const currentBans = await listActiveBans(tx);
+        const banned = timeline.clips.find(
+          (clip) =>
+            currentBans.momentIds.has(clip.momentId) ||
+            currentBans.assetIds.has(clip.source.assetId),
+        );
+        if (banned) {
+          throw new JobFailure(
+            'DIRECTOR_CONSTRAINTS_CHANGED',
+            `moment ${banned.momentId} was banned while the Director ran (constraints ${constraintsRevision} -> ${revisionNow}); re-planning`,
+            true,
+          );
+        }
+      }
+      const persisted = await insertTimelineVersion(tx, {
+        projectId,
+        data: timeline,
+        director: suggestion.director,
+        directorVersion: suggestion.directorVersion,
+        promptVersion: suggestion.promptVersion,
+      });
+      await enqueue({
+        type: 'TIMING',
+        entityId: projectId,
+        input: { projectId, sourceTimelineVersion: persisted.version },
+      });
+      return {
+        projectId,
+        version: persisted.version,
+        clipCount: timeline.clips.length,
+        constraintsRevision: revisionNow,
+      };
+    });
+    const version = result.version as number;
 
     const debugFile = directorDebugFile(ctx.config, projectId);
     await ensureDir(dirname(debugFile.absolute));
@@ -244,9 +281,14 @@ export function createDirectorHandler(): JobHandler {
       JSON.stringify(
         {
           projectId,
+          generationId: ctx.job.generationId,
+          timelineVersion: version,
           picks: suggestion.picks,
+          director: suggestion.director,
+          directorVersion: suggestion.directorVersion,
           promptVersion: suggestion.promptVersion,
           windowVersion: window.version,
+          constraintsRevision: result.constraintsRevision,
           memory,
           decisions,
         },
@@ -261,12 +303,12 @@ export function createDirectorHandler(): JobHandler {
 
     ctx.logger.info('director_completed', {
       projectId,
-      version: persisted.version,
+      version,
       clipCount: timeline.clips.length,
       windowVersion: window.version,
     });
 
-    return { projectId, version: persisted.version, clipCount: timeline.clips.length };
+    return result;
   };
 }
 

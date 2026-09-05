@@ -1,6 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { NarrativeInput, NarrativeSegment } from '@memetize/contracts';
+import type { EditWindowRow, NarrativeSegmentRow } from '@memetize/database';
 import { planNarrativeCoverage } from '@memetize/edit-planner';
 import { JobFailure } from '@memetize/job-system';
 import { createProviders } from '@memetize/model-providers';
@@ -105,14 +106,29 @@ export function createNarrativeHandler(): JobHandler {
     });
     validateCoverage(normalized, sourceStartMs, sourceEndMs);
 
-    // Analysis succeeded: publish the window, then its segments.
-    const window = await insertEditWindow(ctx.db, { projectId, selection });
+    // Analysis succeeded: publish the window, its segments, PLANNING and the
+    // MATCH follow-up in one transaction with the job completion (F10/F11), only
+    // while this attempt owns the job and its generation is current (F08/F09).
     const segments = normalized.map((segment) => NarrativeSegment.parse(segment));
-    const persisted = await replaceNarrativeSegments(ctx.db, {
-      projectId,
-      segments,
-      extractor: suggestion.extractor,
-      extractorVersion: suggestion.extractorVersion,
+    let window: EditWindowRow | undefined;
+    let persisted: NarrativeSegmentRow[] = [];
+    const result = await ctx.publish(async ({ tx, enqueue }) => {
+      window = await insertEditWindow(tx, { projectId, selection });
+      persisted = await replaceNarrativeSegments(tx, {
+        projectId,
+        segments,
+        extractor: suggestion.extractor,
+        extractorVersion: suggestion.extractorVersion,
+      });
+      await setProjectStatus(tx, projectId, 'PLANNING');
+      await enqueue({ type: 'MATCH', entityId: projectId, input: { projectId } });
+      return {
+        segmentCount: persisted.length,
+        extractor: suggestion.extractor,
+        extractorVersion: suggestion.extractorVersion,
+        promptVersion: suggestion.promptVersion,
+        windowVersion: window.version,
+      };
     });
 
     const debugFile = narrativeDebugFile(ctx.config, projectId);
@@ -123,18 +139,21 @@ export function createNarrativeHandler(): JobHandler {
         {
           projectId,
           promptVersion: suggestion.promptVersion,
+          generationId: ctx.job.generationId,
           extractor: suggestion.extractor,
           extractorVersion: suggestion.extractorVersion,
-          window: {
-            version: window.version,
-            sourceStartMs: window.sourceStartMs,
-            sourceEndMs: window.sourceEndMs,
-            durationMs: window.durationMs,
-            score: window.score,
-            scoreBreakdown: window.scoreBreakdown,
-            selector: window.selector,
-            selectorVersion: window.selectorVersion,
-          },
+          window: window
+            ? {
+                version: window.version,
+                sourceStartMs: window.sourceStartMs,
+                sourceEndMs: window.sourceEndMs,
+                durationMs: window.durationMs,
+                score: window.score,
+                scoreBreakdown: window.scoreBreakdown,
+                selector: window.selector,
+                selectorVersion: window.selectorVersion,
+              }
+            : null,
           raw: suggestion.segments,
           parsed: persisted,
         },
@@ -143,22 +162,13 @@ export function createNarrativeHandler(): JobHandler {
       ),
     );
 
-    await setProjectStatus(ctx.db, projectId, 'PLANNING');
-    await ctx.enqueue({ type: 'MATCH', entityId: projectId, input: { projectId } });
-
     ctx.logger.info('narrative_completed', {
       projectId,
       segmentCount: persisted.length,
       extractor: suggestion.extractor,
-      windowVersion: window.version,
+      windowVersion: result.windowVersion,
     });
-    return {
-      segmentCount: persisted.length,
-      extractor: suggestion.extractor,
-      extractorVersion: suggestion.extractorVersion,
-      promptVersion: suggestion.promptVersion,
-      windowVersion: window.version,
-    };
+    return result;
   };
 }
 

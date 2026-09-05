@@ -1,6 +1,6 @@
 import type { TranscriptSegment as TranscriptSegmentInput } from '@memetize/contracts';
 import {
-  type Database,
+  type Executor,
   type NewTranscriptSegmentRow,
   type TranscriptSegmentRow,
   transcriptSegments,
@@ -38,7 +38,7 @@ export function toTranscriptRows(params: ReplaceTranscriptParams): NewTranscript
  * or non-verbal clips) is a valid, successful result, not a failure.
  */
 export async function replaceTranscript(
-  db: Database,
+  db: Executor,
   params: ReplaceTranscriptParams,
 ): Promise<TranscriptSegmentRow[]> {
   const rows = toTranscriptRows(params);
@@ -58,7 +58,7 @@ export async function replaceTranscript(
 }
 
 export function listTranscriptSegments(
-  db: Database,
+  db: Executor,
   assetId: string,
 ): Promise<TranscriptSegmentRow[]> {
   return db.query.transcriptSegments.findMany({

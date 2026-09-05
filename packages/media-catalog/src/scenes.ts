@@ -1,5 +1,5 @@
 import type { ExtractedFrame, VisionSceneAnalysis } from '@memetize/contracts';
-import { type Database, type NewSceneRow, type SceneRow, scenes } from '@memetize/database';
+import { type Executor, type NewSceneRow, type SceneRow, scenes } from '@memetize/database';
 import { assertIntegerMs, sceneId } from '@memetize/shared';
 import { and, asc, eq } from 'drizzle-orm';
 
@@ -42,7 +42,7 @@ export function toSceneRows(params: ReplaceScenesParams): NewSceneRow[] {
  * duplicates scenes (spec section 4.2).
  */
 export async function replaceScenes(
-  db: Database,
+  db: Executor,
   params: ReplaceScenesParams,
 ): Promise<SceneRow[]> {
   const rows = toSceneRows(params);
@@ -61,20 +61,20 @@ export async function replaceScenes(
   });
 }
 
-export function listScenes(db: Database, assetId: string): Promise<SceneRow[]> {
+export function listScenes(db: Executor, assetId: string): Promise<SceneRow[]> {
   return db.query.scenes.findMany({
     where: eq(scenes.assetId, assetId),
     orderBy: asc(scenes.startMs),
   });
 }
 
-export function getScene(db: Database, id: string): Promise<SceneRow | undefined> {
+export function getScene(db: Executor, id: string): Promise<SceneRow | undefined> {
   return db.query.scenes.findFirst({ where: eq(scenes.id, id) });
 }
 
 /** Frame Extractor output: persists the sampled frames for one scene. */
 export async function updateSceneFrames(
-  db: Database,
+  db: Executor,
   sceneRowId: string,
   frames: ExtractedFrame[],
 ): Promise<void> {
@@ -83,7 +83,7 @@ export async function updateSceneFrames(
 
 /** Vision Analyzer output: persists the structured analysis for one scene. */
 export async function updateSceneVision(
-  db: Database,
+  db: Executor,
   sceneRowId: string,
   params: { vision: VisionSceneAnalysis; visionModel: string; visionVersion: string },
 ): Promise<void> {

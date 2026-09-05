@@ -1,5 +1,6 @@
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
+import { describeProviders } from '@memetize/model-providers';
 import type { AppRuntime } from '@memetize/runtime';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { registerAssetRoutes } from './routes/assets';
@@ -20,7 +21,8 @@ export async function buildApi(runtime: AppRuntime): Promise<FastifyInstance> {
   });
   await app.register(multipart, { limits: { fileSize: 2 * 1024 * 1024 * 1024 } });
 
-  app.get('/v1/health', async () => ({ ok: true }));
+  // Diagnostics (F01): which model capabilities are real and which are fixtures.
+  app.get('/v1/health', async () => ({ ok: true, providers: describeProviders(runtime.config) }));
 
   registerAssetRoutes(app, runtime);
   registerProjectRoutes(app, runtime);

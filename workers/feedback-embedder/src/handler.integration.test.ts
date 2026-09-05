@@ -1,6 +1,6 @@
 import { createTestDatabase, type Database, truncateAll } from '@memetize/database';
 import { listFeedbackEmbeddingsForMoment, recordFeedbackEvents } from '@memetize/feedback';
-import type { JobContext } from '@memetize/orchestrator';
+import { createDirectJobContext, type JobContext } from '@memetize/orchestrator';
 import { createLogger, loadConfig } from '@memetize/shared';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { createFeedbackEmbedHandler } from './handler';
@@ -9,7 +9,7 @@ const handle = await createTestDatabase();
 const db = handle?.db as Database;
 
 function contextFor(feedbackEventId: string): JobContext {
-  return {
+  return createDirectJobContext({
     job: {
       id: 'job_test',
       type: 'FEEDBACK_EMBED',
@@ -23,7 +23,7 @@ function contextFor(feedbackEventId: string): JobContext {
     enqueue: async () => {
       throw new Error('not expected');
     },
-  };
+  });
 }
 
 describe.skipIf(!handle)('FEEDBACK_EMBED handler', () => {

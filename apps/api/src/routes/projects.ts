@@ -1,5 +1,6 @@
 import { ProjectReprocessFrom, ReprocessBody, SwapClipInput } from '@memetize/contracts';
 import { listJobsForEntity } from '@memetize/job-system';
+import { describeProviders } from '@memetize/model-providers';
 import {
   clearManualWindow,
   deleteProject,
@@ -10,6 +11,7 @@ import {
   getLatestTimeline,
   getLyrics,
   getProject,
+  getProjectGeneration,
   ingestProject,
   listNarrativeSegments,
   listProjectFeedback,
@@ -89,6 +91,9 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
     const moments = await summarizeMoments(runtime.db, momentIds);
     return {
       project,
+      // Which capabilities produced this project's analysis for real vs. simulated (F01).
+      providers: describeProviders(runtime.config),
+      generationId: await getProjectGeneration(runtime.db, id),
       audio,
       lyrics,
       narrative,
@@ -246,6 +251,7 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
         projectId: id,
         clipId,
         momentId: parsed.data.momentId,
+        expectedTimelineVersion: parsed.data.expectedTimelineVersion,
       });
       // Each swap event carries its own FEEDBACK_EMBED job keyed by event id.
       for (const event of events) kickDrain(runtime, event.id);

@@ -1,6 +1,6 @@
 import {
   mediaAssets as assetsTable,
-  type Database,
+  type Executor,
   moments as momentsTable,
   scenes as scenesTable,
 } from '@memetize/database';
@@ -26,7 +26,7 @@ export interface MomentSummary {
  * descriptions, asset names, and the closest extracted frame.
  */
 export async function summarizeMoments(
-  db: Database,
+  db: Executor,
   momentIds: Iterable<string>,
 ): Promise<Record<string, MomentSummary>> {
   const ids = [...new Set(momentIds)];

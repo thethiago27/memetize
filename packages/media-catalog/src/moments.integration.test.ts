@@ -82,4 +82,61 @@ describe.skipIf(!handle)('replaceMoments id preservation (F12)', () => {
     // Shifted interval gets a fresh id (its old memory is left as history).
     expect(shifted?.id).not.toBe(idByInterval.get('3000:4000'));
   });
+
+  it('keeps the id when the same interval comes back from another extractor/version, and drops stale rows', async () => {
+    const assetId = 'ast_f12_provider';
+    const sceneId = 'scn_f12_provider';
+    await seedAssetAndScene(db, assetId, sceneId);
+
+    const fixture = await replaceMoments(db, {
+      assetId,
+      extractor: 'fixture',
+      extractorVersion: '1.0.0',
+      moments: [candidate(sceneId, 1000, 2000), candidate(sceneId, 3000, 4000)],
+    });
+    const stableId = fixture.find((m) => m.startMs === 1000)?.id;
+
+    // Switching to the gateway model reproduces one interval and changes the other.
+    const gateway = await replaceMoments(db, {
+      assetId,
+      extractor: 'gateway',
+      extractorVersion: '1.0.0/openai/gpt-5',
+      moments: [candidate(sceneId, 1000, 2000), candidate(sceneId, 3000, 4500)],
+    });
+    expect(gateway.find((m) => m.startMs === 1000)?.id).toBe(stableId);
+    // The previous extractor's rows do not linger next to the new catalog.
+    const all = await db.query.moments.findMany({ where: (t, { eq }) => eq(t.assetId, assetId) });
+    expect(all).toHaveLength(2);
+    expect(all.every((m) => m.extractor === 'gateway')).toBe(true);
+  });
+
+  it('gives an interval its original id back after it disappears and is re-extracted (F12)', async () => {
+    const assetId = 'ast_f12_return';
+    const sceneId = 'scn_f12_return';
+    await seedAssetAndScene(db, assetId, sceneId);
+
+    const first = await replaceMoments(db, {
+      assetId,
+      extractor: 'fixture',
+      extractorVersion: '1.0.0',
+      moments: [candidate(sceneId, 1000, 2000)],
+    });
+    const originalId = first[0]?.id;
+
+    // A pass that no longer finds the interval...
+    await replaceMoments(db, {
+      assetId,
+      extractor: 'fixture',
+      extractorVersion: '1.1.0',
+      moments: [candidate(sceneId, 500, 1500)],
+    });
+    // ...and a later one that finds it again: bans/feedback keyed by the id apply again.
+    const third = await replaceMoments(db, {
+      assetId,
+      extractor: 'fixture',
+      extractorVersion: '1.2.0',
+      moments: [candidate(sceneId, 1000, 2000)],
+    });
+    expect(third[0]?.id).toBe(originalId);
+  });
 });

@@ -1,10 +1,10 @@
 import {
-  type Database,
+  type Executor,
   type FeedbackEventRow,
   feedbackEvents,
   moments as momentsTable,
 } from '@memetize/database';
-import { and, asc, inArray } from 'drizzle-orm';
+import { and, asc, inArray, sql } from 'drizzle-orm';
 import { applyRangeEvent, type ExcludedRange, overlapsRange } from './aggregate';
 import { recordFeedbackEvents } from './events';
 import type { FeedbackEventLike } from './types';
@@ -63,7 +63,7 @@ export function resolveBans(events: readonly FeedbackEventLike[]): ActiveBans {
  * catalog here, so a moment created by a later reprocess is still excluded
  * if it touches an excluded range.
  */
-export async function listActiveBans(db: Database): Promise<ActiveBans> {
+export async function listActiveBans(db: Executor): Promise<ActiveBans> {
   const rows = await db.query.feedbackEvents.findMany({
     where: inArray(feedbackEvents.kind, [...BAN_KINDS]),
     orderBy: [asc(feedbackEvents.createdAt), asc(feedbackEvents.seq)],
@@ -83,7 +83,7 @@ export async function listActiveBans(db: Database): Promise<ActiveBans> {
 }
 
 export function excludeRange(
-  db: Database,
+  db: Executor,
   params: { assetId: string; startMs: number; endMs: number; note?: string | null },
 ): Promise<FeedbackEventRow> {
   return recordOne(db, {
@@ -95,7 +95,7 @@ export function excludeRange(
 }
 
 export function includeRange(
-  db: Database,
+  db: Executor,
   params: { assetId: string; startMs: number; endMs: number },
 ): Promise<FeedbackEventRow> {
   return recordOne(db, {
@@ -106,7 +106,7 @@ export function includeRange(
 }
 
 export function banMoment(
-  db: Database,
+  db: Executor,
   params: { momentId: string; assetId: string; note?: string | null },
 ): Promise<FeedbackEventRow> {
   return recordOne(db, {
@@ -118,7 +118,7 @@ export function banMoment(
 }
 
 export function unbanMoment(
-  db: Database,
+  db: Executor,
   params: { momentId: string; assetId: string },
 ): Promise<FeedbackEventRow> {
   return recordOne(db, {
@@ -129,21 +129,36 @@ export function unbanMoment(
 }
 
 export function banAsset(
-  db: Database,
+  db: Executor,
   params: { assetId: string; note?: string | null },
 ): Promise<FeedbackEventRow> {
   return recordOne(db, { kind: 'BAN_ASSET', assetId: params.assetId, note: params.note ?? null });
 }
 
-export function unbanAsset(db: Database, params: { assetId: string }): Promise<FeedbackEventRow> {
+export function unbanAsset(db: Executor, params: { assetId: string }): Promise<FeedbackEventRow> {
   return recordOne(db, { kind: 'UNBAN_ASSET', assetId: params.assetId });
 }
 
 async function recordOne(
-  db: Database,
+  db: Executor,
   input: Omit<Parameters<typeof recordFeedbackEvents>[1][number], 'source'>,
 ): Promise<FeedbackEventRow> {
   const [row] = await recordFeedbackEvents(db, [{ ...input, source: 'USER' }]);
   if (!row) throw new Error('failed to record feedback event');
   return row;
+}
+
+/**
+ * Monotonic revision of the editorial constraints (F13). Bans are global, so the
+ * revision is the highest `feedback_events.seq` among ban/unban/range events:
+ * any change to what is banned strictly increases it. A worker reads it before a
+ * long model call and compares at publication; a different value means the
+ * constraints moved underneath the run and the result must be re-validated.
+ */
+export async function getConstraintsRevision(db: Executor): Promise<number> {
+  const rows = await db
+    .select({ revision: sql<string>`coalesce(max(${feedbackEvents.seq}), 0)` })
+    .from(feedbackEvents)
+    .where(inArray(feedbackEvents.kind, [...BAN_KINDS]));
+  return Number(rows[0]?.revision ?? 0);
 }

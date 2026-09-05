@@ -43,17 +43,26 @@ export function createNormalizeHandler(): JobHandler {
       );
     }
 
-    await updateAssetDerived(ctx.db, assetId, {
-      proxyPath: proxy.relative,
-      analysisPath: analysis.relative,
-      thumbnailPath: thumbnail.relative,
-    });
-    await setAssetStatus(ctx.db, assetId, 'ANALYZING');
-
-    await ctx.enqueue({
-      type: 'SCENE_DETECT',
-      entityId: assetId,
-      input: { assetId, analysisPath: analysis.relative },
+    // Derived paths, ANALYZING and the SCENE_DETECT follow-up commit together
+    // with the job completion (F10), only while this attempt owns the job and its
+    // generation is current (F08/F09).
+    const result = await ctx.publish(async ({ tx, enqueue }) => {
+      await updateAssetDerived(tx, assetId, {
+        proxyPath: proxy.relative,
+        analysisPath: analysis.relative,
+        thumbnailPath: thumbnail.relative,
+      });
+      await setAssetStatus(tx, assetId, 'ANALYZING');
+      await enqueue({
+        type: 'SCENE_DETECT',
+        entityId: assetId,
+        input: { assetId, analysisPath: analysis.relative },
+      });
+      return {
+        proxyPath: proxy.relative,
+        analysisPath: analysis.relative,
+        thumbnailPath: thumbnail.relative,
+      };
     });
 
     ctx.logger.info('normalize_completed', {
@@ -61,10 +70,6 @@ export function createNormalizeHandler(): JobHandler {
       analysisPath: analysis.relative,
     });
 
-    return {
-      proxyPath: proxy.relative,
-      analysisPath: analysis.relative,
-      thumbnailPath: thumbnail.relative,
-    };
+    return result;
   };
 }

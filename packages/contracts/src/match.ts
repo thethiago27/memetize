@@ -14,6 +14,8 @@ export const SHORTLIST_LIMIT = 6;
 // MATCH
 export const MatchInput = z.object({
   projectId: z.string(),
+  /** Generation this run belongs to (F09/F11); absent only on legacy jobs. */
+  generationId: z.string().optional(),
 });
 export type MatchInput = z.infer<typeof MatchInput>;
 

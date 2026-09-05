@@ -16,6 +16,7 @@
     "@memetize/feedback": "workspace:*",
     "@memetize/job-system": "workspace:*",
     "@memetize/media-catalog": "workspace:*",
+    "@memetize/model-providers": "workspace:*",
     "@memetize/projects": "workspace:*",
     "@memetize/retriever": "workspace:*",
     "@memetize/runtime": "workspace:*",

@@ -10,7 +10,8 @@ export function sendSwapError(reply: FastifyReply, error: unknown) {
     const status =
       error.code === 'NOT_IN_SHORTLIST' ||
       error.code === 'MOMENT_TOO_SHORT' ||
-      error.code === 'MOMENT_BANNED'
+      error.code === 'MOMENT_BANNED' ||
+      error.code === 'VERSION_CONFLICT'
         ? 409
         : 404;
     return sendError(reply, status, error.code, error.message);

@@ -218,7 +218,12 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
                 actions.run(
                   `swap:${momentId}`,
                   async () => {
-                    const { timeline } = await api.swapClip(id, selected.id, momentId);
+                    const { timeline } = await api.swapClip(
+                      id,
+                      selected.id,
+                      momentId,
+                      detail?.timeline?.version,
+                    );
                     applyTimeline(timeline);
                   },
                   'Clipe trocado. Renderize para ver.',

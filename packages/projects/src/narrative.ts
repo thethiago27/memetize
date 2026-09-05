@@ -1,6 +1,6 @@
 import type { NarrativeSegment } from '@memetize/contracts';
 import {
-  type Database,
+  type Executor,
   type NarrativeSegmentRow,
   type NewNarrativeSegmentRow,
   narrativeSegments,
@@ -52,7 +52,7 @@ function segmentKey(startMs: number, endMs: number, sourceKind: string): string 
  * reprocessing; only segments whose boundaries changed get fresh ids.
  */
 export async function replaceNarrativeSegments(
-  db: Database,
+  db: Executor,
   params: ReplaceNarrativeSegmentsParams,
 ): Promise<NarrativeSegmentRow[]> {
   const rows = toNarrativeSegmentRows(params);
@@ -80,7 +80,7 @@ export async function replaceNarrativeSegments(
 }
 
 export function listNarrativeSegments(
-  db: Database,
+  db: Executor,
   projectId: string,
 ): Promise<NarrativeSegmentRow[]> {
   return db.query.narrativeSegments.findMany({

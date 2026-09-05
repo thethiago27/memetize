@@ -1,6 +1,10 @@
 import { embedMany } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { embeddingSpaceId, GatewayEmbeddingProvider } from './gateway-embedding';
+import {
+  embeddingProviderOptions,
+  embeddingSpaceId,
+  GatewayEmbeddingProvider,
+} from './gateway-embedding';
 
 vi.mock('ai', () => ({
   embedMany: vi.fn(),
@@ -32,6 +36,29 @@ describe('GatewayEmbeddingProvider (F01)', () => {
     const result = await provider.embed([]);
     expect(result.vectors).toEqual([]);
     expect(embedManyMock).not.toHaveBeenCalled();
+  });
+
+  it('asks the model for the configured width instead of accepting its default (F01)', async () => {
+    embedManyMock.mockResolvedValue({
+      embeddings: [Array.from({ length: 384 }, () => 1)],
+    } as never);
+    const provider = new GatewayEmbeddingProvider(384, 'openai/text-embedding-3-small');
+    await provider.embed(['hello']);
+    const call = embedManyMock.mock.calls[0]?.[0];
+    // text-embedding-3-small returns 1536 dims by default; the request must pin 384.
+    expect(call).toMatchObject({
+      values: ['hello'],
+      providerOptions: { openai: { dimensions: 384 } },
+    });
+  });
+
+  it('routes the width option to the model creator named by the gateway id', () => {
+    expect(embeddingProviderOptions('openai/text-embedding-3-large', 384)).toEqual({
+      openai: { dimensions: 384 },
+    });
+    expect(embeddingProviderOptions('google/gemini-embedding-001', 384)).toEqual({
+      google: { dimensions: 384, outputDimensionality: 384 },
+    });
   });
 
   it('spaces differ by model and dimensions', () => {

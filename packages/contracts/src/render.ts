@@ -18,6 +18,15 @@ export type RenderProfile = z.infer<typeof RenderProfile>;
 export const RenderInput = z.object({
   projectId: z.string(),
   profile: RenderProfile.default('final'),
+  /** Generation this run belongs to (F09/F11); absent only on legacy jobs. */
+  generationId: z.string().optional(),
+  /**
+   * Timeline version to render (F11), pinned at enqueue. The renderer loads this
+   * exact row and fails when it is gone; it never silently renders "latest".
+   */
+  sourceTimelineVersion: z.number().int().positive().optional(),
+  /** Edit window version the timeline must match (F11), pinned at enqueue. */
+  editWindowVersion: z.number().int().positive().optional(),
 });
 export type RenderInput = z.infer<typeof RenderInput>;
 
@@ -29,6 +38,10 @@ export const RenderWarningCode = z.enum([
   'SOURCE_SHORTER_THAN_SLOT',
   'UNKNOWN_EFFECT',
   'DURATION_DRIFT',
+  /** ffprobe could not determine a stream's coverage; the render is rejected (F07). */
+  'STREAM_COVERAGE_UNKNOWN',
+  /** A stream starts later than the tolerance allows (F07). */
+  'STREAM_START_OFFSET',
 ]);
 export type RenderWarningCode = z.infer<typeof RenderWarningCode>;
 

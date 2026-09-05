@@ -78,23 +78,23 @@ export function createMomentExtractHandler(): JobHandler {
       );
     }
 
-    const persisted = await replaceMoments(ctx.db, {
-      assetId,
-      extractor,
-      extractorVersion,
-      moments: candidates,
+    // Moments, INDEXING and the EMBED follow-up commit together with the job
+    // completion (F10), only while this attempt owns the job and its generation
+    // is current (F08/F09). Moments are catalogued; only embeddings stand between
+    // here and READY (spec section 40).
+    const result = await ctx.publish(async ({ tx, enqueue }) => {
+      const persisted = await replaceMoments(tx, {
+        assetId,
+        extractor,
+        extractorVersion,
+        moments: candidates,
+      });
+      await setAssetStatus(tx, assetId, 'INDEXING');
+      await enqueue({ type: 'EMBED', entityId: assetId, input: { assetId } });
+      return { momentCount: persisted.length, extractor, extractorVersion };
     });
 
-    // Moments are catalogued; only embeddings stand between here and READY
-    // (spec section 40).
-    await setAssetStatus(ctx.db, assetId, 'INDEXING');
-    await ctx.enqueue({ type: 'EMBED', entityId: assetId, input: { assetId } });
-
-    ctx.logger.info('moment_extract_completed', {
-      momentCount: persisted.length,
-      extractor,
-      extractorVersion,
-    });
-    return { momentCount: persisted.length, extractor, extractorVersion };
+    ctx.logger.info('moment_extract_completed', result);
+    return result;
   };
 }

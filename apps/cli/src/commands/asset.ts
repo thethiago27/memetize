@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { banAsset, excludeRange, includeRange, unbanAsset } from '@memetize/feedback';
 import {
+  AssetBusyError,
   getAsset,
   ingestAsset,
   listAssets,
@@ -115,7 +116,15 @@ export function registerAssetCommands(program: Command): void {
           );
           return;
         }
-        await reprocessAsset(ctx.db, assetId, options.from);
+        try {
+          await reprocessAsset(ctx.db, assetId, options.from);
+        } catch (error) {
+          if (error instanceof AssetBusyError) {
+            process.stdout.write(`${error.message}\n`);
+            return;
+          }
+          throw error;
+        }
         process.stdout.write(`Reprocessing ${assetId} from ${options.from}...\n`);
 
         if (options.wait) {

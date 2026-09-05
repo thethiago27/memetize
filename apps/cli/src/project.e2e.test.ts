@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { AUDIO_ANALYZER_DIR } from '@memetize/audio-analyzer';
 import { createTestDatabase, type Database, truncateAll } from '@memetize/database';
-import { Orchestrator, ResourceScheduler } from '@memetize/orchestrator';
+import type { Orchestrator } from '@memetize/orchestrator';
 import {
   getAudioAnalysis,
   getLatestTimeline,
@@ -16,9 +16,9 @@ import {
   listNarrativeSegments,
   listSegmentMatches,
 } from '@memetize/projects';
+import { createOrchestrator } from '@memetize/runtime';
 import type { AppConfig } from '@memetize/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildRegistry } from './registry';
 
 const execFileAsync = promisify(execFile);
 const handle = await createTestDatabase();
@@ -74,12 +74,7 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('project pipeline (e
         audio: { kind: 'fixture', model: null },
       },
     };
-    orchestrator = new Orchestrator({
-      db,
-      config,
-      registry: buildRegistry(),
-      scheduler: new ResourceScheduler(config.resources),
-    });
+    orchestrator = createOrchestrator({ db, config });
     fixture = join(tmp, 'song.mp3');
     await makeSilentClip(fixture, 6);
     await truncateAll(db);

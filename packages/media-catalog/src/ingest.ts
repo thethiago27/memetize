@@ -1,7 +1,12 @@
 import { copyFile, stat } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
 import { type Database, type MediaAssetRow, mediaAssets } from '@memetize/database';
-import { enqueueJob } from '@memetize/job-system';
+import {
+  enqueueJob,
+  ensureEntityExecution,
+  startGeneration,
+  stepKeyFor,
+} from '@memetize/job-system';
 import { type AppConfig, ensureDir, assetId as newAssetId, sha256File } from '@memetize/shared';
 import { eq } from 'drizzle-orm';
 import { assetDir, assetFile } from './paths';
@@ -103,10 +108,17 @@ export async function ingestAsset({
     throw error;
   }
 
-  await enqueueJob(db, {
-    type: 'VIDEO_NORMALIZE',
-    entityId: id,
-    input: { assetId: id, originalPath: original.relative },
+  // Coordination row, first generation and first job commit together (F09/F10).
+  await db.transaction(async (tx) => {
+    await ensureEntityExecution(tx, 'asset', id);
+    const generationId = await startGeneration(tx, 'asset', id);
+    await enqueueJob(tx, {
+      type: 'VIDEO_NORMALIZE',
+      entityId: id,
+      input: { assetId: id, originalPath: original.relative },
+      generationId,
+      stepKey: stepKeyFor('VIDEO_NORMALIZE'),
+    });
   });
 
   return { asset, created: true };

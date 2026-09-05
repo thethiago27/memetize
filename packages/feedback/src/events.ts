@@ -1,6 +1,6 @@
 import type { FeedbackKind } from '@memetize/contracts';
 import {
-  type Database,
+  type Executor,
   type FeedbackEventRow,
   feedbackEvents,
   type NewFeedbackEventRow,
@@ -28,7 +28,7 @@ export function toFeedbackEventRows(inputs: readonly FeedbackEventInput[]): NewF
 
 /** Append-only insert; returns rows in input order. */
 export async function recordFeedbackEvents(
-  db: Database,
+  db: Executor,
   inputs: readonly FeedbackEventInput[],
 ): Promise<FeedbackEventRow[]> {
   const rows = toFeedbackEventRows(inputs);
@@ -55,7 +55,7 @@ export interface FeedbackFilter {
 }
 
 export async function listFeedbackEvents(
-  db: Database,
+  db: Executor,
   filter: FeedbackFilter = {},
 ): Promise<FeedbackEventRow[]> {
   const conditions: SQL[] = [];
@@ -77,6 +77,6 @@ export async function listFeedbackEvents(
   });
 }
 
-export function getFeedbackEvent(db: Database, id: string): Promise<FeedbackEventRow | undefined> {
+export function getFeedbackEvent(db: Executor, id: string): Promise<FeedbackEventRow | undefined> {
   return db.query.feedbackEvents.findFirst({ where: eq(feedbackEvents.id, id) });
 }

@@ -11,6 +11,14 @@ import { z } from 'zod';
 
 export const TimingInput = z.object({
   projectId: z.string(),
+  /** Generation this run belongs to (F09/F11); absent only on legacy jobs. */
+  generationId: z.string().optional(),
+  /**
+   * The timeline version this run must consume (F11), pinned when the job was
+   * enqueued so an edit landing before the claim cannot change its input. Absent
+   * only on legacy jobs, which fall back to the latest version.
+   */
+  sourceTimelineVersion: z.number().int().positive().optional(),
 });
 export type TimingInput = z.infer<typeof TimingInput>;
 

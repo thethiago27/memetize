@@ -11,6 +11,10 @@ import { z } from 'zod';
 
 export const EffectsInput = z.object({
   projectId: z.string(),
+  /** Generation this run belongs to (F09/F11); absent only on legacy jobs. */
+  generationId: z.string().optional(),
+  /** Timeline version to plan effects on (F11); see `TimingInput`. */
+  sourceTimelineVersion: z.number().int().positive().optional(),
 });
 export type EffectsInput = z.infer<typeof EffectsInput>;
 

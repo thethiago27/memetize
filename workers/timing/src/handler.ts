@@ -6,9 +6,9 @@ import { JobFailure } from '@memetize/job-system';
 import type { JobHandler } from '@memetize/orchestrator';
 import {
   getAudioAnalysis,
-  getLatestTimeline,
   insertTimelineVersion,
   listNarrativeSegments,
+  resolveSourceTimeline,
   timingDebugFile,
 } from '@memetize/projects';
 import { validateTimeline } from '@memetize/renderer';
@@ -26,11 +26,19 @@ export function createTimingHandler(): JobHandler {
     if (!parsed.success) {
       throw new JobFailure('INVALID_INPUT', parsed.error.message, false);
     }
-    const { projectId } = parsed.data;
+    const { projectId, sourceTimelineVersion } = parsed.data;
 
-    const sourceVersion = await getLatestTimeline(ctx.db, projectId);
+    // Consume the version this job was pinned to (F11), never "whatever is latest now".
+    const source = await resolveSourceTimeline(ctx.db, projectId, sourceTimelineVersion);
+    const sourceVersion = source.row;
     if (!sourceVersion) {
-      throw new JobFailure('TIMING_NO_TIMELINE', `project ${projectId} has no timeline yet`, false);
+      throw source.pinned
+        ? new JobFailure(
+            'TIMING_STALE_SOURCE',
+            `project ${projectId} no longer has timeline v${sourceTimelineVersion}`,
+            false,
+          )
+        : new JobFailure('TIMING_NO_TIMELINE', `project ${projectId} has no timeline yet`, false);
     }
 
     const audio = await getAudioAnalysis(ctx.db, projectId);
@@ -79,14 +87,28 @@ export function createTimingHandler(): JobHandler {
       );
     }
 
-    const persisted = await insertTimelineVersion(ctx.db, {
-      projectId,
-      data: result.timeline,
-      director: sourceVersion.director,
-      directorVersion: sourceVersion.directorVersion,
-      promptVersion: sourceVersion.promptVersion,
-      timingOptimizer: 'heuristic',
-      timingOptimizerVersion: WORKER_VERSION.TIMING,
+    const clipsAdjusted = result.adjustments.filter(
+      (adjustment) => adjustment.snappedTo !== 'none',
+    ).length;
+
+    // Timeline insert + next step commit together with the job completion (F10),
+    // only while this attempt owns the job and its generation is current (F08/F09).
+    const published = await ctx.publish(async ({ tx, enqueue }) => {
+      const persisted = await insertTimelineVersion(tx, {
+        projectId,
+        data: result.timeline,
+        director: sourceVersion.director,
+        directorVersion: sourceVersion.directorVersion,
+        promptVersion: sourceVersion.promptVersion,
+        timingOptimizer: 'heuristic',
+        timingOptimizerVersion: WORKER_VERSION.TIMING,
+      });
+      await enqueue({
+        type: 'EFFECTS',
+        entityId: projectId,
+        input: { projectId, sourceTimelineVersion: persisted.version },
+      });
+      return { projectId, version: persisted.version, clipsAdjusted };
     });
 
     const debugFile = timingDebugFile(ctx.config, projectId);
@@ -96,7 +118,9 @@ export function createTimingHandler(): JobHandler {
       JSON.stringify(
         {
           projectId,
+          generationId: ctx.job.generationId,
           sourceTimelineVersion: sourceVersion.version,
+          timelineVersion: published.version,
           adjustments: result.adjustments,
         },
         null,
@@ -104,18 +128,12 @@ export function createTimingHandler(): JobHandler {
       ),
     );
 
-    await ctx.enqueue({ type: 'EFFECTS', entityId: projectId, input: { projectId } });
-
-    const clipsAdjusted = result.adjustments.filter(
-      (adjustment) => adjustment.snappedTo !== 'none',
-    ).length;
-
     ctx.logger.info('timing_completed', {
       projectId,
-      version: persisted.version,
+      version: published.version,
       clipsAdjusted,
     });
 
-    return { projectId, version: persisted.version, clipsAdjusted };
+    return published;
   };
 }

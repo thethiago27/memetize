@@ -1,5 +1,5 @@
 import type { FeedbackPlacement } from '@memetize/contracts';
-import type { Database, FeedbackEventRow } from '@memetize/database';
+import type { Executor, FeedbackEventRow } from '@memetize/database';
 import { buildSegmentContext, listFeedbackEvents, recordFeedbackEvents } from '@memetize/feedback';
 import { listSegmentMatches } from './match';
 import { listNarrativeSegments } from './narrative';
@@ -23,7 +23,7 @@ export class ProjectFeedbackError extends Error {
  * moments that were actually on the slate, without re-reading timelines.
  */
 export async function rateProject(
-  db: Database,
+  db: Executor,
   params: { projectId: string; value: number },
 ): Promise<FeedbackEventRow> {
   const timeline = await getLatestTimeline(db, params.projectId);
@@ -56,7 +56,7 @@ export async function rateProject(
 
 /** `CLIP_UP` / `CLIP_DOWN` on a clip of the latest timeline, with the segment context. */
 export async function rateClip(
-  db: Database,
+  db: Executor,
   params: { projectId: string; clipId: string; kind: 'CLIP_UP' | 'CLIP_DOWN' },
 ): Promise<FeedbackEventRow> {
   const timeline = await getLatestTimeline(db, params.projectId);
@@ -101,7 +101,7 @@ export async function rateClip(
 
 /** A free-text editorial note; null project means it applies everywhere. */
 export async function addNote(
-  db: Database,
+  db: Executor,
   params: { projectId?: string | null; note: string },
 ): Promise<FeedbackEventRow> {
   const [row] = await recordFeedbackEvents(db, [
@@ -115,7 +115,7 @@ export const PROJECT_FEEDBACK_LIMIT = 50;
 
 /** Newest first: the project's own events plus global notes. */
 export function listProjectFeedback(
-  db: Database,
+  db: Executor,
   projectId: string,
   limit = PROJECT_FEEDBACK_LIMIT,
 ): Promise<FeedbackEventRow[]> {

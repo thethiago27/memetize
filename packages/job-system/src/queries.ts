@@ -1,7 +1,6 @@
-import type { JobType } from '@memetize/contracts';
-import { type Database, type JobRow, jobs } from '@memetize/database';
-import { and, asc, count, eq, inArray, ne } from 'drizzle-orm';
-import type { Executor } from './entity';
+import type { JobStatus, JobType } from '@memetize/contracts';
+import { type Database, type Executor, type JobRow, jobs } from '@memetize/database';
+import { and, asc, count, eq, inArray } from 'drizzle-orm';
 
 export function getJob(db: Database, id: string): Promise<JobRow | undefined> {
   return db.query.jobs.findFirst({ where: eq(jobs.id, id) });
@@ -38,48 +37,30 @@ export async function countRunningForEntity(
 }
 
 /**
- * Deletes an entity's job rows for the given types, so a later `enqueueJob`
- * with the same idempotency key creates a fresh job instead of returning the
- * old (already COMPLETED) one. Used by `asset reprocess --from` (spec section
- * 42).
- *
- * A RUNNING job is never deleted (F09): its handler may still be writing
- * timelines, files and jobs, and pulling the row out from under it corrupts
- * state. Callers must cancel active jobs first (see `cancelActiveJobsForEntity`)
- * so only terminal rows remain to delete.
- */
-export async function deleteJobsForEntity(
-  db: Executor,
-  entityId: string,
-  types: JobType[],
-): Promise<void> {
-  if (types.length === 0) return;
-  await db
-    .delete(jobs)
-    .where(and(eq(jobs.entityId, entityId), inArray(jobs.type, types), ne(jobs.status, 'RUNNING')));
-}
-
-/**
- * Marks an entity's not-yet-terminal jobs (PENDING or RUNNING) of the given
- * types as CANCELLED without deleting history (F09). A RUNNING job's lease is
- * left intact so its own lease-guarded completion/heartbeat will find the row no
- * longer RUNNING and stop; its subprocess should be signalled separately.
+ * Marks an entity's not-yet-terminal jobs of the given types as CANCELLED without
+ * deleting history (F09). Defaults to PENDING and RUNNING; a reprocess that has
+ * already refused to run while a job is RUNNING passes `['PENDING']`. A RUNNING
+ * job's lease is left intact so its own lease-guarded completion/heartbeat will
+ * find the row no longer RUNNING and stop; its subprocess should be signalled
+ * separately.
  */
 export async function cancelActiveJobsForEntity(
   db: Executor,
   entityId: string,
   types: JobType[],
+  statuses: JobStatus[] = ['PENDING', 'RUNNING'],
 ): Promise<JobRow[]> {
-  if (types.length === 0) return [];
+  if (types.length === 0 || statuses.length === 0) return [];
   return db
     .update(jobs)
-    .set({ status: 'CANCELLED', completedAt: new Date() })
+    .set({
+      status: 'CANCELLED',
+      errorCode: 'SUPERSEDED',
+      errorMessage: 'cancelled by a newer generation of the pipeline',
+      completedAt: new Date(),
+    })
     .where(
-      and(
-        eq(jobs.entityId, entityId),
-        inArray(jobs.type, types),
-        inArray(jobs.status, ['PENDING', 'RUNNING']),
-      ),
+      and(eq(jobs.entityId, entityId), inArray(jobs.type, types), inArray(jobs.status, statuses)),
     )
     .returning();
 }

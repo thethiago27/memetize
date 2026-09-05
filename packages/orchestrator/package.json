@@ -16,5 +16,8 @@
     "@memetize/database": "workspace:*",
     "@memetize/job-system": "workspace:*",
     "@memetize/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "drizzle-orm": "^0.45.2"
   }
 }

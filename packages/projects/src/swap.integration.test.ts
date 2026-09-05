@@ -354,4 +354,41 @@ describe.skipIf(!handle)('swapClip (integration)', () => {
       swapClip(db, { projectId, clipId: 'clp_swap_1', momentId: 'mom_swap_b' }),
     ).rejects.toMatchObject({ code: 'NO_TIMELINE' });
   });
+
+  it('refuses a swap based on a stale timeline version and writes nothing (F09)', async () => {
+    const projectId = 'prj_swap_conflict';
+    await seedSwapFixture(db, projectId);
+    await insertTimelineVersion(db, {
+      projectId,
+      data: timelineWithClip(projectId),
+      director: 'fixture',
+      directorVersion: '1.0.0',
+      promptVersion: 'v1',
+    });
+
+    // Another editor already produced v2; this swap was decided against v1.
+    await swapClip(db, { projectId, clipId: 'clp_swap_1', momentId: 'mom_swap_b' });
+    await expect(
+      swapClip(db, {
+        projectId,
+        clipId: 'clp_swap_1',
+        momentId: 'mom_swap_wide',
+        expectedTimelineVersion: 1,
+      }),
+    ).rejects.toMatchObject({ code: 'VERSION_CONFLICT' } satisfies Partial<SwapClipError>);
+
+    // Nothing from the refused swap leaked: still two versions, two swap events, two jobs.
+    expect(await listTimelineVersions(db, projectId)).toHaveLength(2);
+    expect(await listFeedbackEvents(db, { projectId })).toHaveLength(2);
+    expect(await listJobsForEntity(db, projectId)).toHaveLength(0);
+
+    // The same swap against the version actually on screen goes through.
+    const ok = await swapClip(db, {
+      projectId,
+      clipId: 'clp_swap_1',
+      momentId: 'mom_swap_wide',
+      expectedTimelineVersion: 2,
+    });
+    expect(ok.timeline.version).toBe(3);
+  });
 });

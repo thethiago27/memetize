@@ -50,6 +50,9 @@ importers:
       '@memetize/media-catalog':
         specifier: workspace:*
         version: link:../../packages/media-catalog
+      '@memetize/model-providers':
+        specifier: workspace:*
+        version: link:../../packages/model-providers
       '@memetize/projects':
         specifier: workspace:*
         version: link:../../packages/projects
@@ -92,6 +95,9 @@ importers:
       '@memetize/media-catalog':
         specifier: workspace:*
         version: link:../../packages/media-catalog
+      '@memetize/model-providers':
+        specifier: workspace:*
+        version: link:../../packages/model-providers
       '@memetize/orchestrator':
         specifier: workspace:*
         version: link:../../packages/orchestrator
@@ -221,6 +227,9 @@ importers:
       '@memetize/director':
         specifier: workspace:*
         version: link:../director
+      '@memetize/timing':
+        specifier: workspace:*
+        version: link:../timing
 
   packages/evaluation:
     dependencies:
@@ -329,6 +338,10 @@ importers:
       '@memetize/shared':
         specifier: workspace:*
         version: link:../shared
+    devDependencies:
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
 
   packages/projects:
     dependencies:

@@ -20,7 +20,8 @@ export type IdPrefix =
   | 'rnd'
   | 'win'
   | 'fb'
-  | 'fbe';
+  | 'fbe'
+  | 'gen';
 
 /** Builds a URL-safe, sortable-enough id like `ast_9x3k...`. */
 export function prefixedId(prefix: IdPrefix): string {
@@ -44,3 +45,5 @@ export const renderId = (): string => prefixedId('rnd');
 export const editWindowId = (): string => prefixedId('win');
 export const feedbackEventId = (): string => prefixedId('fb');
 export const feedbackEmbeddingId = (): string => prefixedId('fbe');
+/** Pipeline generation: one run of an entity's pipeline from some stage (F09/F11). */
+export const generationId = (): string => prefixedId('gen');

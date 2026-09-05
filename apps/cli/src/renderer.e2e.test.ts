@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import { AUDIO_ANALYZER_DIR } from '@memetize/audio-analyzer';
 import { createTestDatabase, type Database, truncateAll } from '@memetize/database';
 import { ingestAsset, probeVideo } from '@memetize/media-catalog';
-import { Orchestrator, ResourceScheduler } from '@memetize/orchestrator';
+import type { Orchestrator } from '@memetize/orchestrator';
 import {
   effectsDebugFile,
   getLatestRender,
@@ -20,12 +20,12 @@ import {
   resolveStorage,
 } from '@memetize/projects';
 import { isFadeStyle, isOverlapStyle, transitionOutOf } from '@memetize/renderer';
+import { createOrchestrator } from '@memetize/runtime';
 import { SCENE_DETECTOR_DIR } from '@memetize/scene-detector';
 import type { AppConfig } from '@memetize/shared';
 import type { Timeline } from '@memetize/timeline';
 import { TRANSCRIPT_DIR } from '@memetize/transcript';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildRegistry } from './registry';
 
 const execFileAsync = promisify(execFile);
 const handle = await createTestDatabase();
@@ -190,12 +190,7 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('renderer pipeline (
         audio: { kind: 'fixture', model: null },
       },
     };
-    orchestrator = new Orchestrator({
-      db,
-      config,
-      registry: buildRegistry(),
-      scheduler: new ResourceScheduler(config.resources),
-    });
+    orchestrator = createOrchestrator({ db, config });
     songFixture = join(tmp, 'song.mp3');
     await makeSilentClip(songFixture, 6);
     await truncateAll(db);
@@ -305,12 +300,7 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('renderer pipeline (
       ...config,
       providers: { ...config.providers, llm: { kind: 'fixture', model: 'styled' } },
     };
-    const styled = new Orchestrator({
-      db,
-      config: styledConfig,
-      registry: buildRegistry(),
-      scheduler: new ResourceScheduler(styledConfig.resources),
-    });
+    const styled = createOrchestrator({ db, config: styledConfig });
 
     for (const index of [0, 1, 2]) {
       const clipPath = join(tmp, `styled-clip-${index}.mp4`);

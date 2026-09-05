@@ -6,13 +6,16 @@ import type { OutputProbe } from './types';
 /**
  * Checks the rendered MP4 against the `Timeline` it was built from (spec
  * section 38). Hard failures — a missing file, wrong resolution/fps, a missing
- * video/audio stream, an unreadable duration, or a duration/stream that drifts
- * beyond tolerance — mean the encode is broken and the `renders` row must never
- * be written (F07). A small, deliberately tolerated drift is only a warning.
+ * video/audio stream, an unreadable duration, a stream whose coverage cannot be
+ * determined, a stream that starts late, or a duration/stream that drifts beyond
+ * tolerance — mean the encode is broken and the `renders` row must never be
+ * written (F07). A small, deliberately tolerated drift is only a warning.
  *
  * The container duration alone can hide a truncated stream (e.g. 1s of video
- * under 60s of audio still reports a 60s container), so each stream's duration
- * is checked against the timeline separately when ffprobe reports it.
+ * under 60s of audio still reports a 60s container), so each stream's span is
+ * checked against the timeline separately. Unknown coverage is a failure, not a
+ * pass: the probe measures stream spans from packets when the header lacks them,
+ * so `null` here means even that failed and nothing proves the stream is whole.
  */
 export function validateOutput(probe: OutputProbe, timeline: Timeline): RenderValidation {
   const warnings: RenderWarning[] = [];
@@ -49,13 +52,32 @@ export function validateOutput(probe: OutputProbe, timeline: Timeline): RenderVa
 
   // Each stream must actually cover the timeline; the container duration alone
   // would accept a video stream that ends long before the audio.
-  if (!streamCoversTimeline(probe.videoDurationMs, timeline.durationMs, maxDriftMs)) {
-    warnings.push(streamWarning('video', probe.videoDurationMs, timeline.durationMs));
-    return { valid: false, warnings };
-  }
-  if (!streamCoversTimeline(probe.audioDurationMs, timeline.durationMs, AUDIO_DRIFT_MS)) {
-    warnings.push(streamWarning('audio', probe.audioDurationMs, timeline.durationMs));
-    return { valid: false, warnings };
+  for (const stream of [
+    {
+      kind: 'video' as const,
+      durationMs: probe.videoDurationMs,
+      startMs: probe.videoStartMs,
+      toleranceMs: maxDriftMs,
+    },
+    {
+      kind: 'audio' as const,
+      durationMs: probe.audioDurationMs,
+      startMs: probe.audioStartMs,
+      toleranceMs: AUDIO_DRIFT_MS,
+    },
+  ]) {
+    if (stream.durationMs === null) {
+      warnings.push(unknownCoverageWarning(stream.kind));
+      return { valid: false, warnings };
+    }
+    if (!streamCoversTimeline(stream.durationMs, timeline.durationMs, stream.toleranceMs)) {
+      warnings.push(streamWarning(stream.kind, stream.durationMs, timeline.durationMs));
+      return { valid: false, warnings };
+    }
+    if (stream.startMs !== null && Math.abs(stream.startMs) > stream.toleranceMs) {
+      warnings.push(startOffsetWarning(stream.kind, stream.startMs));
+      return { valid: false, warnings };
+    }
   }
 
   if (driftMs > DURATION_DRIFT_MS) {
@@ -65,19 +87,29 @@ export function validateOutput(probe: OutputProbe, timeline: Timeline): RenderVa
   return { valid: true, warnings };
 }
 
-/**
- * A stream covers the timeline when its reported duration is within tolerance.
- * `null` means ffprobe did not report a per-stream duration; the container
- * duration check above still guards those cases, so we do not fail on absence.
- */
+/** A stream covers the timeline when its measured duration is within tolerance. */
 function streamCoversTimeline(
-  streamDurationMs: number | null,
+  streamDurationMs: number,
   expectedMs: number,
   toleranceMs: number,
 ): boolean {
-  if (streamDurationMs === null) return true;
   if (!Number.isFinite(streamDurationMs) || streamDurationMs <= 0) return false;
   return Math.abs(streamDurationMs - expectedMs) <= toleranceMs;
+}
+
+function unknownCoverageWarning(kind: 'video' | 'audio'): RenderWarning {
+  return {
+    code: 'STREAM_COVERAGE_UNKNOWN',
+    message: `${kind} stream coverage could not be determined from ffprobe; refusing to publish`,
+  };
+}
+
+function startOffsetWarning(kind: 'video' | 'audio', startMs: number): RenderWarning {
+  return {
+    code: 'STREAM_START_OFFSET',
+    durationMs: Math.max(0, Math.round(Math.abs(startMs))),
+    message: `${kind} stream starts at ${startMs}ms instead of 0`,
+  };
 }
 
 function driftWarning(actualMs: number, expectedMs: number): RenderWarning {
@@ -91,12 +123,12 @@ function driftWarning(actualMs: number, expectedMs: number): RenderWarning {
 
 function streamWarning(
   kind: 'video' | 'audio',
-  actualMs: number | null,
+  actualMs: number,
   expectedMs: number,
 ): RenderWarning {
   return {
     code: 'DURATION_DRIFT',
-    durationMs: actualMs !== null ? Math.max(0, Math.round(Math.abs(actualMs - expectedMs))) : 0,
+    durationMs: Math.max(0, Math.round(Math.abs(actualMs - expectedMs))),
     message: `${kind} stream duration ${actualMs}ms does not cover the timeline's ${expectedMs}ms`,
   };
 }

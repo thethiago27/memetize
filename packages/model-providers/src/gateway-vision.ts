@@ -3,10 +3,10 @@ import { extname } from 'node:path';
 import { VisionSceneAnalysis } from '@memetize/contracts';
 import { VISION_PROMPT_V1, VISION_PROMPT_VERSION } from '@memetize/prompts';
 import { generateObject } from 'ai';
+import { gatewayModelVersion } from './gateway';
 import type { VisionAnalyzeInput, VisionAnalyzeResult, VisionProvider } from './types';
 
 const GATEWAY_NAME = 'gateway';
-const GATEWAY_VERSION = '1.0.0';
 
 const MIME_BY_EXT: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -21,6 +21,10 @@ const MIME_BY_EXT: Record<string, string> = {
  * parses the reply against the `VisionSceneAnalysis` contract, so an invalid
  * shape fails the structured-output parse rather than reaching the catalog.
  * Provenance (model, version, prompt) is returned with the result.
+ *
+ * Frame paths must be absolute: the worker resolves the catalog's repo-relative
+ * paths against `config.rootDir` before calling (F01), so the provider works the
+ * same from any working directory (`pnpm studio` runs the API from `apps/api`).
  */
 export class GatewayVisionProvider implements VisionProvider {
   readonly name = GATEWAY_NAME;
@@ -69,7 +73,7 @@ export class GatewayVisionProvider implements VisionProvider {
     return {
       result,
       model: this.model,
-      modelVersion: GATEWAY_VERSION,
+      modelVersion: gatewayModelVersion(this.model),
       promptVersion: VISION_PROMPT_VERSION,
       raw: object,
     };

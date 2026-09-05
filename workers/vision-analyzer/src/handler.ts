@@ -5,6 +5,7 @@ import { JobFailure } from '@memetize/job-system';
 import {
   listScenes,
   listTranscriptSegments,
+  resolveStorage,
   updateSceneVision,
   visionDebugFile,
 } from '@memetize/media-catalog';
@@ -44,11 +45,16 @@ export function createVisionAnalyzeHandler(): JobHandler {
             text: segment.text,
           }));
 
+        // Frame paths are stored repo-relative; resolve them here so the provider
+        // reads the right file from any working directory (F01).
         const analysis = await provider.analyze({
           sceneId: scene.id,
           startMs: scene.startMs,
           endMs: scene.endMs,
-          frames: scene.frames,
+          frames: scene.frames.map((frame) => ({
+            ...frame,
+            path: resolveStorage(ctx.config, frame.path),
+          })),
           transcript: sceneTranscript,
         });
         const result = VisionSceneAnalysis.parse(analysis.result);
@@ -91,13 +97,18 @@ export function createVisionAnalyzeHandler(): JobHandler {
       );
     }
 
-    await ctx.enqueue({ type: 'MOMENT_EXTRACT', entityId: assetId, input: { assetId } });
+    // The MOMENT_EXTRACT follow-up commits with the job completion (F10), only
+    // while this attempt owns the job and its generation is current (F08/F09).
+    const result = await ctx.publish(async ({ enqueue }) => {
+      await enqueue({ type: 'MOMENT_EXTRACT', entityId: assetId, input: { assetId } });
+      return { sceneCount: scenes.length, model, modelVersion, promptVersion };
+    });
 
     ctx.logger.info('vision_analyze_completed', {
       sceneCount: scenes.length,
       model,
       modelVersion,
     });
-    return { sceneCount: scenes.length, model, modelVersion, promptVersion };
+    return result;
   };
 }

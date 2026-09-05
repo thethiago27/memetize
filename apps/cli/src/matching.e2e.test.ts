@@ -8,7 +8,7 @@ import { AUDIO_ANALYZER_DIR } from '@memetize/audio-analyzer';
 import { createTestDatabase, type Database, truncateAll } from '@memetize/database';
 import { listFeedbackEvents, recordFeedbackEvents } from '@memetize/feedback';
 import { ingestAsset } from '@memetize/media-catalog';
-import { Orchestrator, ResourceScheduler } from '@memetize/orchestrator';
+import type { Orchestrator } from '@memetize/orchestrator';
 import {
   getLatestTimeline,
   getProject,
@@ -18,11 +18,11 @@ import {
   matchDebugFile,
   reprocessProject,
 } from '@memetize/projects';
+import { createOrchestrator } from '@memetize/runtime';
 import { SCENE_DETECTOR_DIR } from '@memetize/scene-detector';
 import type { AppConfig } from '@memetize/shared';
 import { TRANSCRIPT_DIR } from '@memetize/transcript';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildRegistry } from './registry';
 
 const execFileAsync = promisify(execFile);
 const handle = await createTestDatabase();
@@ -97,12 +97,7 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('matching pipeline (
         audio: { kind: 'fixture', model: null },
       },
     };
-    orchestrator = new Orchestrator({
-      db,
-      config,
-      registry: buildRegistry(),
-      scheduler: new ResourceScheduler(config.resources),
-    });
+    orchestrator = createOrchestrator({ db, config });
     songFixture = join(tmp, 'song.mp3');
     await makeSilentClip(songFixture, 6);
     await truncateAll(db);

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { dirname } from 'node:path';
 import { promisify } from 'node:util';
-import type { Database } from '@memetize/database';
+import type { Executor } from '@memetize/database';
 import { type AppConfig, ensureDir } from '@memetize/shared';
 import { getAsset } from './assets';
 import { getMoment } from './moments';
@@ -16,7 +16,7 @@ const execFileAsync = promisify(execFile);
  * CLI never processes media directly (spec section principles).
  */
 export async function exportMoment(
-  db: Database,
+  db: Executor,
   config: AppConfig,
   momentId: string,
 ): Promise<StoragePath> {

@@ -11,6 +11,8 @@ import { z } from 'zod';
 
 export const DirectorInput = z.object({
   projectId: z.string(),
+  /** Generation this run belongs to (F09/F11); absent only on legacy jobs. */
+  generationId: z.string().optional(),
 });
 export type DirectorInput = z.infer<typeof DirectorInput>;
 

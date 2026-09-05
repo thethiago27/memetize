@@ -86,6 +86,8 @@ export type LyricsOutput = z.infer<typeof LyricsOutput>;
 // NARRATIVE
 export const NarrativeInput = z.object({
   projectId: z.string(),
+  /** Generation this run belongs to (F09/F11); absent only on legacy jobs. */
+  generationId: z.string().optional(),
 });
 export type NarrativeInput = z.infer<typeof NarrativeInput>;
 

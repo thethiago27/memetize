@@ -1,25 +1,22 @@
-import { type Database, type JobRow, jobs } from '@memetize/database';
-import { and, eq, lt, sql } from 'drizzle-orm';
+import { type Executor, type JobRow, jobs } from '@memetize/database';
+import { and, eq, sql } from 'drizzle-orm';
+import { leaseGone, ownedBy } from './claim';
 
 /**
  * Marks a job COMPLETED. When a lease token is given the write is conditioned on
  * still holding a live lease (F08): zero rows means the lease was lost — another
  * worker reclaimed the job — and the caller must not treat the job as done or
- * publish its result. Returns null on lost ownership or a missing job.
+ * publish its result. Returns null on lost ownership or a missing job. Accepts a
+ * transaction handle so completion commits together with the domain writes and
+ * follow-up jobs it belongs to (F10).
  */
 export async function completeJob(
-  db: Database,
+  db: Executor,
   id: string,
   result: Record<string, unknown>,
   leaseToken?: string,
 ): Promise<JobRow | null> {
-  const guard = leaseToken
-    ? [
-        eq(jobs.status, 'RUNNING'),
-        eq(jobs.leaseToken, leaseToken),
-        sql`${jobs.leaseExpiresAt} > clock_timestamp()`,
-      ]
-    : [];
+  const where = leaseToken ? ownedBy(id, leaseToken) : eq(jobs.id, id);
   const rows = await db
     .update(jobs)
     .set({
@@ -31,7 +28,7 @@ export async function completeJob(
       errorCode: null,
       errorMessage: null,
     })
-    .where(and(eq(jobs.id, id), ...guard))
+    .where(where)
     .returning();
   return rows[0] ?? null;
 }
@@ -49,7 +46,7 @@ export interface FailArgs {
  * `completeJob`, so a stale attempt cannot overwrite a job it no longer owns.
  */
 export async function failJob(
-  db: Database,
+  db: Executor,
   id: string,
   args: FailArgs,
   leaseToken?: string,
@@ -59,13 +56,7 @@ export async function failJob(
 
   const shouldRetry = (args.retryable ?? false) && current.attempts < current.maxAttempts;
 
-  const guard = leaseToken
-    ? [
-        eq(jobs.status, 'RUNNING'),
-        eq(jobs.leaseToken, leaseToken),
-        sql`${jobs.leaseExpiresAt} > clock_timestamp()`,
-      ]
-    : [];
+  const where = leaseToken ? ownedBy(id, leaseToken) : eq(jobs.id, id);
   const rows = await db
     .update(jobs)
     .set({
@@ -77,7 +68,33 @@ export async function failJob(
       leaseToken: null,
       leaseExpiresAt: null,
     })
-    .where(and(eq(jobs.id, id), ...guard))
+    .where(where)
+    .returning();
+  return rows[0] ?? null;
+}
+
+/**
+ * Ends an owned attempt whose generation was superseded while it ran (F09): the
+ * job becomes CANCELLED (history kept, no retry) instead of publishing over the
+ * newer generation. Lease-guarded like `completeJob`.
+ */
+export async function cancelOwnedJob(
+  db: Executor,
+  id: string,
+  leaseToken: string,
+  reason: string,
+): Promise<JobRow | null> {
+  const rows = await db
+    .update(jobs)
+    .set({
+      status: 'CANCELLED',
+      errorCode: 'GENERATION_SUPERSEDED',
+      errorMessage: reason,
+      completedAt: new Date(),
+      leaseToken: null,
+      leaseExpiresAt: null,
+    })
+    .where(ownedBy(id, leaseToken))
     .returning();
   return rows[0] ?? null;
 }
@@ -90,13 +107,14 @@ export interface ReconciledJob {
 }
 
 /**
- * Finalizes RUNNING jobs whose lease expired and whose attempts are exhausted
- * (F08): their worker crashed and cannot recover, so they become terminal
- * FAILED with `LEASE_EXPIRED`. Run at startup and periodically. Returns the
- * finalized jobs so the caller can propagate entity status under the same
- * coordination (only when the generation is still current — F09).
+ * Finalizes RUNNING jobs whose lease expired (or was never set) and whose
+ * attempts are exhausted (F08): their worker crashed and cannot recover, so they
+ * become terminal FAILED with `LEASE_EXPIRED`. Jobs with attempts left are not
+ * touched here — the claim path picks them up. Run at startup and periodically.
+ * Returns the finalized jobs so the caller can propagate entity status (only when
+ * the generation is still current — F09).
  */
-export async function reconcileExpiredLeases(db: Database): Promise<ReconciledJob[]> {
+export async function reconcileExpiredLeases(db: Executor): Promise<ReconciledJob[]> {
   const rows = await db
     .update(jobs)
     .set({
@@ -107,13 +125,7 @@ export async function reconcileExpiredLeases(db: Database): Promise<ReconciledJo
       leaseToken: null,
       leaseExpiresAt: null,
     })
-    .where(
-      and(
-        eq(jobs.status, 'RUNNING'),
-        sql`${jobs.attempts} >= ${jobs.maxAttempts}`,
-        lt(jobs.leaseExpiresAt, sql`clock_timestamp()`),
-      ),
-    )
+    .where(and(eq(jobs.status, 'RUNNING'), sql`${jobs.attempts} >= ${jobs.maxAttempts}`, leaseGone))
     .returning({
       id: jobs.id,
       entityId: jobs.entityId,

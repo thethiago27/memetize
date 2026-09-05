@@ -1,9 +1,16 @@
 import type { JobType } from '@memetize/contracts';
-import type { Database } from '@memetize/database';
-import { countRunningForEntity, deleteJobsForEntity, enqueueJob } from '@memetize/job-system';
+import type { Executor } from '@memetize/database';
+import {
+  cancelActiveJobsForEntity,
+  countRunningForEntity,
+  enqueueJob,
+  stepKeyFor,
+} from '@memetize/job-system';
 import { ProjectBusyError } from './busy';
-import { lockProject } from './coordinate';
+import { lockProject, startProjectGeneration } from './coordinate';
 import { getProjectAudio } from './projects';
+import { getLatestTimeline } from './timeline';
+import { getLatestEditWindow } from './window';
 
 export const REPROCESS_STAGES = [
   'audio',
@@ -18,14 +25,14 @@ export const REPROCESS_STAGES = [
 export type ReprocessStage = (typeof REPROCESS_STAGES)[number];
 
 /**
- * Jobs to drop for each stage: the stage's own job plus everything
- * downstream. `audio` and `lyrics` also drop `NARRATIVE`, `MATCH`,
+ * Jobs superseded by each stage: the stage's own job plus everything
+ * downstream. `audio` and `lyrics` also supersede `NARRATIVE`, `MATCH`,
  * `DIRECTOR`, `TIMING`, `EFFECTS` and `RENDER` (mirrors `reprocessAsset` in
  * `@memetize/media-catalog`): otherwise `project inspect` would show
  * narrative segments, shortlists, a timeline, or an MP4 derived from stale
  * upstream data. `director` never drops `segment_matches` /
  * `narrative_segments`, and `render` never drops `timeline_versions` —
- * only the job(s), so the chain re-enqueues against the *same* upstream data.
+ * only the jobs, so the chain re-runs against the *same* upstream data.
  * `timing` never drops the Director's raw version either — re-running it
  * just re-aligns the same picks against the same beats/downbeats.
  * `effects` never drops the timed version — it only rewrites `clip.effects`
@@ -42,81 +49,108 @@ const STAGE_JOBS: Record<ReprocessStage, JobType[]> = {
   render: ['RENDER'],
 };
 
+export interface ReprocessOutcome {
+  /** The new active generation every enqueued job belongs to. */
+  generationId: string;
+  /** Jobs of the stage that were PENDING and are now CANCELLED (history kept). */
+  cancelled: number;
+}
+
 /**
- * `project reprocess --from <stage>` (spec section 42): deletes the stage's
- * job (and everything downstream) then re-enqueues it. `audio` and `lyrics`
- * are siblings in the fan-out (spec section 24) — reprocessing one leaves the
- * other's (already COMPLETED) job alone, and the barrier still re-enqueues
- * NARRATIVE once both are COMPLETED again. Dropping `DIRECTOR` this way is
- * also how `project generate` forces a fresh `timeline_versions` row even
- * when the previous run is still COMPLETED with the same `inputHash`
- * (spec section 35: a plain `enqueueJob` would be a no-op).
+ * `project reprocess --from <stage>` (spec section 42): starts a new generation
+ * (F09/F11) and enqueues the stage's first job for it. The whole command runs
+ * under the per-project lock so concurrent reprocess/generate/render/swap calls
+ * serialize instead of racing. Jobs are never deleted: PENDING jobs of the
+ * superseded stages become CANCELLED, COMPLETED ones stay as history, and a
+ * RUNNING one makes the command refuse (`ProjectBusyError`) — an active handler
+ * is never pulled out from under itself. Because the generation id is part of
+ * every job's idempotency key, a fresh job is created even when a previous
+ * generation already COMPLETED the same step with the same input (this is also
+ * how `project generate` forces a new `timeline_versions` row).
+ *
+ * Inputs are pinned at enqueue time (F11): `timing`/`effects`/`render` carry the
+ * timeline version they must consume and `render` the edit window version it must
+ * validate against, both read under the same lock, so an edit that lands before
+ * the job is claimed cannot change what it renders.
  */
 export async function reprocessProject(
-  db: Database,
+  db: Executor,
   projectId: string,
   from: ReprocessStage,
-): Promise<void> {
+): Promise<ReprocessOutcome> {
   const stageJobs = STAGE_JOBS[from];
-  const audio =
-    from === 'audio' || from === 'lyrics' ? await getProjectAudio(db, projectId) : undefined;
-  if ((from === 'audio' || from === 'lyrics') && !audio) {
+  const needsAudio = from === 'audio' || from === 'lyrics';
+  const audio = needsAudio ? await getProjectAudio(db, projectId) : undefined;
+  if (needsAudio && !audio) {
     throw new Error(`project ${projectId} has no audio yet`);
   }
 
-  // The whole command runs under the per-project lock so concurrent
-  // reprocess/generate/render calls serialize instead of racing (F09). We never
-  // delete a RUNNING job: refuse while one of the stage's jobs is in flight, so
-  // an active handler is never pulled out from under itself.
-  await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     await lockProject(tx, projectId);
     if ((await countRunningForEntity(tx, projectId, stageJobs)) > 0) {
       throw new ProjectBusyError(projectId);
     }
-    await deleteJobsForEntity(tx, projectId, stageJobs);
+    const cancelled = await cancelActiveJobsForEntity(tx, projectId, stageJobs, ['PENDING']);
+    const generationId = await startProjectGeneration(tx, projectId);
+    const enqueue = (type: JobType, input: Record<string, unknown>) =>
+      enqueueJob(tx, {
+        type,
+        entityId: projectId,
+        input,
+        generationId,
+        stepKey: stepKeyFor(type),
+      });
 
     switch (from) {
-      case 'render':
-        await enqueueJob(tx, { type: 'RENDER', entityId: projectId, input: { projectId } });
-        return;
-      case 'director':
-        await enqueueJob(tx, { type: 'DIRECTOR', entityId: projectId, input: { projectId } });
-        return;
+      case 'render': {
+        const timeline = await getLatestTimeline(tx, projectId);
+        const window = await getLatestEditWindow(tx, projectId);
+        await enqueue('RENDER', {
+          projectId,
+          ...(timeline ? { sourceTimelineVersion: timeline.version } : {}),
+          ...(window ? { editWindowVersion: window.version } : {}),
+        });
+        break;
+      }
       case 'timing':
-        await enqueueJob(tx, { type: 'TIMING', entityId: projectId, input: { projectId } });
-        return;
-      case 'effects':
-        await enqueueJob(tx, { type: 'EFFECTS', entityId: projectId, input: { projectId } });
-        return;
+      case 'effects': {
+        const timeline = await getLatestTimeline(tx, projectId);
+        await enqueue(from === 'timing' ? 'TIMING' : 'EFFECTS', {
+          projectId,
+          ...(timeline ? { sourceTimelineVersion: timeline.version } : {}),
+        });
+        break;
+      }
+      case 'director':
+        await enqueue('DIRECTOR', { projectId });
+        break;
       case 'match':
-        await enqueueJob(tx, { type: 'MATCH', entityId: projectId, input: { projectId } });
-        return;
+        await enqueue('MATCH', { projectId });
+        break;
       case 'narrative':
-        await enqueueJob(tx, { type: 'NARRATIVE', entityId: projectId, input: { projectId } });
-        return;
+        await enqueue('NARRATIVE', { projectId });
+        break;
       case 'audio':
-        await enqueueJob(tx, {
-          type: 'AUDIO_ANALYZE',
-          entityId: projectId,
+        await enqueue('AUDIO_ANALYZE', {
+          projectId,
           // biome-ignore lint/style/noNonNullAssertion: guarded above.
-          input: { projectId, originalPath: audio!.originalPath, durationMs: audio!.durationMs },
+          originalPath: audio!.originalPath,
+          // biome-ignore lint/style/noNonNullAssertion: guarded above.
+          durationMs: audio!.durationMs,
         });
-        return;
+        break;
       case 'lyrics':
-        await enqueueJob(tx, {
-          type: 'LYRICS',
-          entityId: projectId,
-          input: {
-            projectId,
-            // biome-ignore lint/style/noNonNullAssertion: guarded above.
-            lyricsPath: audio!.lyricsPath,
-            // biome-ignore lint/style/noNonNullAssertion: guarded above.
-            originalPath: audio!.originalPath,
-            // biome-ignore lint/style/noNonNullAssertion: guarded above.
-            durationMs: audio!.durationMs,
-          },
+        await enqueue('LYRICS', {
+          projectId,
+          // biome-ignore lint/style/noNonNullAssertion: guarded above.
+          lyricsPath: audio!.lyricsPath,
+          // biome-ignore lint/style/noNonNullAssertion: guarded above.
+          originalPath: audio!.originalPath,
+          // biome-ignore lint/style/noNonNullAssertion: guarded above.
+          durationMs: audio!.durationMs,
         });
-        return;
+        break;
     }
+    return { generationId, cancelled: cancelled.length };
   });
 }

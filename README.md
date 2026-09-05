@@ -20,6 +20,74 @@ pnpm db:migrate
 pnpm py:sync
 ```
 
+## Model providers
+
+Every model capability (vision, LLM, embeddings) runs either on the deterministic
+`fixture` provider or on a real model through the Vercel AI Gateway. Which one is
+in use is part of the project's diagnostics: `GET /v1/health` and
+`GET /v1/projects/:id` return `providers`, and `pnpm cli project inspect` prints
+a `providers:` line, so a simulated analysis is never mistaken for a real one.
+
+- `PROVIDER_MODE=demo` (default) allows fixtures. `PROVIDER_MODE=production`
+  refuses to build a worker whose capability is still a fixture
+  (`CAPABILITY_NOT_READY`).
+- `VISION_PROVIDER=gateway` + `VISION_MODEL=<creator/model>` analyzes scene
+  frames with a multimodal model. Frame paths are resolved against the repo
+  root, so the API may run from `apps/api` (`pnpm studio`).
+- `LLM_PROVIDER=gateway` + `LLM_MODEL=<creator/model>` drives moment
+  suggestion, narrative analysis and the Director. Provenance records the model:
+  `extractorVersion` / `directorVersion` are `1.0.0/<creator/model>`.
+- `EMBEDDING_PROVIDER=gateway` + `EMBEDDING_MODEL=<creator/model>` embeds
+  moments and feedback. The request pins the catalog's vector width (384), and
+  the vector space id (`model@384d/unit`) is stored as `modelVersion`, so
+  searches never mix spaces. Changing the embedding model requires re-indexing:
+  `pnpm cli asset reprocess <id> --from embeddings` per asset.
+- `AI_GATEWAY_API_KEY` is required whenever any capability uses the gateway.
+
+## Jobs, generations, and recovery
+
+Every command that (re)starts a pipeline — `project create`, `generate`,
+`render`, `reprocess`, `asset add`, `asset reprocess` — runs under a per-entity
+lock and starts a new **generation**. Jobs carry the generation id and a step
+key; `TIMING`, `EFFECTS` and `RENDER` also carry the timeline (and, for render,
+edit window) version they must consume, pinned when they were enqueued, so an
+edit that lands before the job is claimed cannot change its input. Old jobs are
+never deleted: PENDING ones of the superseded stages become `CANCELLED`,
+COMPLETED ones stay as history, and a command refuses (`409 PROJECT_BUSY` /
+`ASSET_BUSY`) while a stage job is RUNNING.
+
+A claimed job holds a lease (60 s, renewed by heartbeat). A worker publishes its
+result in one transaction that locks the entity, verifies it still holds the
+lease and that its generation is still the active one, writes the domain rows
+and follow-up jobs, marks the job COMPLETED and evaluates fan-in barriers. An
+attempt that lost its lease publishes nothing (`LEASE_LOST`); one whose
+generation was superseded ends `CANCELLED`. The renderer additionally moves the
+validated MP4 to its version-named path inside that transaction, so a `renders`
+row never points at a missing file; stale `attempt-*` directories are swept
+before each render.
+
+Recovery: the API reconciles at startup and then every
+`JOB_MAINTENANCE_INTERVAL_MS` (30 s): RUNNING jobs whose lease expired are
+reclaimed by the next drain (attempts left) or finalized as
+`FAILED/LEASE_EXPIRED` (attempts exhausted), and the owning project/asset is
+marked FAILED only when its generation is still current. `pnpm cli worker run`
+does the same once.
+
+Clip swaps accept `expectedTimelineVersion`; a swap decided against an older
+version is refused with `409 VERSION_CONFLICT` instead of dropping another
+editor's change. The swap, its feedback events and their embedding jobs commit
+together.
+
+### Upgrading a database that predates leases/generations
+
+Migration `0015` is additive plus a backfill. Deploy in this order: stop every
+worker and API process (old attempts cannot be trusted to hold a lease), run
+`pnpm db:migrate` (RUNNING jobs without a lease are given an expired one,
+coordination rows are seeded from history, existing moment ids are registered
+as stable identities), then start the updated API/workers — their startup
+reconcile finalizes exhausted jobs and the maintenance drain resumes the rest.
+Never delete jobs, feedback or timelines to satisfy the new indexes.
+
 Start Studio (API on `:8787`, web on `:3000`). The web UI is in Portuguese: **Projetos** (home, editor per project) and **Biblioteca** (asset catalog). The editor plays the latest render when it matches the timeline; otherwise it plays a storyboard (the project's music plus one thumbnail per clip) so cuts can be reviewed before rendering. Scrub on the strip or the slider, click a clip to inspect it, and swap candidates from the inspector.
 
 ```bash
@@ -125,4 +193,10 @@ pnpm lint
 pnpm --filter @memetize/web build
 ```
 
-Integration and E2E suites need `TEST_DATABASE_URL` plus FFmpeg and the Python worker virtualenvs. Without those, the suites skip — they are not a pass.
+Integration and E2E suites need `TEST_DATABASE_URL` plus FFmpeg and the Python worker virtualenvs (`docker compose up -d db` provides PostgreSQL+pgvector on `:5433`; create `memetize_test` next to `memetize`). Without those, the suites skip under plain `pnpm test` — they are not a pass. The gate is:
+
+```bash
+pnpm test:integration   # REQUIRE_INTEGRATION_TESTS=1: a missing or broken TEST_DATABASE_URL fails the run
+```
+
+CI runs it in `.github/workflows/integration.yml` with a real database, FFmpeg and the Python virtualenvs. Locally, FFmpeg- and Python-dependent suites still skip when those tools are absent; only the database is mandatory.

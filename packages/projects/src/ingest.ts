@@ -1,11 +1,12 @@
 import { copyFile, stat } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
 import { type Database, type ProjectRow, projectAudio, projects } from '@memetize/database';
-import { enqueueJob } from '@memetize/job-system';
+import { enqueueJob, ensureEntityExecution, stepKeyFor } from '@memetize/job-system';
 import { type AppConfig, ensureDir, projectId as newProjectId, sha256File } from '@memetize/shared';
+import { startProjectGeneration } from './coordinate';
 import { audioDir, audioFile } from './paths';
 import { probeAudio } from './probe';
-import { getProject, setProjectStatus } from './projects';
+import { getProject } from './projects';
 
 const SUPPORTED_EXTENSIONS = new Set(['.mp3', '.wav', '.m4a', '.flac', '.ogg']);
 
@@ -85,34 +86,43 @@ export async function ingestProject({
     lyricsRelative = lyricsFile.relative;
   }
 
-  await db
-    .insert(projects)
-    .values({ id, filename: displayName ?? basename(filePath), status: 'CREATED' });
-  await db.insert(projectAudio).values({
-    projectId: id,
-    originalPath: original.relative,
-    lyricsPath: lyricsRelative,
-    checksum,
-    durationMs: probe.durationMs,
-    contentType: EXT_CONTENT_TYPE[ext] ?? 'application/octet-stream',
-    sizeBytes: stats.size,
-  });
-  await setProjectStatus(db, id, 'ANALYZING_AUDIO');
-
-  await enqueueJob(db, {
-    type: 'AUDIO_ANALYZE',
-    entityId: id,
-    input: { projectId: id, originalPath: original.relative, durationMs: probe.durationMs },
-  });
-  await enqueueJob(db, {
-    type: 'LYRICS',
-    entityId: id,
-    input: {
+  // Register the project, its coordination row and first generation, and the
+  // fan-out jobs in one transaction (F09/F10): a crash cannot leave a project
+  // with no jobs, and every job carries the generation it belongs to.
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(projects)
+      .values({ id, filename: displayName ?? basename(filePath), status: 'ANALYZING_AUDIO' });
+    await tx.insert(projectAudio).values({
       projectId: id,
-      lyricsPath: lyricsRelative,
       originalPath: original.relative,
+      lyricsPath: lyricsRelative,
+      checksum,
       durationMs: probe.durationMs,
-    },
+      contentType: EXT_CONTENT_TYPE[ext] ?? 'application/octet-stream',
+      sizeBytes: stats.size,
+    });
+    await ensureEntityExecution(tx, 'project', id);
+    const generationId = await startProjectGeneration(tx, id);
+    await enqueueJob(tx, {
+      type: 'AUDIO_ANALYZE',
+      entityId: id,
+      input: { projectId: id, originalPath: original.relative, durationMs: probe.durationMs },
+      generationId,
+      stepKey: stepKeyFor('AUDIO_ANALYZE'),
+    });
+    await enqueueJob(tx, {
+      type: 'LYRICS',
+      entityId: id,
+      input: {
+        projectId: id,
+        lyricsPath: lyricsRelative,
+        originalPath: original.relative,
+        durationMs: probe.durationMs,
+      },
+      generationId,
+      stepKey: stepKeyFor('LYRICS'),
+    });
   });
 
   const project = await getProject(db, id);

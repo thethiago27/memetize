@@ -1,6 +1,6 @@
 import type { ProjectStatus } from '@memetize/contracts';
 import {
-  type Database,
+  type Executor,
   type ProjectAudioRow,
   type ProjectRow,
   projectAudio,
@@ -8,16 +8,16 @@ import {
 } from '@memetize/database';
 import { desc, eq } from 'drizzle-orm';
 
-export function getProject(db: Database, id: string): Promise<ProjectRow | undefined> {
+export function getProject(db: Executor, id: string): Promise<ProjectRow | undefined> {
   return db.query.projects.findFirst({ where: eq(projects.id, id) });
 }
 
-export function listProjects(db: Database): Promise<ProjectRow[]> {
+export function listProjects(db: Executor): Promise<ProjectRow[]> {
   return db.query.projects.findMany({ orderBy: desc(projects.createdAt) });
 }
 
 export async function setProjectStatus(
-  db: Database,
+  db: Executor,
   id: string,
   status: ProjectStatus,
 ): Promise<void> {
@@ -25,7 +25,7 @@ export async function setProjectStatus(
 }
 
 export function getProjectAudio(
-  db: Database,
+  db: Executor,
   projectId: string,
 ): Promise<ProjectAudioRow | undefined> {
   return db.query.projectAudio.findFirst({ where: eq(projectAudio.projectId, projectId) });

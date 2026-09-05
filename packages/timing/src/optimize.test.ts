@@ -1,7 +1,7 @@
 import type { Timeline, TimelineClip, TimelineRange } from '@memetize/timeline';
 import { DEFAULT_DIRECTION, Timeline as TimelineSchema } from '@memetize/timeline';
 import { describe, expect, it } from 'vitest';
-import { optimizeTiming } from './optimize';
+import { fitSource, optimizeTiming } from './optimize';
 import type { TimingContext } from './types';
 
 function buildClip(
@@ -120,6 +120,64 @@ describe('optimizeTiming', () => {
     expect(result.timeline.clips[0]?.timeline.startMs).toBe(0);
     expect(result.timeline.clips.at(-1)?.timeline.endMs).toBe(2_000);
     expect(result.timeline.durationMs).toBe(2_000);
+  });
+
+  it('keeps a transition handle on both ends when a snap grows the clip (F05)', () => {
+    // Coverage centered each 2000 ms take inside a 2400 ms moment: 200 ms of handle
+    // on both sides. A beat at 2150 ms grows clip A by 150 ms; the extra source
+    // must not all come from the tail, or Effects loses the crossfade handle.
+    const result = optimizeTiming(
+      buildTimeline(
+        [
+          buildClip(
+            'clp_a',
+            { startMs: 0, endMs: 2_000 },
+            { source: { assetId: 'ast_a', startMs: 200, endMs: 2_200 } },
+          ),
+          buildClip(
+            'clp_b',
+            { startMs: 2_000, endMs: 4_000 },
+            { source: { assetId: 'ast_b', startMs: 200, endMs: 2_200 } },
+          ),
+        ],
+        4_000,
+      ),
+      context({
+        beats: [{ timeMs: 2_150, strength: 1, isDownbeat: true }],
+        sourceBoundsByMomentId: new Map([
+          ['mom_clp_a', { startMs: 0, endMs: 2_400 }],
+          ['mom_clp_b', { startMs: 0, endMs: 2_400 }],
+        ]),
+      }),
+    );
+    const [a, b] = result.timeline.clips;
+    expect(a?.timeline).toEqual({ startMs: 0, endMs: 2_150 });
+    // 2150 ms of source; the 250 ms of spare room is split between head and tail
+    // (125 each), so neither handle collapses.
+    expect(a?.source).toEqual({ assetId: 'ast_a', startMs: 125, endMs: 2_275 });
+    // The shrinking clip keeps its start so its content does not drift.
+    expect(b?.source).toEqual({ assetId: 'ast_b', startMs: 200, endMs: 2_050 });
+  });
+
+  it('fitSource keeps the start while spare room allows the current head, and never leaves bounds', () => {
+    const bounds = { startMs: 0, endMs: 3_000 };
+    // Growing with plenty of room: start unchanged.
+    expect(fitSource({ startMs: 200, endMs: 2_200 }, 2_100, bounds)).toEqual({
+      startMs: 200,
+      endMs: 2_300,
+    });
+    // Growing to the moment's full length: no handles remain, but it still fits.
+    expect(fitSource({ startMs: 200, endMs: 2_200 }, 3_000, bounds)).toEqual({
+      startMs: 0,
+      endMs: 3_000,
+    });
+    // Longer than the moment: impossible.
+    expect(fitSource({ startMs: 0, endMs: 2_000 }, 3_001, bounds)).toBeNull();
+    // A take that starts at the moment start stays there (legacy placement).
+    expect(fitSource({ startMs: 0, endMs: 2_000 }, 2_500, bounds)).toEqual({
+      startMs: 0,
+      endMs: 2_500,
+    });
   });
 
   it('returns the timeline unchanged with no adjustments when there are no clips', () => {

@@ -1,11 +1,12 @@
-import type { Database } from '@memetize/database';
+import type { Executor } from '@memetize/database';
 import {
   type EnqueueResult,
   enqueueJob,
-  ensureEntityExecution,
+  isStepSatisfied,
   listJobsForEntity,
-  lockEntity,
+  stepKeyFor,
 } from '@memetize/job-system';
+import { lockProject } from './coordinate';
 
 type BarrierJobType = 'AUDIO_ANALYZE' | 'LYRICS';
 
@@ -18,24 +19,52 @@ const OTHER_TYPE: Record<BarrierJobType, BarrierJobType> = {
  * Fan-in after project ingest (spec section 24): audio analysis and lyrics run
  * independently, and the narrative analyzer only starts once both are done.
  *
- * This runs AFTER the completing job is marked COMPLETED (from the orchestrator's
- * post-completion hook, not from inside the handler), under the per-project lock
- * (F10). Serializing on the lock and reading committed completion state means the
- * last sibling to finish always sees both siblings COMPLETED and enqueues exactly
- * once; the earlier sibling's check sees the other still running and does nothing.
- * Enqueue is idempotent, so a repeated notification cannot duplicate NARRATIVE.
+ * Runs INSIDE the completing job's publication transaction (F10), after the job
+ * is marked COMPLETED and under the per-project lock, so the decision reads
+ * committed-in-this-transaction state and the NARRATIVE enqueue commits with it:
+ * a crash can no longer land between "both COMPLETED" and "continuation
+ * enqueued". Two siblings finishing together serialize on the lock; the second
+ * one sees the first's completion. The enqueue is idempotent per
+ * (entity, generation, step), so a repeated notification cannot duplicate it.
+ *
+ * With a generation, the sibling is satisfied when it COMPLETED in this
+ * generation or, when this generation never re-ran it (`reprocess --from lyrics`
+ * keeps the previous audio analysis), when the project's most recent job of that
+ * type is COMPLETED. Legacy jobs without a generation fall back to "latest job of
+ * the sibling type is COMPLETED".
  */
 export async function maybeEnqueueNarrative(
-  db: Database,
+  tx: Executor,
   projectId: string,
   completedType: BarrierJobType,
+  generationId: string | null,
 ): Promise<EnqueueResult | null> {
-  return db.transaction(async (tx) => {
-    await ensureEntityExecution(tx, 'project', projectId);
-    await lockEntity(tx, 'project', projectId);
-    const jobsForProject = await listJobsForEntity(tx, projectId);
-    const other = jobsForProject.find((job) => job.type === OTHER_TYPE[completedType]);
-    if (other?.status !== 'COMPLETED') return null;
-    return enqueueJob(tx, { type: 'NARRATIVE', entityId: projectId, input: { projectId } });
+  await lockProject(tx, projectId);
+  const other = OTHER_TYPE[completedType];
+  const satisfied = generationId
+    ? await isStepSatisfied(tx, {
+        entityId: projectId,
+        generationId,
+        stepKey: stepKeyFor(other),
+        type: other,
+      })
+    : await latestOfTypeCompleted(tx, projectId, other);
+  if (!satisfied) return null;
+  return enqueueJob(tx, {
+    type: 'NARRATIVE',
+    entityId: projectId,
+    input: { projectId },
+    generationId,
+    stepKey: generationId ? stepKeyFor('NARRATIVE') : null,
   });
+}
+
+async function latestOfTypeCompleted(
+  tx: Executor,
+  projectId: string,
+  type: BarrierJobType,
+): Promise<boolean> {
+  const jobsForProject = await listJobsForEntity(tx, projectId);
+  const latest = jobsForProject.filter((job) => job.type === type).at(-1);
+  return latest?.status === 'COMPLETED';
 }

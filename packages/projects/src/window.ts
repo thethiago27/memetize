@@ -1,12 +1,19 @@
 import { type EditWindowSelection, ManualWindowInput } from '@memetize/contracts';
-import { type Database, type EditWindowRow, editWindows, projects } from '@memetize/database';
+import {
+  type Database,
+  type EditWindowRow,
+  type Executor,
+  editWindows,
+  projects,
+} from '@memetize/database';
 import {
   type HighlightSelectionInput,
   scoreEditWindow,
   selectEditWindow,
 } from '@memetize/edit-planner';
+import { reserveVersion } from '@memetize/job-system';
 import { editWindowId } from '@memetize/shared';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { getAudioAnalysis } from './audio';
 import { assertProjectIdle } from './busy';
 import { lockProject } from './coordinate';
@@ -16,8 +23,14 @@ import { reprocessProject } from './reprocess';
 export const MANUAL_SELECTOR = 'manual';
 export const MANUAL_SELECTOR_VERSION = '1.0.0';
 
+/**
+ * Append-only insert: the version is reserved from the project's coordination
+ * counter under the per-project lock (F09), floored at `max(version) + 1`.
+ * Accepts a transaction handle so the narrative worker publishes the window with
+ * its segments and the next job in one transaction.
+ */
 export async function insertEditWindow(
-  db: Database,
+  db: Executor,
   params: { projectId: string; selection: EditWindowSelection },
 ): Promise<EditWindowRow> {
   return db.transaction(async (tx) => {
@@ -28,12 +41,19 @@ export async function insertEditWindow(
       .where(eq(editWindows.projectId, params.projectId))
       .orderBy(desc(editWindows.version))
       .limit(1);
+    const version = await reserveVersion(
+      tx,
+      'project',
+      params.projectId,
+      'window',
+      (latest?.version ?? 0) + 1,
+    );
     const [row] = await tx
       .insert(editWindows)
       .values({
         id: editWindowId(),
         projectId: params.projectId,
-        version: (latest?.version ?? 0) + 1,
+        version,
         ...params.selection,
       })
       .returning();
@@ -43,7 +63,7 @@ export async function insertEditWindow(
 }
 
 export function getLatestEditWindow(
-  db: Database,
+  db: Executor,
   projectId: string,
 ): Promise<EditWindowRow | undefined> {
   return db.query.editWindows.findFirst({
@@ -52,7 +72,18 @@ export function getLatestEditWindow(
   });
 }
 
-export function listEditWindows(db: Database, projectId: string): Promise<EditWindowRow[]> {
+/** One specific window version (F11): the render validates against the window it was pinned to. */
+export function getEditWindowByVersion(
+  db: Executor,
+  projectId: string,
+  version: number,
+): Promise<EditWindowRow | undefined> {
+  return db.query.editWindows.findFirst({
+    where: and(eq(editWindows.projectId, projectId), eq(editWindows.version, version)),
+  });
+}
+
+export function listEditWindows(db: Executor, projectId: string): Promise<EditWindowRow[]> {
   return db.query.editWindows.findMany({
     where: eq(editWindows.projectId, projectId),
     orderBy: desc(editWindows.version),

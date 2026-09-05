@@ -23,6 +23,15 @@ const GATEWAY_NAME = 'gateway';
 const GATEWAY_VERSION = '1.0.0';
 
 /**
+ * Provenance version for a gateway-backed result (F01): the adapter version plus
+ * the exact model id, so narrative segments, moments and timelines record which
+ * model produced them, not just "gateway".
+ */
+export function gatewayModelVersion(model: string): string {
+  return `${GATEWAY_VERSION}/${model}`;
+}
+
+/**
  * Exported so tests can pin the exact contract the model is held to: cut
  * styles are closed enums with defaults, so an omitted style is fine and
  * an invented one fails the structured-output parse.
@@ -92,7 +101,7 @@ export class GatewayLLMProvider implements LLMProvider {
     return {
       moments,
       extractor: GATEWAY_NAME,
-      extractorVersion: GATEWAY_VERSION,
+      extractorVersion: gatewayModelVersion(this.options.model),
       promptVersion: MOMENTS_PROMPT_VERSION,
     };
   }
@@ -115,7 +124,7 @@ export class GatewayLLMProvider implements LLMProvider {
     return {
       segments,
       extractor: GATEWAY_NAME,
-      extractorVersion: GATEWAY_VERSION,
+      extractorVersion: gatewayModelVersion(this.options.model),
       promptVersion: NARRATIVE_PROMPT_VERSION,
     };
   }
@@ -139,7 +148,7 @@ export class GatewayLLMProvider implements LLMProvider {
     return {
       picks,
       director: GATEWAY_NAME,
-      directorVersion: GATEWAY_VERSION,
+      directorVersion: gatewayModelVersion(this.options.model),
       promptVersion: DIRECTOR_PROMPT_VERSION,
     };
   }

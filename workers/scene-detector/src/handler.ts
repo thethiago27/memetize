@@ -66,35 +66,40 @@ export function createSceneDetectHandler(): JobHandler {
     }
     const output = outputParse.data;
 
-    const persisted = await replaceScenes(ctx.db, {
-      assetId,
-      detector: output.detector,
-      detectorVersion: output.detectorVersion,
-      scenes: output.scenes,
-    });
-
-    // Fan-out (spec section 12): frames and transcript run independently;
-    // vision analysis waits for both via the barrier in media-catalog.
     const asset = await getAsset(ctx.db, assetId);
     if (!asset) {
       throw new JobFailure('ASSET_NOT_FOUND', `asset not found: ${assetId}`, false);
     }
-    await ctx.enqueue({
-      type: 'FRAME_EXTRACT',
-      entityId: assetId,
-      input: { assetId, analysisPath: parsed.data.analysisPath },
-    });
-    await ctx.enqueue({
-      type: 'TRANSCRIPT',
-      entityId: assetId,
-      input: { assetId, originalPath: asset.originalPath },
+
+    // Scenes and the fan-out (spec section 12: frames and transcript run
+    // independently; vision analysis waits for both via the barrier) commit
+    // together with the job completion (F10), only while this attempt owns the
+    // job and its generation is current (F08/F09).
+    const published = await ctx.publish(async ({ tx, enqueue }) => {
+      const persisted = await replaceScenes(tx, {
+        assetId,
+        detector: output.detector,
+        detectorVersion: output.detectorVersion,
+        scenes: output.scenes,
+      });
+      await enqueue({
+        type: 'FRAME_EXTRACT',
+        entityId: assetId,
+        input: { assetId, analysisPath: parsed.data.analysisPath },
+      });
+      await enqueue({
+        type: 'TRANSCRIPT',
+        entityId: assetId,
+        input: { assetId, originalPath: asset.originalPath },
+      });
+      return {
+        sceneCount: persisted.length,
+        detector: output.detector,
+        detectorVersion: output.detectorVersion,
+      };
     });
 
-    ctx.logger.info('scene_detection_persisted', { sceneCount: persisted.length });
-    return {
-      sceneCount: persisted.length,
-      detector: output.detector,
-      detectorVersion: output.detectorVersion,
-    };
+    ctx.logger.info('scene_detection_persisted', { sceneCount: published.sceneCount });
+    return published;
   };
 }

@@ -1,6 +1,6 @@
 import type { EmbeddingType, VisionSceneAnalysis } from '@memetize/contracts';
 import {
-  type Database,
+  type Executor,
   type MomentEmbeddingRow,
   momentEmbeddings,
   type NewMomentEmbeddingRow,
@@ -96,7 +96,7 @@ export function toEmbeddingRows(params: ReplaceEmbeddingsParams): NewMomentEmbed
  * duplicates vectors (spec section 4.2).
  */
 export async function replaceEmbeddings(
-  db: Database,
+  db: Executor,
   params: ReplaceEmbeddingsParams,
 ): Promise<MomentEmbeddingRow[]> {
   const rows = toEmbeddingRows(params);
@@ -116,7 +116,7 @@ export async function replaceEmbeddings(
 }
 
 export function listEmbeddingsForAsset(
-  db: Database,
+  db: Executor,
   assetId: string,
 ): Promise<MomentEmbeddingRow[]> {
   return db.query.momentEmbeddings.findMany({

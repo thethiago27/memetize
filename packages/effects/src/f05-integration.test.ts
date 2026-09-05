@@ -1,4 +1,5 @@
 import { type AssembleMoment, assembleDirectedTimeline } from '@memetize/director';
+import { optimizeTiming } from '@memetize/timing';
 import { describe, expect, it } from 'vitest';
 import { resolveCutStyles } from './cut-styles';
 import type { CutSourceBounds } from './types';
@@ -11,7 +12,7 @@ import type { CutSourceBounds } from './types';
  * transition is justifiably downgraded.
  */
 describe('F05: pipeline reserves handles for overlapping transitions', () => {
-  function buildAndResolve(momentDurationMs: number) {
+  function buildAndResolve(momentDurationMs: number, beatMs?: number) {
     const moments = new Map<string, AssembleMoment>([
       [
         'mom_a',
@@ -45,13 +46,31 @@ describe('F05: pipeline reserves handles for overlapping transitions', () => {
       ['mom_a', { startMs: 0, endMs: momentDurationMs }],
       ['mom_b', { startMs: 0, endMs: momentDurationMs }],
     ]);
-    return resolveCutStyles(timeline, { beatMs: 500, sourceBoundsByMomentId });
+    // Optionally run the real Timing pass in between, like the pipeline does.
+    const timed =
+      beatMs === undefined
+        ? timeline
+        : optimizeTiming(timeline, {
+            beats: [{ timeMs: beatMs, strength: 1, isDownbeat: true }],
+            segmentFunctionById: new Map(),
+            sourceBoundsByMomentId,
+          }).timeline;
+    return resolveCutStyles(timed, { beatMs: 500, sourceBoundsByMomentId });
   }
 
   it('keeps a crossfade renderable when the moment has spare source', () => {
     const result = buildAndResolve(4000);
     expect(result.timeline.clips[0]?.transitionOut?.style).toBe('crossfade');
     expect(result.timeline.clips[0]?.transitionOut?.durationMs).toBeGreaterThan(0);
+  });
+
+  it('keeps the crossfade after Timing grows the first clip onto a beat (F05)', () => {
+    // 2400 ms moments, 2000 ms slots, beat at 2150 ms: Timing extends clip A by
+    // 150 ms. Before the fix the whole extension came from A's tail, leaving 50 ms
+    // of handle and downgrading the crossfade to dip_black/no_source_handle.
+    const result = buildAndResolve(2400, 2150);
+    expect(result.timeline.clips[0]?.timeline.endMs).toBe(2150);
+    expect(result.timeline.clips[0]?.transitionOut?.style).toBe('crossfade');
   });
 
   it('downgrades the crossfade when the moment is exactly slot-sized', () => {

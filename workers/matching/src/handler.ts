@@ -173,12 +173,24 @@ export function createMatchHandler(): JobHandler {
       });
     }
 
-    const persisted = await replaceSegmentMatches(ctx.db, {
-      projectId,
-      matches,
-      ranker: RANKER_NAME,
-      rankerVersion: RANKER_VERSION,
-      feedbackCutoffAt: feedback.cutoffAt,
+    // Matches and the DIRECTOR follow-up commit together with the job
+    // completion (F10), only while this attempt owns the job and its generation
+    // is current (F08/F09). The Timeline Director (spec section 31) only needs
+    // the shortlists persisted here, never the raw catalog.
+    const published = await ctx.publish(async ({ tx, enqueue }) => {
+      const rows = await replaceSegmentMatches(tx, {
+        projectId,
+        matches,
+        ranker: RANKER_NAME,
+        rankerVersion: RANKER_VERSION,
+        feedbackCutoffAt: feedback.cutoffAt,
+      });
+      await enqueue({ type: 'DIRECTOR', entityId: projectId, input: { projectId } });
+      return {
+        projectId,
+        segmentCount: rows.length,
+        shortlistCount: rows.reduce((sum, row) => sum + row.shortlist.length, 0),
+      };
     });
 
     const debugFile = matchDebugFile(ctx.config, projectId);
@@ -204,19 +216,13 @@ export function createMatchHandler(): JobHandler {
       ),
     );
 
-    const shortlistCount = persisted.reduce((sum, row) => sum + row.shortlist.length, 0);
     ctx.logger.info('match_completed', {
       projectId,
-      segmentCount: persisted.length,
-      shortlistCount,
+      segmentCount: published.segmentCount,
+      shortlistCount: published.shortlistCount,
       feedbackEvents: feedback.eventCount,
     });
 
-    // The Timeline Director (spec section 31) only needs the shortlists
-    // just persisted above, never the raw catalog — chain straight into it
-    // the same way NARRATIVE chains into MATCH.
-    await ctx.enqueue({ type: 'DIRECTOR', entityId: projectId, input: { projectId } });
-
-    return { projectId, segmentCount: persisted.length, shortlistCount };
+    return published;
   };
 }

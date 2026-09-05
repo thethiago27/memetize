@@ -1,5 +1,5 @@
 import type { LyricLine, LyricSource } from '@memetize/contracts';
-import { type Database, type LyricsRow, lyrics, type NewLyricsRow } from '@memetize/database';
+import { type Executor, type LyricsRow, lyrics, type NewLyricsRow } from '@memetize/database';
 import { assertIntegerMs, lyricsId } from '@memetize/shared';
 import { and, desc, eq } from 'drizzle-orm';
 
@@ -37,7 +37,7 @@ export function toLyricsRow(params: ReplaceLyricsParams): NewLyricsRow {
  * project/source/model/version combination are replaced (spec section 4.2).
  * An empty line list (instrumental) is a valid, successful result.
  */
-export async function replaceLyrics(db: Database, params: ReplaceLyricsParams): Promise<LyricsRow> {
+export async function replaceLyrics(db: Executor, params: ReplaceLyricsParams): Promise<LyricsRow> {
   const row = toLyricsRow(params);
   return db.transaction(async (tx) => {
     await tx
@@ -58,7 +58,7 @@ export async function replaceLyrics(db: Database, params: ReplaceLyricsParams): 
 }
 
 /** Most recent lyrics for a project (spec section 39). */
-export function getLyrics(db: Database, projectId: string): Promise<LyricsRow | undefined> {
+export function getLyrics(db: Executor, projectId: string): Promise<LyricsRow | undefined> {
   return db.query.lyrics.findFirst({
     where: eq(lyrics.projectId, projectId),
     orderBy: desc(lyrics.createdAt),

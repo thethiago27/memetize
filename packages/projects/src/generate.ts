@@ -1,4 +1,4 @@
-import type { Database } from '@memetize/database';
+import type { Executor } from '@memetize/database';
 import { listJobsForEntity } from '@memetize/job-system';
 import { reprocessProject } from './reprocess';
 
@@ -10,7 +10,7 @@ import { reprocessProject } from './reprocess';
  * `MATCH` first: without a shortlist there is nothing for the Director to
  * choose from.
  */
-export async function generateTimeline(db: Database, projectId: string): Promise<void> {
+export async function generateTimeline(db: Executor, projectId: string): Promise<void> {
   const jobs = await listJobsForEntity(db, projectId);
   const match = jobs.find((job) => job.type === 'MATCH');
   if (match?.status !== 'COMPLETED') {

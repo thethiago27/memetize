@@ -17,6 +17,12 @@ import type {
  * Snaps shared internal cut boundaries to beats without creating gaps.
  * Timeline 0 and `durationMs` stay fixed; source ranges resize so each
  * source duration stays equal to its slot and inside moment bounds.
+ *
+ * When a clip grows, the extra source is taken from both ends of the take
+ * rather than only from its tail (F05): coverage centered the take inside its
+ * moment to leave a handle on each side for an overlapping transition, and
+ * eating the whole tail would silently downgrade a viable crossfade in Effects.
+ * A clip that shrinks keeps its start, so its content does not drift.
  */
 export function optimizeTiming(timeline: Timeline, context: TimingContext): TimingResult {
   const sorted = [...timeline.clips].sort((a, b) => a.timeline.startMs - b.timeline.startMs);
@@ -55,7 +61,15 @@ export function optimizeTiming(timeline: Timeline, context: TimingContext): Timi
     ) {
       adjustedBoundaryMs = target.timeMs;
       snappedTo = target.isDownbeat ? 'downbeat' : 'beat';
-      applyBoundary(previous, next, previousRange, nextRange, adjustedBoundaryMs, sourceById);
+      applyBoundary(
+        previous,
+        next,
+        previousRange,
+        nextRange,
+        adjustedBoundaryMs,
+        sourceById,
+        context,
+      );
     }
 
     adjustments.push({
@@ -88,24 +102,42 @@ function canMoveBoundary(
   const nextDuration = nextRange.endMs - targetMs;
   if (previousDuration < MIN_TIMED_CLIP_MS || nextDuration < MIN_TIMED_CLIP_MS) return false;
 
-  const previousSource = previous.source;
-  const nextSource = next.source;
-  if (!sourceFits(previous.momentId, previousSource.startMs, previousDuration, context))
-    return false;
-  if (!sourceFits(next.momentId, nextSource.startMs, nextDuration, context)) return false;
+  if (!sourceFits(previous.momentId, previous.source, previousDuration, context)) return false;
+  if (!sourceFits(next.momentId, next.source, nextDuration, context)) return false;
   return true;
 }
 
 function sourceFits(
   momentId: string,
-  sourceStartMs: number,
+  source: TimelineClip['source'],
   durationMs: number,
   context: TimingContext,
 ): boolean {
   const bounds = context.sourceBoundsByMomentId.get(momentId);
   if (!bounds) return durationMs >= 0;
-  const sourceEndMs = sourceStartMs + durationMs;
-  return sourceStartMs >= bounds.startMs && sourceEndMs <= bounds.endMs;
+  return fitSource(source, durationMs, bounds) !== null;
+}
+
+/**
+ * Places a take of `durationMs` inside `bounds`, starting from the current
+ * source range. Shrinking keeps the start. Growing keeps the start while the
+ * spare room still allows the take's current head handle; when it does not, the
+ * head handle shrinks to half of the remaining spare room so head and tail keep
+ * comparable handles instead of the tail collapsing to zero. Returns null when
+ * the take cannot fit at all.
+ */
+export function fitSource(
+  source: { startMs: number; endMs: number },
+  durationMs: number,
+  bounds: { startMs: number; endMs: number },
+): { startMs: number; endMs: number } | null {
+  const room = bounds.endMs - bounds.startMs;
+  if (durationMs < 0 || durationMs > room) return null;
+  const spare = room - durationMs;
+  const currentHead = Math.max(0, source.startMs - bounds.startMs);
+  const head = Math.min(currentHead, Math.floor(spare / 2));
+  const startMs = bounds.startMs + head;
+  return { startMs, endMs: startMs + durationMs };
 }
 
 function applyBoundary(
@@ -115,16 +147,30 @@ function applyBoundary(
   nextRange: TimelineRange,
   targetMs: number,
   sourceById: Map<string, TimelineClip['source']>,
+  context: TimingContext,
 ): void {
   previousRange.endMs = targetMs;
   nextRange.startMs = targetMs;
-  const previousSource = sourceById.get(previous.id);
-  const nextSource = sourceById.get(next.id);
-  if (previousSource) {
-    previousSource.endMs = previousSource.startMs + (previousRange.endMs - previousRange.startMs);
-  }
-  if (nextSource) {
-    nextSource.endMs = nextSource.startMs + (nextRange.endMs - nextRange.startMs);
+  resizeSource(previous, previousRange, sourceById, context);
+  resizeSource(next, nextRange, sourceById, context);
+}
+
+function resizeSource(
+  clip: TimelineClip,
+  range: TimelineRange,
+  sourceById: Map<string, TimelineClip['source']>,
+  context: TimingContext,
+): void {
+  const source = sourceById.get(clip.id);
+  if (!source) return;
+  const durationMs = range.endMs - range.startMs;
+  const bounds = context.sourceBoundsByMomentId.get(clip.momentId);
+  const fitted = bounds ? fitSource(source, durationMs, bounds) : null;
+  if (fitted) {
+    source.startMs = fitted.startMs;
+    source.endMs = fitted.endMs;
+  } else {
+    source.endMs = source.startMs + durationMs;
   }
 }
 

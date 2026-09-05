@@ -9,9 +9,9 @@ import type { JobHandler } from '@memetize/orchestrator';
 import {
   effectsDebugFile,
   getAudioAnalysis,
-  getLatestTimeline,
   insertTimelineVersion,
   listNarrativeSegments,
+  resolveSourceTimeline,
   setProjectStatus,
   timelineFile,
 } from '@memetize/projects';
@@ -33,15 +33,19 @@ export function createEffectsHandler(): JobHandler {
     if (!parsed.success) {
       throw new JobFailure('INVALID_INPUT', parsed.error.message, false);
     }
-    const { projectId } = parsed.data;
+    const { projectId, sourceTimelineVersion } = parsed.data;
 
-    const sourceVersion = await getLatestTimeline(ctx.db, projectId);
+    // Consume the version this job was pinned to (F11), never "whatever is latest now".
+    const source = await resolveSourceTimeline(ctx.db, projectId, sourceTimelineVersion);
+    const sourceVersion = source.row;
     if (!sourceVersion) {
-      throw new JobFailure(
-        'EFFECTS_NO_TIMELINE',
-        `project ${projectId} has no timeline yet`,
-        false,
-      );
+      throw source.pinned
+        ? new JobFailure(
+            'EFFECTS_STALE_SOURCE',
+            `project ${projectId} no longer has timeline v${sourceTimelineVersion}`,
+            false,
+          )
+        : new JobFailure('EFFECTS_NO_TIMELINE', `project ${projectId} has no timeline yet`, false);
     }
 
     const segments = await listNarrativeSegments(ctx.db, projectId);
@@ -79,16 +83,40 @@ export function createEffectsHandler(): JobHandler {
       );
     }
 
-    const persisted = await insertTimelineVersion(ctx.db, {
-      projectId,
-      data: result.timeline,
-      director: sourceVersion.director,
-      directorVersion: sourceVersion.directorVersion,
-      promptVersion: sourceVersion.promptVersion,
-      timingOptimizer: sourceVersion.timingOptimizer,
-      timingOptimizerVersion: sourceVersion.timingOptimizerVersion,
-      effectsPlanner: 'heuristic',
-      effectsPlannerVersion: WORKER_VERSION.EFFECTS,
+    // Timeline insert, TIMELINE_READY and the PLACED memory commit together with
+    // the job completion (F10), only while this attempt owns the job and its
+    // generation is current (F08/F09).
+    let placedCount = 0;
+    const published = await ctx.publish(async ({ tx }) => {
+      const persisted = await insertTimelineVersion(tx, {
+        projectId,
+        data: result.timeline,
+        director: sourceVersion.director,
+        directorVersion: sourceVersion.directorVersion,
+        promptVersion: sourceVersion.promptVersion,
+        timingOptimizer: sourceVersion.timingOptimizer,
+        timingOptimizerVersion: sourceVersion.timingOptimizerVersion,
+        effectsPlanner: 'heuristic',
+        effectsPlannerVersion: WORKER_VERSION.EFFECTS,
+      });
+      await setProjectStatus(tx, projectId, 'TIMELINE_READY');
+      // Editorial memory: every clip on the finished slate is a placement the
+      // cross-project novelty term and later video ratings can refer to.
+      const placed = await recordFeedbackEvents(
+        tx,
+        toPlacedEvents({
+          projectId,
+          timelineVersion: persisted.version,
+          timeline: result.timeline,
+          segments,
+        }),
+      );
+      placedCount = placed.length;
+      return {
+        projectId,
+        version: persisted.version,
+        clipsWithEffects: result.planned.length,
+      };
     });
 
     const debugFile = effectsDebugFile(ctx.config, projectId);
@@ -98,7 +126,9 @@ export function createEffectsHandler(): JobHandler {
       JSON.stringify(
         {
           projectId,
+          generationId: ctx.job.generationId,
           sourceTimelineVersion: sourceVersion.version,
+          timelineVersion: published.version,
           planned: result.planned,
           cuts: result.cuts,
         },
@@ -111,32 +141,14 @@ export function createEffectsHandler(): JobHandler {
     await ensureDir(dirname(tlFile.absolute));
     await writeFile(tlFile.absolute, JSON.stringify(result.timeline, null, 2));
 
-    await setProjectStatus(ctx.db, projectId, 'TIMELINE_READY');
-
-    // Editorial memory: every clip on the finished slate is a placement the
-    // cross-project novelty term and later video ratings can refer to.
-    const placed = await recordFeedbackEvents(
-      ctx.db,
-      toPlacedEvents({
-        projectId,
-        timelineVersion: persisted.version,
-        timeline: result.timeline,
-        segments,
-      }),
-    );
-
     ctx.logger.info('effects_completed', {
       projectId,
-      version: persisted.version,
+      version: published.version,
       clipsWithEffects: result.planned.length,
       cutDecisions: result.cuts.length,
-      placedEvents: placed.length,
+      placedEvents: placedCount,
     });
 
-    return {
-      projectId,
-      version: persisted.version,
-      clipsWithEffects: result.planned.length,
-    };
+    return published;
   };
 }

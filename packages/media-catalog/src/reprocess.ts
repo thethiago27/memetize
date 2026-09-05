@@ -1,6 +1,14 @@
 import type { JobType } from '@memetize/contracts';
-import type { Database } from '@memetize/database';
-import { deleteJobsForEntity, enqueueJob } from '@memetize/job-system';
+import type { Executor } from '@memetize/database';
+import {
+  cancelActiveJobsForEntity,
+  countRunningForEntity,
+  enqueueJob,
+  ensureEntityExecution,
+  lockEntity,
+  startGeneration,
+  stepKeyFor,
+} from '@memetize/job-system';
 import { getAsset } from './assets';
 
 export const REPROCESS_STAGES = [
@@ -13,8 +21,8 @@ export const REPROCESS_STAGES = [
 export type ReprocessStage = (typeof REPROCESS_STAGES)[number];
 
 /**
- * Jobs to drop for each stage: the stage's own job plus everything
- * downstream. Every earlier stage also drops `EMBED` now (spec section 40):
+ * Jobs superseded by each stage: the stage's own job plus everything
+ * downstream. Every earlier stage also supersedes `EMBED` (spec section 40):
  * otherwise the asset would keep its `READY` status with stale vectors.
  */
 const STAGE_JOBS: Record<ReprocessStage, JobType[]> = {
@@ -25,52 +33,70 @@ const STAGE_JOBS: Record<ReprocessStage, JobType[]> = {
   embeddings: ['EMBED'],
 };
 
+/** A command refused because one of the asset's jobs is still RUNNING (F09). */
+export class AssetBusyError extends Error {
+  readonly code = 'ASSET_BUSY';
+  constructor(assetId: string) {
+    super(`asset ${assetId} has a job running; wait for it to finish before changing it`);
+    this.name = 'AssetBusyError';
+  }
+}
+
 /**
- * `asset reprocess --from <stage>` (spec section 42): deletes the stage's job
- * (and everything downstream) then re-enqueues it. Deleting first is
- * required because `enqueueJob` is idempotent — re-enqueuing a still-present
- * COMPLETED job would just return it instead of doing new work. Frames and
- * transcript are siblings in the fan-out (spec section 12): reprocessing one
- * does not disturb the other, and the frames/transcript barrier still
- * re-enqueues VISION_ANALYZE once both are COMPLETED again.
+ * `asset reprocess --from <stage>` (spec section 42): starts a new generation
+ * for the asset (F09/F11) and enqueues the stage's first job for it, under the
+ * per-asset lock. PENDING jobs of the superseded stages become CANCELLED,
+ * COMPLETED ones stay as history, and a RUNNING one makes the command refuse
+ * (`AssetBusyError`). Because the generation id is part of the idempotency key,
+ * a fresh job is created even when the previous generation already COMPLETED the
+ * same step. Frames and transcript are siblings in the fan-out (spec section 12):
+ * reprocessing one does not disturb the other, and the barrier still enqueues
+ * VISION_ANALYZE once the re-run step completes and the sibling's latest run is
+ * COMPLETED.
  */
 export async function reprocessAsset(
-  db: Database,
+  db: Executor,
   assetId: string,
   from: ReprocessStage,
-): Promise<void> {
-  await deleteJobsForEntity(db, assetId, STAGE_JOBS[from]);
-
-  if (from === 'vision') {
-    await enqueueJob(db, { type: 'VISION_ANALYZE', entityId: assetId, input: { assetId } });
-    return;
+): Promise<{ generationId: string }> {
+  const stageJobs = STAGE_JOBS[from];
+  // Only the stages whose input names a file need the asset row itself.
+  const asset = from === 'frames' || from === 'transcript' ? await getAsset(db, assetId) : null;
+  if ((from === 'frames' || from === 'transcript') && !asset) {
+    throw new Error(`asset not found: ${assetId}`);
   }
-  if (from === 'moments') {
-    await enqueueJob(db, { type: 'MOMENT_EXTRACT', entityId: assetId, input: { assetId } });
-    return;
-  }
-  if (from === 'embeddings') {
-    await enqueueJob(db, { type: 'EMBED', entityId: assetId, input: { assetId } });
-    return;
+  if (from === 'frames' && !asset?.analysisPath) {
+    throw new Error(`asset ${assetId} has no analysisPath yet`);
   }
 
-  const asset = await getAsset(db, assetId);
-  if (!asset) throw new Error(`asset not found: ${assetId}`);
+  return db.transaction(async (tx) => {
+    await ensureEntityExecution(tx, 'asset', assetId);
+    await lockEntity(tx, 'asset', assetId);
+    if ((await countRunningForEntity(tx, assetId, stageJobs)) > 0) {
+      throw new AssetBusyError(assetId);
+    }
+    await cancelActiveJobsForEntity(tx, assetId, stageJobs, ['PENDING']);
+    const generationId = await startGeneration(tx, 'asset', assetId);
+    const enqueue = (type: JobType, input: Record<string, unknown>) =>
+      enqueueJob(tx, { type, entityId: assetId, input, generationId, stepKey: stepKeyFor(type) });
 
-  if (from === 'frames') {
-    if (!asset.analysisPath) throw new Error(`asset ${assetId} has no analysisPath yet`);
-    await enqueueJob(db, {
-      type: 'FRAME_EXTRACT',
-      entityId: assetId,
-      input: { assetId, analysisPath: asset.analysisPath },
-    });
-    return;
-  }
-
-  // from === 'transcript'
-  await enqueueJob(db, {
-    type: 'TRANSCRIPT',
-    entityId: assetId,
-    input: { assetId, originalPath: asset.originalPath },
+    switch (from) {
+      case 'vision':
+        await enqueue('VISION_ANALYZE', { assetId });
+        break;
+      case 'moments':
+        await enqueue('MOMENT_EXTRACT', { assetId });
+        break;
+      case 'embeddings':
+        await enqueue('EMBED', { assetId });
+        break;
+      case 'frames':
+        await enqueue('FRAME_EXTRACT', { assetId, analysisPath: asset?.analysisPath });
+        break;
+      case 'transcript':
+        await enqueue('TRANSCRIPT', { assetId, originalPath: asset?.originalPath });
+        break;
+    }
+    return { generationId };
   });
 }

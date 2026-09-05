@@ -71,11 +71,18 @@ export const api = {
   generate: (id: string) =>
     request<{ ok: boolean }>(`/v1/projects/${id}/generate`, { method: 'POST' }),
   render: (id: string) => request<{ ok: boolean }>(`/v1/projects/${id}/render`, { method: 'POST' }),
-  swapClip: (projectId: string, clipId: string, momentId: string) =>
+  swapClip: (
+    projectId: string,
+    clipId: string,
+    momentId: string,
+    expectedTimelineVersion?: number,
+  ) =>
     request<{ timeline: TimelineVersion }>(`/v1/projects/${projectId}/clips/${clipId}/swap`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ momentId }),
+      // The version on screen: a swap on a stale version is refused (409) instead
+      // of silently dropping another editor's edit.
+      body: JSON.stringify({ momentId, expectedTimelineVersion }),
     }),
   feedback: (projectId: string, body: ProjectFeedbackBody) =>
     request<{ event: FeedbackEventRow }>(`/v1/projects/${projectId}/feedback`, {

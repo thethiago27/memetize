@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTestDatabase, type Database, projects, truncateAll } from '@memetize/database';
 import { selectEditWindow } from '@memetize/edit-planner';
-import type { JobContext } from '@memetize/orchestrator';
+import { createDirectJobContext } from '@memetize/orchestrator';
 import {
   getLatestEditWindow,
   getProject,
@@ -78,41 +78,46 @@ describe.skipIf(!handle)('narrative handler window coverage (integration)', () =
       lyrics,
     });
 
-    const config = loadConfig({
-      ...process.env,
-      STORAGE_PATH: storageDir,
-      LLM_PROVIDER: 'fixture',
-    });
+    // Point storage at a temp tree by overriding the resolved roots; STORAGE_PATH
+    // itself must stay repo-relative (minor issue in the report).
+    const config = {
+      ...loadConfig({ ...process.env, LLM_PROVIDER: 'fixture' }),
+      rootDir: storageDir,
+      storageDir: join(storageDir, 'storage'),
+      storageDirRelative: 'storage',
+    };
     const handler = createNarrativeHandler();
-    await handler({
-      job: {
-        id: 'job_narrative_window',
-        type: 'NARRATIVE',
-        entityId: projectId,
-        status: 'RUNNING',
-        payload: { projectId },
-        result: null,
-        priority: 0,
-        resourceClass: 'CPU_LIGHT',
-        attempts: 1,
-        maxAttempts: 3,
-        inputHash: 'hash',
-        workerVersion: '1.0.0',
-        createdAt: new Date(),
-        startedAt: new Date(),
-        completedAt: null,
-        errorCode: null,
-        errorMessage: null,
-        leaseToken: null,
-        leaseExpiresAt: null,
-        generationId: null,
-        stepKey: null,
-      },
-      db,
-      config,
-      logger: createLogger({ worker: 'narrative-test' }),
-      enqueue: async () => ({ created: true, job: { id: 'job_match' } as never }),
-    } as JobContext);
+    await handler(
+      createDirectJobContext({
+        job: {
+          id: 'job_narrative_window',
+          type: 'NARRATIVE',
+          entityId: projectId,
+          status: 'RUNNING',
+          payload: { projectId },
+          result: null,
+          priority: 0,
+          resourceClass: 'CPU_LIGHT',
+          attempts: 1,
+          maxAttempts: 3,
+          inputHash: 'hash',
+          workerVersion: '1.0.0',
+          createdAt: new Date(),
+          startedAt: new Date(),
+          completedAt: null,
+          errorCode: null,
+          errorMessage: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          generationId: null,
+          stepKey: null,
+        },
+        db,
+        config,
+        logger: createLogger({ worker: 'narrative-test' }),
+        enqueue: async () => ({ created: true, job: { id: 'job_match' } as never }),
+      }),
+    );
 
     const window = await getLatestEditWindow(db, projectId);
     const segments = await listNarrativeSegments(db, projectId);
@@ -170,41 +175,46 @@ describe.skipIf(!handle)('narrative handler window coverage (integration)', () =
       modelVersion: '1.0.0',
     });
 
-    const config = loadConfig({
-      ...process.env,
-      STORAGE_PATH: storageDir,
-      LLM_PROVIDER: 'fixture',
-    });
+    // Point storage at a temp tree by overriding the resolved roots; STORAGE_PATH
+    // itself must stay repo-relative (minor issue in the report).
+    const config = {
+      ...loadConfig({ ...process.env, LLM_PROVIDER: 'fixture' }),
+      rootDir: storageDir,
+      storageDir: join(storageDir, 'storage'),
+      storageDirRelative: 'storage',
+    };
     const handler = createNarrativeHandler();
-    await handler({
-      job: {
-        id: 'job_narrative_manual',
-        type: 'NARRATIVE',
-        entityId: projectId,
-        status: 'RUNNING',
-        payload: { projectId },
-        result: null,
-        priority: 0,
-        resourceClass: 'CPU_LIGHT',
-        attempts: 1,
-        maxAttempts: 3,
-        inputHash: 'hash',
-        workerVersion: '1.0.0',
-        createdAt: new Date(),
-        startedAt: new Date(),
-        completedAt: null,
-        errorCode: null,
-        errorMessage: null,
-        leaseToken: null,
-        leaseExpiresAt: null,
-        generationId: null,
-        stepKey: null,
-      },
-      db,
-      config,
-      logger: createLogger({ worker: 'narrative-test' }),
-      enqueue: async () => ({ created: true, job: { id: 'job_match' } as never }),
-    } as JobContext);
+    await handler(
+      createDirectJobContext({
+        job: {
+          id: 'job_narrative_manual',
+          type: 'NARRATIVE',
+          entityId: projectId,
+          status: 'RUNNING',
+          payload: { projectId },
+          result: null,
+          priority: 0,
+          resourceClass: 'CPU_LIGHT',
+          attempts: 1,
+          maxAttempts: 3,
+          inputHash: 'hash',
+          workerVersion: '1.0.0',
+          createdAt: new Date(),
+          startedAt: new Date(),
+          completedAt: null,
+          errorCode: null,
+          errorMessage: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          generationId: null,
+          stepKey: null,
+        },
+        db,
+        config,
+        logger: createLogger({ worker: 'narrative-test' }),
+        enqueue: async () => ({ created: true, job: { id: 'job_match' } as never }),
+      }),
+    );
 
     const window = await getLatestEditWindow(db, projectId);
     expect(window).toMatchObject({

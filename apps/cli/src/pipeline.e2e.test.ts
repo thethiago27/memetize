@@ -13,13 +13,13 @@ import {
   listScenes,
   listTranscriptSegments,
 } from '@memetize/media-catalog';
-import { Orchestrator, ResourceScheduler } from '@memetize/orchestrator';
+import type { Orchestrator } from '@memetize/orchestrator';
 import { searchMoments } from '@memetize/retriever';
+import { createOrchestrator } from '@memetize/runtime';
 import { SCENE_DETECTOR_DIR } from '@memetize/scene-detector';
 import type { AppConfig } from '@memetize/shared';
 import { TRANSCRIPT_DIR } from '@memetize/transcript';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildRegistry } from './registry';
 
 const execFileAsync = promisify(execFile);
 const handle = await createTestDatabase();
@@ -94,12 +94,7 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('asset pipeline (e2e
         audio: { kind: 'fixture', model: null },
       },
     };
-    orchestrator = new Orchestrator({
-      db,
-      config,
-      registry: buildRegistry(),
-      scheduler: new ResourceScheduler(config.resources),
-    });
+    orchestrator = createOrchestrator({ db, config });
     fixture = join(tmp, 'test-cuts.mp4');
     await makeCutsClip(fixture);
     await truncateAll(db);

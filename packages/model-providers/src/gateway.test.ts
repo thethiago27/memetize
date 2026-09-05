@@ -83,7 +83,7 @@ describe('GatewayLLMProvider.directTimeline', () => {
       { segmentId: 'nar_1', momentId: 'mom_a', clipStyle: 'none', transitionOut: 'hard' },
     ]);
     expect(result.director).toBe('gateway');
-    expect(result.directorVersion).toBe('1.0.0');
+    expect(result.directorVersion).toBe('1.0.0/anthropic/claude-sonnet-4.5');
     expect(result.promptVersion).toBe(DIRECTOR_PROMPT_VERSION);
   });
 

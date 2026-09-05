@@ -1,6 +1,6 @@
 import type { RankedCandidate, RetrievedCandidate, ShortlistCandidate } from '@memetize/contracts';
 import {
-  type Database,
+  type Executor,
   type NewSegmentMatchRow,
   type SegmentMatchRow,
   segmentMatches,
@@ -45,7 +45,7 @@ export function toSegmentMatchRows(params: ReplaceSegmentMatchesParams): NewSegm
  * wholesale (spec section 4.2), mirroring `replaceNarrativeSegments`.
  */
 export async function replaceSegmentMatches(
-  db: Database,
+  db: Executor,
   params: ReplaceSegmentMatchesParams,
 ): Promise<SegmentMatchRow[]> {
   const rows = toSegmentMatchRows(params);
@@ -64,7 +64,7 @@ export async function replaceSegmentMatches(
   });
 }
 
-export function listSegmentMatches(db: Database, projectId: string): Promise<SegmentMatchRow[]> {
+export function listSegmentMatches(db: Executor, projectId: string): Promise<SegmentMatchRow[]> {
   return db.query.segmentMatches.findMany({
     where: eq(segmentMatches.projectId, projectId),
   });

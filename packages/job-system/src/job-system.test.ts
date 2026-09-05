@@ -1,9 +1,11 @@
 import { createTestDatabase, type Database, jobs, truncateAll } from '@memetize/database';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { claimNextJob, renewLease } from './claim';
+import { assertJobOwned, claimNextJob, renewLease } from './claim';
 import { completeJob, failJob, reconcileExpiredLeases } from './complete';
-import { enqueueJob } from './enqueue';
+import { enqueueJob, stepKeyFor } from './enqueue';
+import { ensureEntityExecution, getActiveGeneration, startGeneration } from './entity';
+import { LeaseLostError } from './errors';
 
 const handle = await createTestDatabase();
 // Safe: the suite body only runs (dereferencing db) when a test DB is present.
@@ -120,5 +122,83 @@ describe.skipIf(!handle)('job-system (integration)', () => {
     const row = await db.query.jobs.findFirst({ where: eq(jobs.id, job.id) });
     expect(row?.status).toBe('FAILED');
     expect(row?.errorCode).toBe('LEASE_EXPIRED');
+  });
+
+  it('reclaims and reconciles a RUNNING job that never got a lease (pre-upgrade row) (F08)', async () => {
+    const { job } = await enqueueJob(db, { type: 'PING', entityId: 'e7', input: {} });
+    // A worker from before leases existed left it RUNNING with no lease.
+    await db
+      .update(jobs)
+      .set({ status: 'RUNNING', attempts: 1, leaseToken: null, leaseExpiresAt: null })
+      .where(eq(jobs.id, job.id));
+    const reclaimed = await claimNextJob(db, { entityId: 'e7' });
+    expect(reclaimed?.job.id).toBe(job.id);
+    expect(reclaimed?.job.attempts).toBe(2);
+
+    const { job: exhausted } = await enqueueJob(db, {
+      type: 'PING',
+      entityId: 'e8',
+      input: {},
+      maxAttempts: 1,
+    });
+    await db
+      .update(jobs)
+      .set({ status: 'RUNNING', attempts: 1, leaseToken: null, leaseExpiresAt: null })
+      .where(eq(jobs.id, exhausted.id));
+    const reconciled = await reconcileExpiredLeases(db);
+    expect(reconciled.map((row) => row.id)).toContain(exhausted.id);
+  });
+
+  it('assertJobOwned locks the row for the owner and throws for a stale attempt (F08)', async () => {
+    const { job } = await enqueueJob(db, { type: 'PING', entityId: 'e9', input: {} });
+    const stale = await claimNextJob(db, { entityId: 'e9' });
+    await db.transaction(async (tx) => {
+      const owned = await assertJobOwned(tx, job.id, stale?.leaseToken ?? '');
+      expect(owned.id).toBe(job.id);
+    });
+    await db
+      .update(jobs)
+      .set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 second'` })
+      .where(eq(jobs.id, job.id));
+    await claimNextJob(db, { entityId: 'e9' });
+    await expect(
+      db.transaction((tx) => assertJobOwned(tx, job.id, stale?.leaseToken ?? '')),
+    ).rejects.toBeInstanceOf(LeaseLostError);
+  });
+
+  it('enqueue is keyed by generation: same input in a new generation is a new job, same step in the same generation is not (F09/F10)', async () => {
+    await ensureEntityExecution(db, 'project', 'prj_gen');
+    const first = await startGeneration(db, 'project', 'prj_gen');
+    const a = await enqueueJob(db, {
+      type: 'NARRATIVE',
+      entityId: 'prj_gen',
+      input: { projectId: 'prj_gen' },
+      generationId: first,
+    });
+    expect(a.job.generationId).toBe(first);
+    expect(a.job.stepKey).toBe(stepKeyFor('NARRATIVE'));
+    expect(a.job.payload).toEqual({ projectId: 'prj_gen', generationId: first });
+
+    // Same step, same generation, even with a different input: one row.
+    const again = await enqueueJob(db, {
+      type: 'NARRATIVE',
+      entityId: 'prj_gen',
+      input: { projectId: 'prj_gen', extra: true },
+      generationId: first,
+    });
+    expect(again.created).toBe(false);
+    expect(again.job.id).toBe(a.job.id);
+
+    // A new generation with the identical input gets its own job.
+    const second = await startGeneration(db, 'project', 'prj_gen');
+    const b = await enqueueJob(db, {
+      type: 'NARRATIVE',
+      entityId: 'prj_gen',
+      input: { projectId: 'prj_gen' },
+      generationId: second,
+    });
+    expect(b.created).toBe(true);
+    expect(b.job.id).not.toBe(a.job.id);
+    expect(await getActiveGeneration(db, 'project', 'prj_gen')).toBe(second);
   });
 });

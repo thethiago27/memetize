@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import { AUDIO_ANALYZER_DIR } from '@memetize/audio-analyzer';
 import { createTestDatabase, type Database, truncateAll } from '@memetize/database';
 import { ingestAsset } from '@memetize/media-catalog';
-import { Orchestrator, ResourceScheduler } from '@memetize/orchestrator';
+import type { Orchestrator } from '@memetize/orchestrator';
 import {
   directorDebugFile,
   effectsDebugFile,
@@ -23,12 +23,12 @@ import {
   reprocessProject,
   timelineFile,
 } from '@memetize/projects';
+import { createOrchestrator } from '@memetize/runtime';
 import { SCENE_DETECTOR_DIR } from '@memetize/scene-detector';
 import type { AppConfig } from '@memetize/shared';
 import { Timeline } from '@memetize/timeline';
 import { TRANSCRIPT_DIR } from '@memetize/transcript';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildRegistry } from './registry';
 
 const execFileAsync = promisify(execFile);
 const handle = await createTestDatabase();
@@ -118,12 +118,7 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
         audio: { kind: 'fixture', model: null },
       },
     };
-    orchestrator = new Orchestrator({
-      db,
-      config,
-      registry: buildRegistry(),
-      scheduler: new ResourceScheduler(config.resources),
-    });
+    orchestrator = createOrchestrator({ db, config });
     shortSong = join(tmp, 'short.mp3');
     longSong = join(tmp, 'long.mp3');
     await makeSilentClip(shortSong, 6);

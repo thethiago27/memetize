@@ -1,6 +1,7 @@
 import { AssetReprocessFrom, ExclusionInput, ReprocessBody } from '@memetize/contracts';
 import { excludeRange, includeRange, listActiveBans } from '@memetize/feedback';
 import {
+  AssetBusyError,
   getAsset,
   ingestAsset,
   listAssets,
@@ -83,7 +84,12 @@ export function registerAssetRoutes(app: FastifyInstance, runtime: AppRuntime): 
     if (!from.success) return sendError(reply, 400, 'INVALID_INPUT', from.error.message);
     const asset = await getAsset(runtime.db, id);
     if (!asset) return sendError(reply, 404, 'NOT_FOUND', `asset not found: ${id}`);
-    await reprocessAsset(runtime.db, id, from.data);
+    try {
+      await reprocessAsset(runtime.db, id, from.data);
+    } catch (error) {
+      if (error instanceof AssetBusyError) return sendError(reply, 409, error.code, error.message);
+      throw error;
+    }
     kickDrain(runtime, id);
     return { ok: true, from: from.data };
   });

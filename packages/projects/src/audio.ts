@@ -2,7 +2,7 @@ import type { AudioSection, BeatPoint, EnergyPoint } from '@memetize/contracts';
 import {
   type AudioAnalysisRow,
   audioAnalysis,
-  type Database,
+  type Executor,
   type NewAudioAnalysisRow,
 } from '@memetize/database';
 import { assertIntegerMs, audioAnalysisId } from '@memetize/shared';
@@ -52,7 +52,7 @@ export function toAudioAnalysisRow(params: ReplaceAudioAnalysisParams): NewAudio
  * mirroring `replaceScenes`.
  */
 export async function replaceAudioAnalysis(
-  db: Database,
+  db: Executor,
   params: ReplaceAudioAnalysisParams,
 ): Promise<AudioAnalysisRow> {
   const row = toAudioAnalysisRow(params);
@@ -75,7 +75,7 @@ export async function replaceAudioAnalysis(
 
 /** Most recent audio analysis for a project (spec section 39). */
 export function getAudioAnalysis(
-  db: Database,
+  db: Executor,
   projectId: string,
 ): Promise<AudioAnalysisRow | undefined> {
   return db.query.audioAnalysis.findFirst({

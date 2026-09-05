@@ -1,6 +1,6 @@
 import type { FeedbackPolarity } from '@memetize/contracts';
 import {
-  type Database,
+  type Executor,
   type MomentFeedbackEmbeddingRow,
   momentFeedbackEmbeddings,
 } from '@memetize/database';
@@ -20,7 +20,7 @@ export interface UpsertFeedbackEmbeddingParams {
 
 /** Idempotent on `(feedbackEventId, model, modelVersion)` so a re-run FEEDBACK_EMBED job replaces, never duplicates. */
 export async function upsertFeedbackEmbedding(
-  db: Database,
+  db: Executor,
   params: UpsertFeedbackEmbeddingParams,
 ): Promise<MomentFeedbackEmbeddingRow> {
   const [row] = await db
@@ -55,7 +55,7 @@ export async function upsertFeedbackEmbedding(
 }
 
 export function listFeedbackEmbeddingsForMoment(
-  db: Database,
+  db: Executor,
   momentId: string,
 ): Promise<MomentFeedbackEmbeddingRow[]> {
   return db.query.momentFeedbackEmbeddings.findMany({

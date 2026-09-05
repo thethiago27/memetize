@@ -53,7 +53,7 @@ describe.skipIf(!handle)('generateTimeline (integration)', () => {
     expect(directorJobs[0]?.status).toBe('PENDING');
   });
 
-  it('drops a completed DIRECTOR job and enqueues a new one, forcing a fresh version', async () => {
+  it('keeps the completed DIRECTOR job as history and enqueues a new one in a fresh generation', async () => {
     const projectId = 'prj_generate_again';
     await seedProject(db, projectId);
     const { job: matchJob } = await enqueueJob(db, {
@@ -76,8 +76,13 @@ describe.skipIf(!handle)('generateTimeline (integration)', () => {
 
     const jobs = await listJobsForEntity(db, projectId);
     const directorJobs = jobs.filter((job) => job.type === 'DIRECTOR');
-    expect(directorJobs).toHaveLength(1);
-    expect(directorJobs[0]?.id).not.toBe(directorJob.id);
-    expect(directorJobs[0]?.status).toBe('PENDING');
+    // History is kept (F09): the old COMPLETED run stays, the new run is a new
+    // job in the project's new generation, so the same input yields a fresh version.
+    expect(directorJobs).toHaveLength(2);
+    expect(directorJobs[0]?.id).toBe(directorJob.id);
+    expect(directorJobs[0]?.status).toBe('COMPLETED');
+    expect(directorJobs[1]?.id).not.toBe(directorJob.id);
+    expect(directorJobs[1]?.status).toBe('PENDING');
+    expect(directorJobs[1]?.generationId).toBeTruthy();
   });
 });

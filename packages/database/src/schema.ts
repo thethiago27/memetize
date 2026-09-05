@@ -101,10 +101,12 @@ export const jobs = pgTable(
 
 /**
  * Per-entity coordination record (F09). Serializes commands on a project/asset
- * (`SELECT ... FOR UPDATE` on this row) and holds the monotonic counters used to
- * reserve timeline/render versions atomically, the currently active generation,
- * and the constraints revision that bans bump (F13). Exactly one row per entity,
- * created with the entity.
+ * (`SELECT ... FOR UPDATE` on this row), holds the monotonic counters used to
+ * reserve timeline/render/window versions atomically, and names the currently
+ * active generation: the pipeline run whose jobs may still publish (F09/F11).
+ * Exactly one row per entity, created with the entity (and lazily by
+ * `ensureEntityExecution` for rows that predate it). Bans are global, so the
+ * constraints revision lives on `feedback_events.seq` (see `@memetize/feedback`).
  */
 export const entityExecution = pgTable(
   'entity_execution',
@@ -116,7 +118,6 @@ export const entityExecution = pgTable(
     nextRenderVersion: integer('next_render_version').notNull().default(1),
     nextTimelineVersion: integer('next_timeline_version').notNull().default(1),
     nextWindowVersion: integer('next_window_version').notNull().default(1),
-    constraintsRevision: integer('constraints_revision').notNull().default(0),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -230,6 +231,33 @@ export const moments = pgTable(
     index('moments_scene_idx').on(table.sceneId),
   ],
 );
+
+/**
+ * Stable editorial identity per exact source interval (F12). A moment's id is
+ * the key every piece of editorial memory (bans, swaps, feedback vectors, usage
+ * stats) hangs off; re-extracting the catalog with another extractor or model
+ * must not mint a new id for the same interval. Rows are never deleted by
+ * extraction (only with the asset), so an interval that disappears and comes
+ * back later regains its original id.
+ */
+export const momentIdentities = pgTable(
+  'moment_identities',
+  {
+    assetId: text('asset_id')
+      .notNull()
+      .references(() => mediaAssets.id, { onDelete: 'cascade' }),
+    startMs: integer('start_ms').notNull(),
+    endMs: integer('end_ms').notNull(),
+    momentId: text('moment_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.assetId, table.startMs, table.endMs] }),
+    uniqueIndex('moment_identities_moment_id').on(table.momentId),
+  ],
+);
+
+export type MomentIdentityRow = typeof momentIdentities.$inferSelect;
 
 /**
  * Per-moment vectors used by the Candidate Retriever (spec sections 23, 28).

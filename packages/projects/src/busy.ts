@@ -1,4 +1,4 @@
-import { type Database, jobs } from '@memetize/database';
+import { type Executor, jobs } from '@memetize/database';
 import { and, eq } from 'drizzle-orm';
 
 export class ProjectBusyError extends Error {
@@ -14,7 +14,7 @@ export class ProjectBusyError extends Error {
  * in-flight worker would otherwise write against rows being replaced.
  * PENDING jobs are fine; callers drop or re-enqueue them.
  */
-export async function assertProjectIdle(db: Database, projectId: string): Promise<void> {
+export async function assertProjectIdle(db: Executor, projectId: string): Promise<void> {
   const running = await db
     .select({ id: jobs.id })
     .from(jobs)

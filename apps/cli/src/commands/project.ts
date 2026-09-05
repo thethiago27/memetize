@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import type { RenderWarning } from '@memetize/contracts';
+import { describeProviders } from '@memetize/model-providers';
 import {
   clearManualWindow,
   deleteProject,
@@ -11,6 +12,7 @@ import {
   getLyrics,
   getProject,
   getProjectAudio,
+  getProjectGeneration,
   ingestProject,
   listNarrativeSegments,
   listProjects,
@@ -115,7 +117,15 @@ export function registerProjectCommands(program: Command): void {
     .action(async (projectId: string, options: { wait: boolean }) => {
       const ctx = await buildContext();
       try {
-        await generateTimeline(ctx.db, projectId);
+        try {
+          await generateTimeline(ctx.db, projectId);
+        } catch (error) {
+          if (error instanceof ProjectBusyError) {
+            process.stdout.write(`${error.message}\n`);
+            return;
+          }
+          throw error;
+        }
         process.stdout.write(`Enqueued a new DIRECTOR run for ${projectId}...\n`);
 
         if (options.wait) {
@@ -143,7 +153,15 @@ export function registerProjectCommands(program: Command): void {
     .action(async (projectId: string, options: { wait: boolean }) => {
       const ctx = await buildContext();
       try {
-        await renderProject(ctx.db, projectId);
+        try {
+          await renderProject(ctx.db, projectId);
+        } catch (error) {
+          if (error instanceof ProjectBusyError) {
+            process.stdout.write(`${error.message}\n`);
+            return;
+          }
+          throw error;
+        }
         process.stdout.write(`Enqueued a new RENDER run for ${projectId}...\n`);
 
         if (options.wait) {
@@ -270,7 +288,15 @@ export function registerProjectCommands(program: Command): void {
           );
           return;
         }
-        await reprocessProject(ctx.db, projectId, options.from);
+        try {
+          await reprocessProject(ctx.db, projectId, options.from);
+        } catch (error) {
+          if (error instanceof ProjectBusyError) {
+            process.stdout.write(`${error.message}\n`);
+            return;
+          }
+          throw error;
+        }
         process.stdout.write(`Reprocessing ${projectId} from ${options.from}...\n`);
 
         if (options.wait) {
@@ -311,12 +337,17 @@ async function printProjectDetails(ctx: CliContext, id: string): Promise<void> {
   const timeline = await getLatestTimeline(ctx.db, id);
   const render = await getLatestRender(ctx.db, id);
 
+  const providers = describeProviders(ctx.config);
+  const generation = await getProjectGeneration(ctx.db, id);
   const lines = [
     `Project ${row.id}`,
     `  filename: ${row.filename}`,
     `  status:   ${row.status}`,
     `  original: ${audioFile?.originalPath ?? '-'}`,
     `  duration: ${audioFile?.durationMs ?? '-'} ms`,
+    `  generation: ${generation ?? '-'}`,
+    // Which capabilities were real vs. simulated for this run (F01).
+    `  providers: mode=${providers.mode}  vision=${providers.vision}  llm=${providers.llm}  embedding=${providers.embedding}`,
   ];
 
   if (audio) {
