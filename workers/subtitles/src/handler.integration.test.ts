@@ -163,7 +163,7 @@ describe.skipIf(!handle)('subtitles handler (integration)', () => {
           promptVersion: '1.0.0',
         }),
       },
-    } as ReturnType<typeof modelProviders.createProviders>);
+    } as unknown as modelProviders.Providers);
 
     try {
       const handler = createSubtitlesHandler();
