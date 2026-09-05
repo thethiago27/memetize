@@ -13,6 +13,7 @@ import {
   getProject,
   getProjectAudio,
   getProjectGeneration,
+  getSubtitles,
   ingestProject,
   listNarrativeSegments,
   listProjects,
@@ -331,6 +332,7 @@ async function printProjectDetails(ctx: CliContext, id: string): Promise<void> {
   const audio = await getAudioAnalysis(ctx.db, id);
   const editWindow = await getLatestEditWindow(ctx.db, id);
   const lyrics = await getLyrics(ctx.db, id);
+  const subtitles = await getSubtitles(ctx.db, id);
   const narrative = await listNarrativeSegments(ctx.db, id);
   const matches = await listSegmentMatches(ctx.db, id);
   const matchBySegment = new Map(matches.map((match) => [match.segmentId, match]));
@@ -378,6 +380,17 @@ async function printProjectDetails(ctx: CliContext, id: string): Promise<void> {
     }
   } else {
     lines.push('  lyrics:   (not processed yet)');
+  }
+
+  if (subtitles) {
+    const translation = subtitles.translated
+      ? `translated from ${subtitles.sourceLanguage ?? 'und'}`
+      : 'original lines (already Portuguese / fixture)';
+    lines.push(
+      `  captions: ${subtitles.language}  ${subtitles.lines.length} lines  ${translation}  ${subtitles.model}@${subtitles.modelVersion}`,
+    );
+  } else {
+    lines.push('  captions: (not processed yet)');
   }
 
   lines.push(`  narrative: ${narrative.length} segments`);

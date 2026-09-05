@@ -38,6 +38,14 @@ export function audioDebugFile(config: AppConfig, projectId: string): StoragePat
   };
 }
 
+/** Debug cache file for the Subtitles worker output (translated-subtitles spec). */
+export function subtitlesDebugFile(config: AppConfig, projectId: string): StoragePath {
+  return {
+    absolute: join(config.storageDir, 'cache', projectId, 'subtitles.json'),
+    relative: `${config.storageDirRelative}/cache/${projectId}/subtitles.json`,
+  };
+}
+
 /** Debug cache file for the Lyrics worker output (spec section 64). */
 export function lyricsDebugFile(config: AppConfig, projectId: string): StoragePath {
   return {

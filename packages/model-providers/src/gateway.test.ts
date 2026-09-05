@@ -229,3 +229,60 @@ describe('GatewayLLMProvider narrative and moments', () => {
     expect(generateObjectMock).toHaveBeenCalledOnce();
   });
 });
+
+describe('GatewayLLMProvider.translateLyrics', () => {
+  beforeEach(() => {
+    generateObjectMock.mockReset();
+  });
+
+  it('translates lines and records the stage model', async () => {
+    generateObjectMock.mockResolvedValue({
+      object: {
+        sourceLanguage: 'en',
+        alreadyTargetLanguage: false,
+        lines: ['olá mundo', 'eu achava que estava tudo bem'],
+      },
+    } as never);
+    const provider = new GatewayLLMProvider({
+      model: 'anthropic/claude-opus-5',
+      stageModels: { subtitles: 'anthropic/claude-sonnet-4.5' },
+    });
+    const result = await provider.translateLyrics({
+      lines: ['hello world', 'I thought everything was fine'],
+      targetLanguage: 'pt-BR',
+    });
+    expect(result.lines).toEqual(['olá mundo', 'eu achava que estava tudo bem']);
+    expect(result.translated).toBe(true);
+    expect(result.sourceLanguage).toBe('en');
+    expect(result.modelVersion).toBe('1.0.0/anthropic/claude-sonnet-4.5');
+    expect(generateObjectMock).toHaveBeenCalledOnce();
+  });
+
+  it('keeps already-Portuguese lines and sets translated to false', async () => {
+    generateObjectMock.mockResolvedValue({
+      object: { sourceLanguage: 'pt', alreadyTargetLanguage: true, lines: ['já era'] },
+    } as never);
+    const provider = new GatewayLLMProvider({ model: 'anthropic/claude-sonnet-4.5' });
+    const result = await provider.translateLyrics({
+      lines: ['já era'],
+      targetLanguage: 'pt-BR',
+    });
+    expect(result.translated).toBe(false);
+    expect(result.lines).toEqual(['já era']);
+  });
+
+  it('retries once on a line-count mismatch and then throws', async () => {
+    generateObjectMock
+      .mockResolvedValueOnce({
+        object: { sourceLanguage: 'en', alreadyTargetLanguage: false, lines: ['só uma'] },
+      } as never)
+      .mockResolvedValueOnce({
+        object: { sourceLanguage: 'en', alreadyTargetLanguage: false, lines: ['ainda uma'] },
+      } as never);
+    const provider = new GatewayLLMProvider({ model: 'anthropic/claude-sonnet-4.5' });
+    await expect(
+      provider.translateLyrics({ lines: ['one', 'two'], targetLanguage: 'pt-BR' }),
+    ).rejects.toThrow(/expected 2 lines/);
+    expect(generateObjectMock).toHaveBeenCalledTimes(2);
+  });
+});

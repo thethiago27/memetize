@@ -11,6 +11,7 @@ import { createNarrativeHandler } from '@memetize/narrative-analyzer';
 import type { JobRegistry } from '@memetize/orchestrator';
 import { createRenderHandler } from '@memetize/renderer-worker';
 import { createSceneDetectHandler } from '@memetize/scene-detector';
+import { createSubtitlesHandler } from '@memetize/subtitles';
 import { createTimingHandler } from '@memetize/timing-worker';
 import { createTranscriptHandler } from '@memetize/transcript';
 import { createNormalizeHandler } from '@memetize/video-normalizer';
@@ -36,6 +37,7 @@ export function buildRegistry(): JobRegistry {
     EMBED: createEmbedHandler(),
     AUDIO_ANALYZE: createAudioAnalyzeHandler(),
     LYRICS: createLyricsHandler(),
+    SUBTITLES: createSubtitlesHandler(),
     NARRATIVE: createNarrativeHandler(),
     MATCH: createMatchHandler(),
     DIRECTOR: createDirectorHandler(),

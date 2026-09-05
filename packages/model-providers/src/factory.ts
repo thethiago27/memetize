@@ -98,7 +98,7 @@ function isGatewayModelId(model: string): boolean {
   return slash > 0 && slash < model.length - 1;
 }
 
-/** `LLM_MOMENTS_MODEL`, `LLM_NARRATIVE_MODEL`, `LLM_DIRECTOR_MODEL`. */
+/** `LLM_MOMENTS_MODEL`, `LLM_NARRATIVE_MODEL`, `LLM_DIRECTOR_MODEL`, `LLM_SUBTITLES_MODEL`. */
 function stageEnvVar(stage: LLMStage): string {
   return `LLM_${stage.toUpperCase()}_MODEL`;
 }

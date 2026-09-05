@@ -150,13 +150,11 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
 
     const outcomes = await orchestrator.drain({ entityId: project.id });
     const types = outcomes.map((outcome) => outcome.job.type);
-    expect(types).toHaveLength(7);
-    expect(new Set(types.slice(0, 2))).toEqual(new Set(['AUDIO_ANALYZE', 'LYRICS']));
-    expect(types[2]).toBe('NARRATIVE');
-    expect(types[3]).toBe('MATCH');
-    expect(types[4]).toBe('DIRECTOR');
-    expect(types[5]).toBe('TIMING');
-    expect(types[6]).toBe('EFFECTS');
+    const chain = types.filter((type) => type !== 'SUBTITLES');
+    expect(types).toContain('SUBTITLES');
+    expect(chain).toHaveLength(7);
+    expect(new Set(chain.slice(0, 2))).toEqual(new Set(['AUDIO_ANALYZE', 'LYRICS']));
+    expect(chain.slice(2)).toEqual(['NARRATIVE', 'MATCH', 'DIRECTOR', 'TIMING', 'EFFECTS']);
     expect(outcomes.every((outcome) => outcome.status === 'COMPLETED')).toBe(true);
 
     const refreshed = await getProject(db, project.id);

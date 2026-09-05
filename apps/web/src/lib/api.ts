@@ -311,6 +311,7 @@ export interface ProjectDetail {
   manualWindow?: ManualWindow | null;
   audio: AudioAnalysisRow | null;
   lyrics: LyricsRow | null;
+  subtitles?: SubtitlesSummary | null;
   narrative: NarrativeSegmentRow[];
   matches: { segmentId: string; shortlist: ShortlistEntry[] }[];
   timeline: TimelineVersion | null;
@@ -347,6 +348,15 @@ export interface LyricLineRow {
 export interface LyricsRow {
   source: string;
   lines: LyricLineRow[];
+  model: string;
+  modelVersion: string;
+}
+
+export interface SubtitlesSummary {
+  language: string;
+  sourceLanguage: string | null;
+  translated: boolean;
+  lineCount: number;
   model: string;
   modelVersion: string;
 }

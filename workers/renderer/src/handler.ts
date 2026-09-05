@@ -1,16 +1,19 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { rename, rm, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { RenderInput, type RenderWarning } from '@memetize/contracts';
+import type { Executor } from '@memetize/database';
 import { JobFailure } from '@memetize/job-system';
 import { getAsset, probeVideo } from '@memetize/media-catalog';
 import type { JobHandler } from '@memetize/orchestrator';
 import {
   getEditWindowByVersion,
   getLatestEditWindow,
+  getLyrics,
   getProjectAudio,
+  getSubtitles,
   insertRender,
   renderDebugFile,
   renderDir,
@@ -21,15 +24,20 @@ import {
 } from '@memetize/projects';
 import {
   buildFfmpegGraph,
+  cuesFromLyrics,
+  layoutCue,
   type OutputProbe,
   RENDERER_NAME,
   RENDERER_VERSION,
+  type RenderedCue,
   type ResolvedAssets,
+  rasterizeCue,
   toFfmpegArgs,
   validateOutput,
   validateTimeline,
 } from '@memetize/renderer';
 import { ensureDir } from '@memetize/shared';
+import type { Timeline } from '@memetize/timeline';
 import { chooseRenderSource } from './source';
 import { allocateRenderTarget, cleanupOrphanRenderAttempts } from './target';
 
@@ -147,18 +155,10 @@ export function createRenderHandler(): JobHandler {
       resolvedClips.push({ clipId: clip.id, videoPath });
     }
 
-    const graphStarted = performance.now();
-    const graph = buildFfmpegGraph(timeline, {
-      audioPath,
-      audioDurationMs: projectAudio.durationMs,
-      clips: resolvedClips,
-    });
-    const graphBuildMs = performance.now() - graphStarted;
-
     // Render to an exclusive temp file so two concurrent renders never share a
     // destination; the published, version-named path is only chosen atomically
     // when the render row is inserted (F09). Orphans of earlier crashed attempts
-    // are swept first.
+    // are swept first. Caption PNGs live in the same attempt directory.
     const rendersDirectory = renderDir(ctx.config, projectId).absolute;
     await ensureDir(rendersDirectory);
     const orphansRemoved = await cleanupOrphanRenderAttempts(rendersDirectory);
@@ -166,6 +166,34 @@ export function createRenderHandler(): JobHandler {
     const target = await allocateRenderTarget(rendersDirectory);
     const discardAttempt = () =>
       rm(target.directory, { recursive: true, force: true }).catch(() => undefined);
+
+    let renderedCues: RenderedCue[] = [];
+    let subtitleMeta: {
+      lineCount: number;
+      cueCount: number;
+      translated: boolean;
+      model: string;
+    } | null = null;
+    try {
+      const prepared = await prepareRenderedCues(ctx.db, projectId, timeline, target.directory);
+      renderedCues = prepared.cues;
+      subtitleMeta = prepared.meta;
+    } catch (error) {
+      await discardAttempt();
+      throw error;
+    }
+
+    const graphStarted = performance.now();
+    const graph = buildFfmpegGraph(
+      timeline,
+      {
+        audioPath,
+        audioDurationMs: projectAudio.durationMs,
+        clips: resolvedClips,
+      },
+      renderedCues.length > 0 ? { subtitles: renderedCues } : undefined,
+    );
+    const graphBuildMs = performance.now() - graphStarted;
 
     const args = toFfmpegArgs(graph, target.encodingPath);
     const ffmpegStarted = performance.now();
@@ -271,6 +299,7 @@ export function createRenderHandler(): JobHandler {
           probe,
           validation,
           performance: performanceMetrics,
+          subtitles: subtitleMeta,
         },
         null,
         2,
@@ -287,6 +316,55 @@ export function createRenderHandler(): JobHandler {
     });
 
     return result;
+  };
+}
+
+async function prepareRenderedCues(
+  db: Executor,
+  projectId: string,
+  timeline: Timeline,
+  attemptDirectory: string,
+): Promise<{
+  cues: RenderedCue[];
+  meta: { lineCount: number; cueCount: number; translated: boolean; model: string } | null;
+}> {
+  const lyrics = await getLyrics(db, projectId);
+  const row = await getSubtitles(db, projectId);
+  if ((lyrics?.lines.length ?? 0) > 0 && !row) {
+    throw new JobFailure(
+      'RENDER_SUBTITLES_MISSING',
+      `project ${projectId} has lyrics but no subtitles yet — wait for SUBTITLES or run project reprocess ${projectId} --from subtitles`,
+      false,
+    );
+  }
+  if (!row || row.lines.length === 0) {
+    return { cues: [], meta: null };
+  }
+
+  const planned = cuesFromLyrics(row.lines, timeline);
+  const directory = join(attemptDirectory, 'subtitles');
+  await mkdir(directory, { recursive: true });
+  const cues: RenderedCue[] = [];
+  for (const [index, cue] of planned.entries()) {
+    const layout = layoutCue(cue.text, timeline.canvas);
+    const pngPath = join(directory, `cue-${index}.png`);
+    await writeFile(pngPath, rasterizeCue(layout));
+    cues.push({
+      pngPath,
+      startMs: cue.startMs,
+      endMs: cue.endMs,
+      width: layout.width,
+      height: layout.height,
+    });
+  }
+  return {
+    cues,
+    meta: {
+      lineCount: row.lines.length,
+      cueCount: cues.length,
+      translated: row.translated,
+      model: row.model,
+    },
   };
 }
 

@@ -81,6 +81,7 @@ describe('createLLMProvider', () => {
     expect(provider.modelFor('narrative')).toBe('anthropic/claude-fable-5.1');
     expect(provider.modelFor('moments')).toBe(GATEWAY_MODEL);
     expect(provider.modelFor('director')).toBe(GATEWAY_MODEL);
+    expect(provider.modelFor('subtitles')).toBe(GATEWAY_MODEL);
   });
 
   it('throws when a stage override is not provider/model', () => {

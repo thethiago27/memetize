@@ -83,6 +83,32 @@ export const LyricsOutput = z.object({
 });
 export type LyricsOutput = z.infer<typeof LyricsOutput>;
 
+// SUBTITLES
+export const SubtitlesInput = z.object({
+  projectId: z.string(),
+  /** Generation this run belongs to (F09/F11); absent only on legacy jobs. */
+  generationId: z.string().optional(),
+});
+export type SubtitlesInput = z.infer<typeof SubtitlesInput>;
+
+export const SubtitleLine = z.object({
+  startMs: z.number().int().nonnegative(),
+  endMs: z.number().int().nonnegative(),
+  text: z.string(),
+});
+export type SubtitleLine = z.infer<typeof SubtitleLine>;
+
+export const SubtitlesOutput = z.object({
+  projectId: z.string(),
+  language: z.string(),
+  sourceLanguage: z.string().nullable(),
+  translated: z.boolean(),
+  lineCount: z.number().int().nonnegative(),
+  model: z.string(),
+  modelVersion: z.string(),
+});
+export type SubtitlesOutput = z.infer<typeof SubtitlesOutput>;
+
 // NARRATIVE
 export const NarrativeInput = z.object({
   projectId: z.string(),

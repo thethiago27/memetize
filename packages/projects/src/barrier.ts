@@ -59,6 +59,25 @@ export async function maybeEnqueueNarrative(
   });
 }
 
+/**
+ * SUBTITLES runs after LYRICS, in parallel with NARRATIVE (translated-subtitles
+ * spec). Idempotent per (entity, generation, step).
+ */
+export async function maybeEnqueueSubtitles(
+  tx: Executor,
+  projectId: string,
+  generationId: string | null,
+): Promise<EnqueueResult | null> {
+  await lockProject(tx, projectId);
+  return enqueueJob(tx, {
+    type: 'SUBTITLES',
+    entityId: projectId,
+    input: { projectId },
+    generationId,
+    stepKey: generationId ? stepKeyFor('SUBTITLES') : null,
+  });
+}
+
 async function latestOfTypeCompleted(
   tx: Executor,
   projectId: string,

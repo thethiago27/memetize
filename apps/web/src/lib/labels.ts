@@ -38,6 +38,7 @@ export const JOB_STATUS_LABEL: Record<string, string> = {
 export const JOB_LABEL: Record<string, string> = {
   AUDIO_ANALYZE: 'Análise de áudio',
   LYRICS: 'Letra',
+  SUBTITLES: 'Legendas',
   NARRATIVE: 'Narrativa',
   MATCH: 'Match',
   DIRECTOR: 'Direção',
@@ -57,6 +58,7 @@ export const JOB_LABEL: Record<string, string> = {
 export const PIPELINE_STEPS: { type: string; label: string }[] = [
   { type: 'AUDIO_ANALYZE', label: 'Áudio' },
   { type: 'LYRICS', label: 'Letra' },
+  { type: 'SUBTITLES', label: 'Legendas' },
   { type: 'NARRATIVE', label: 'Narrativa' },
   { type: 'MATCH', label: 'Match' },
   { type: 'DIRECTOR', label: 'Direção' },

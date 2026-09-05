@@ -12,6 +12,7 @@ import {
   getLyrics,
   getProject,
   getProjectGeneration,
+  getSubtitles,
   ingestProject,
   listNarrativeSegments,
   listProjectFeedback,
@@ -65,6 +66,7 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
     const [
       audio,
       lyrics,
+      subtitles,
       narrative,
       matches,
       timeline,
@@ -76,6 +78,7 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
     ] = await Promise.all([
       getAudioAnalysis(runtime.db, id),
       getLyrics(runtime.db, id),
+      getSubtitles(runtime.db, id),
       listNarrativeSegments(runtime.db, id),
       listSegmentMatches(runtime.db, id),
       getLatestTimeline(runtime.db, id),
@@ -96,6 +99,16 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
       generationId: await getProjectGeneration(runtime.db, id),
       audio,
       lyrics,
+      subtitles: subtitles
+        ? {
+            language: subtitles.language,
+            sourceLanguage: subtitles.sourceLanguage,
+            translated: subtitles.translated,
+            lineCount: subtitles.lines.length,
+            model: subtitles.model,
+            modelVersion: subtitles.modelVersion,
+          }
+        : null,
       narrative,
       matches,
       timeline,

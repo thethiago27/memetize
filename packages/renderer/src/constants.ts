@@ -22,7 +22,7 @@ export const AUDIO_DRIFT_MS = 300;
  */
 export const VIDEO_MIN_COVERAGE = 0.8;
 export const RENDERER_NAME = 'ffmpeg';
-export const RENDERER_VERSION = '1.0.0';
+export const RENDERER_VERSION = '1.1.0';
 
 /**
  * Cut styles (cut-styles spec). A transition may never take more than this

@@ -39,6 +39,7 @@ const EnvSchema = z.object({
   LLM_MOMENTS_MODEL: z.string().optional(),
   LLM_NARRATIVE_MODEL: z.string().optional(),
   LLM_DIRECTOR_MODEL: z.string().optional(),
+  LLM_SUBTITLES_MODEL: z.string().optional(),
   // Optional; required at runtime when LLM_PROVIDER=gateway. The AI SDK also reads this from the env.
   AI_GATEWAY_API_KEY: z.string().optional(),
   EMBEDDING_PROVIDER: z.string().optional(),
@@ -66,7 +67,7 @@ export interface ProviderConfig {
 }
 
 /** The three LLM calls of the pipeline, each of which may run on its own model. */
-export const LLM_STAGES = ['moments', 'narrative', 'director'] as const;
+export const LLM_STAGES = ['moments', 'narrative', 'director', 'subtitles'] as const;
 export type LLMStage = (typeof LLM_STAGES)[number];
 
 /**
@@ -158,6 +159,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
           moments: parsed.LLM_MOMENTS_MODEL?.trim() || null,
           narrative: parsed.LLM_NARRATIVE_MODEL?.trim() || null,
           director: parsed.LLM_DIRECTOR_MODEL?.trim() || null,
+          subtitles: parsed.LLM_SUBTITLES_MODEL?.trim() || null,
         },
       },
       embedding: {

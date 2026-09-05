@@ -15,6 +15,7 @@ import { getLatestEditWindow } from './window';
 export const REPROCESS_STAGES = [
   'audio',
   'lyrics',
+  'subtitles',
   'narrative',
   'match',
   'director',
@@ -40,7 +41,8 @@ export type ReprocessStage = (typeof REPROCESS_STAGES)[number];
  */
 const STAGE_JOBS: Record<ReprocessStage, JobType[]> = {
   audio: ['AUDIO_ANALYZE', 'NARRATIVE', 'MATCH', 'DIRECTOR', 'TIMING', 'EFFECTS', 'RENDER'],
-  lyrics: ['LYRICS', 'NARRATIVE', 'MATCH', 'DIRECTOR', 'TIMING', 'EFFECTS', 'RENDER'],
+  lyrics: ['LYRICS', 'SUBTITLES', 'NARRATIVE', 'MATCH', 'DIRECTOR', 'TIMING', 'EFFECTS', 'RENDER'],
+  subtitles: ['SUBTITLES', 'RENDER'],
   narrative: ['NARRATIVE', 'MATCH', 'DIRECTOR', 'TIMING', 'EFFECTS', 'RENDER'],
   match: ['MATCH', 'DIRECTOR', 'TIMING', 'EFFECTS', 'RENDER'],
   director: ['DIRECTOR', 'TIMING', 'EFFECTS', 'RENDER'],
@@ -87,7 +89,10 @@ export async function reprocessProject(
 
   return db.transaction(async (tx) => {
     await lockProject(tx, projectId);
-    if ((await countRunningForEntity(tx, projectId, stageJobs)) > 0) {
+    // A RUNNING SUBTITLES job blocks render the same way other stage jobs do
+    // (translated-subtitles spec) without cancelling the translation.
+    const busyTypes = from === 'render' ? [...stageJobs, 'SUBTITLES' as const] : stageJobs;
+    if ((await countRunningForEntity(tx, projectId, busyTypes)) > 0) {
       throw new ProjectBusyError(projectId);
     }
     const cancelled = await cancelActiveJobsForEntity(tx, projectId, stageJobs, ['PENDING']);
@@ -138,6 +143,9 @@ export async function reprocessProject(
           // biome-ignore lint/style/noNonNullAssertion: guarded above.
           durationMs: audio!.durationMs,
         });
+        break;
+      case 'subtitles':
+        await enqueue('SUBTITLES', { projectId });
         break;
       case 'lyrics':
         await enqueue('LYRICS', {

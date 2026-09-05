@@ -9,7 +9,7 @@ import {
 } from '@memetize/job-system';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { maybeEnqueueNarrative } from './barrier';
+import { maybeEnqueueNarrative, maybeEnqueueSubtitles } from './barrier';
 
 const handle = await createTestDatabase();
 const db = handle?.db as Database;
@@ -152,5 +152,21 @@ describe.skipIf(!handle)('maybeEnqueueNarrative (integration)', () => {
     );
     expect(created?.created).toBe(true);
     expect(created?.job.generationId).toBe(second);
+  });
+
+  it('enqueues SUBTITLES once per generation after LYRICS', async () => {
+    const projectId = 'prj_barrier_subtitles';
+    await ensureEntityExecution(db, 'project', projectId);
+    const generationId = await startGeneration(db, 'project', projectId);
+    const first = await db.transaction((tx) => maybeEnqueueSubtitles(tx, projectId, generationId));
+    const second = await db.transaction((tx) => maybeEnqueueSubtitles(tx, projectId, generationId));
+    expect(first?.created).toBe(true);
+    expect(second?.created).toBe(false);
+    expect(first?.job.stepKey).toBe(stepKeyFor('SUBTITLES'));
+    const subtitleJobs = await db
+      .select({ id: jobs.id })
+      .from(jobs)
+      .where(and(eq(jobs.entityId, projectId), eq(jobs.type, 'SUBTITLES')));
+    expect(subtitleJobs).toHaveLength(1);
   });
 });

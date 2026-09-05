@@ -2,7 +2,12 @@ import { createDatabase, type Database, type Executor, type JobRow } from '@meme
 import { type EntityKind, isGenerationActive } from '@memetize/job-system';
 import { getAsset, maybeEnqueueVisionAnalysis, setAssetStatus } from '@memetize/media-catalog';
 import { Orchestrator, ResourceScheduler } from '@memetize/orchestrator';
-import { getProject, maybeEnqueueNarrative, setProjectStatus } from '@memetize/projects';
+import {
+  getProject,
+  maybeEnqueueNarrative,
+  maybeEnqueueSubtitles,
+  setProjectStatus,
+} from '@memetize/projects';
 import { type AppConfig, createLogger, type Logger, loadConfig } from '@memetize/shared';
 import { buildRegistry } from './registry';
 
@@ -84,7 +89,11 @@ export function createAppRuntime(options: CreateAppRuntimeOptions = {}): AppRunt
 export async function evaluateBarriers(tx: Executor, job: JobRow): Promise<void> {
   if (job.type === 'AUDIO_ANALYZE' || job.type === 'LYRICS') {
     await maybeEnqueueNarrative(tx, job.entityId, job.type, job.generationId);
-  } else if (job.type === 'FRAME_EXTRACT' || job.type === 'TRANSCRIPT') {
+  }
+  if (job.type === 'LYRICS') {
+    await maybeEnqueueSubtitles(tx, job.entityId, job.generationId);
+  }
+  if (job.type === 'FRAME_EXTRACT' || job.type === 'TRANSCRIPT') {
     await maybeEnqueueVisionAnalysis(tx, job.entityId, job.type, job.generationId);
   }
 }

@@ -390,3 +390,46 @@ describe('toFfmpegArgs', () => {
     expect(args[5]).toBe('/abs/storage/audio/prj_1/original.mp3');
   });
 });
+
+describe('buildFfmpegGraph with burned-in subtitles', () => {
+  it('is byte-identical to the current graph when no cues are passed', () => {
+    const clips = [clip({ id: 'clp_1', timeline: { startMs: 0, endMs: 2000 } })];
+    const tl = timeline({ durationMs: 2000, clips });
+    const assets = assetsFor(clips);
+    expect(buildFfmpegGraph(tl, assets).filterComplex).toBe(
+      buildFfmpegGraph(tl, assets, { subtitles: [] }).filterComplex,
+    );
+  });
+
+  it('joins to [vjoin] then overlays each PNG onto [vout]', () => {
+    const clips = [clip({ id: 'clp_1', timeline: { startMs: 0, endMs: 4000 } })];
+    const tl = timeline({ durationMs: 4000, clips });
+    const graph = buildFfmpegGraph(tl, assetsFor(clips), {
+      subtitles: [
+        {
+          pngPath: '/tmp/cue-0.png',
+          startMs: 0,
+          endMs: 1500,
+          width: 400,
+          height: 80,
+        },
+        {
+          pngPath: '/tmp/cue-1.png',
+          startMs: 1500,
+          endMs: 3000,
+          width: 360,
+          height: 72,
+        },
+      ],
+    });
+
+    expect(graph.filterComplex).toContain('[vjoin]');
+    expect(graph.filterComplex).toContain("enable='between(t,0.000,1.500)'");
+    expect(graph.filterComplex).toContain("enable='between(t,1.500,3.000)'");
+    expect(graph.filterComplex).toMatch(/\[vjoin\]\[2:v\]overlay=.*\[vs0\]/);
+    expect(graph.filterComplex).toMatch(/\[vs0\]\[3:v\]overlay=.*\[vout\]/);
+    expect(graph.inputs.map((input) => input.kind)).toEqual(['audio', 'video', 'image', 'image']);
+    expect(graph.inputs[2]?.path).toBe('/tmp/cue-0.png');
+    expect(graph.filterComplex).not.toMatch(/concat=n=1:v=1:a=0\[vout\]/);
+  });
+});

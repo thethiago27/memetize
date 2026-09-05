@@ -186,11 +186,29 @@ export interface DirectTimelineResult {
   promptVersion: string;
 }
 
+export interface TranslateLyricsInput {
+  lines: string[];
+  targetLanguage: string;
+}
+
+export interface TranslateLyricsResult {
+  /** Same length and order as the input lines. */
+  lines: string[];
+  /** BCP-47-ish tag the model detected, or `und`. */
+  sourceLanguage: string;
+  /** False when the source already is the target language. */
+  translated: boolean;
+  model: string;
+  modelVersion: string;
+  promptVersion: string;
+}
+
 export interface LLMProvider {
   readonly name: string;
   suggestMoments(input: MomentSuggestInput): Promise<MomentSuggestResult>;
   analyzeNarrative(input: NarrativeAnalyzeInput): Promise<NarrativeAnalyzeResult>;
   directTimeline(input: DirectTimelineInput): Promise<DirectTimelineResult>;
+  translateLyrics(input: TranslateLyricsInput): Promise<TranslateLyricsResult>;
 }
 
 export interface EmbedResult {
