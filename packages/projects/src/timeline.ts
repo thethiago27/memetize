@@ -6,6 +6,7 @@ import {
 import { timelineVersionId } from '@memetize/shared';
 import type { Timeline } from '@memetize/timeline';
 import { desc, eq } from 'drizzle-orm';
+import { lockProject } from './coordinate';
 
 export interface InsertTimelineVersionParams {
   projectId: string;
@@ -34,6 +35,8 @@ export async function insertTimelineVersion(
   params: InsertTimelineVersionParams,
 ): Promise<TimelineVersionRow> {
   return db.transaction(async (tx) => {
+    // Serialize concurrent inserts for this project so `max()+1` is race-free (F09).
+    await lockProject(tx, params.projectId);
     const [latest] = await tx
       .select({ version: timelineVersionsTable.version })
       .from(timelineVersionsTable)

@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { writeFile } from 'node:fs/promises';
+import { rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { promisify } from 'node:util';
 import { RenderInput, type RenderWarning } from '@memetize/contracts';
@@ -9,7 +9,6 @@ import { getAsset, probeVideo } from '@memetize/media-catalog';
 import type { JobHandler } from '@memetize/orchestrator';
 import {
   getLatestEditWindow,
-  getLatestRender,
   getLatestTimeline,
   getProjectAudio,
   insertRender,
@@ -31,6 +30,7 @@ import {
 } from '@memetize/renderer';
 import { ensureDir } from '@memetize/shared';
 import { chooseRenderSource } from './source';
+import { allocateRenderTarget } from './target';
 
 const execFileAsync = promisify(execFile);
 
@@ -128,10 +128,12 @@ export function createRenderHandler(): JobHandler {
     });
     const graphBuildMs = performance.now() - graphStarted;
 
-    const nextVersion = ((await getLatestRender(ctx.db, projectId))?.version ?? 0) + 1;
-    const output = renderFile(ctx.config, projectId, nextVersion);
+    // Render to an exclusive temp file so two concurrent renders never share a
+    // destination; the published, version-named path is only chosen atomically
+    // when the render row is inserted, then the temp file is moved into place (F09).
     await ensureDir(renderDir(ctx.config, projectId).absolute);
-    const args = toFfmpegArgs(graph, output.absolute);
+    const target = await allocateRenderTarget(renderDir(ctx.config, projectId).absolute);
+    const args = toFfmpegArgs(graph, target.encodingPath);
 
     const ffmpegStarted = performance.now();
     try {
@@ -140,16 +142,18 @@ export function createRenderHandler(): JobHandler {
         timeout: Math.max(120_000, timeline.durationMs * 4),
       });
     } catch (error) {
+      await rm(target.directory, { recursive: true, force: true }).catch(() => undefined);
       const message = error instanceof Error ? error.message : String(error);
       throw new JobFailure('RENDER_FFMPEG_ERROR', `ffmpeg failed: ${message}`, false);
     }
     const ffmpegMs = performance.now() - ffmpegStarted;
 
     const probeStarted = performance.now();
-    const probe = await probeOutput(output.absolute);
+    const probe = await probeOutput(target.encodingPath);
     const probeMs = performance.now() - probeStarted;
     const outputValidation = validateOutput(probe, timeline);
     if (!outputValidation.valid) {
+      await rm(target.directory, { recursive: true, force: true }).catch(() => undefined);
       throw new JobFailure(
         'RENDER_OUTPUT_INVALID',
         `rendered file failed validation: ${JSON.stringify(probe)}`,
@@ -166,7 +170,7 @@ export function createRenderHandler(): JobHandler {
     const persisted = await insertRender(ctx.db, {
       projectId,
       timelineVersion: timelineVersion.version,
-      path: output.relative,
+      pathForVersion: (version) => renderFile(ctx.config, projectId, version).relative,
       durationMs: probe.durationMs,
       width: probe.width,
       height: probe.height,
@@ -177,6 +181,12 @@ export function createRenderHandler(): JobHandler {
       rendererVersion: RENDERER_VERSION,
       validation,
     });
+
+    // Publish: move the validated temp encode to its reserved version path, then
+    // drop the scratch directory. Same filesystem, so the rename is atomic.
+    const publishedAbsolute = resolveStorage(ctx.config, persisted.path);
+    await rename(target.encodingPath, publishedAbsolute);
+    await rm(target.directory, { recursive: true, force: true }).catch(() => undefined);
 
     const performanceMetrics = {
       validationMs,

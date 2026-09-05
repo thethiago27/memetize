@@ -9,6 +9,7 @@ import { editWindowId } from '@memetize/shared';
 import { desc, eq } from 'drizzle-orm';
 import { getAudioAnalysis } from './audio';
 import { assertProjectIdle } from './busy';
+import { lockProject } from './coordinate';
 import { getProject } from './projects';
 import { reprocessProject } from './reprocess';
 
@@ -20,6 +21,7 @@ export async function insertEditWindow(
   params: { projectId: string; selection: EditWindowSelection },
 ): Promise<EditWindowRow> {
   return db.transaction(async (tx) => {
+    await lockProject(tx, params.projectId);
     const [latest] = await tx
       .select({ version: editWindows.version })
       .from(editWindows)

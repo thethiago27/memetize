@@ -7,13 +7,21 @@ import {
 } from '@memetize/database';
 import { renderId } from '@memetize/shared';
 import { desc, eq } from 'drizzle-orm';
+import { lockProject } from './coordinate';
 import { reprocessProject } from './reprocess';
 import { getLatestTimeline } from './timeline';
 
 export interface InsertRenderParams {
   projectId: string;
   timelineVersion: number;
-  path: string;
+  /**
+   * Builds the render's stored (repo-relative) path from the version reserved
+   * under the entity lock. The version and therefore the destination are only
+   * known atomically here (F09), so the caller renders to an exclusive temp file
+   * first and moves it to this path after the row is inserted — two concurrent
+   * renders can never target the same file.
+   */
+  pathForVersion: (version: number) => string;
   durationMs: number;
   width: number;
   height: number;
@@ -27,11 +35,13 @@ export interface InsertRenderParams {
 
 /**
  * Append-only insert (spec section 39, mirrors `insertTimelineVersion`):
- * `renders` never gets overwritten, so `version` is `max(version) + 1`
- * inside the same transaction as the insert.
+ * `renders` never gets overwritten, so `version` is `max(version) + 1` under the
+ * per-project lock (F09), and the stored path is derived from that reserved
+ * version so the destination is unique.
  */
 export async function insertRender(db: Database, params: InsertRenderParams): Promise<RenderRow> {
   return db.transaction(async (tx) => {
+    await lockProject(tx, params.projectId);
     const [latest] = await tx
       .select({ version: rendersTable.version })
       .from(rendersTable)
@@ -45,7 +55,7 @@ export async function insertRender(db: Database, params: InsertRenderParams): Pr
       projectId: params.projectId,
       version,
       timelineVersion: params.timelineVersion,
-      path: params.path,
+      path: params.pathForVersion(version),
       durationMs: params.durationMs,
       width: params.width,
       height: params.height,

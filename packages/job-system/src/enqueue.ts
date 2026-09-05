@@ -4,9 +4,10 @@ import {
   type ResourceClass,
   WORKER_VERSION,
 } from '@memetize/contracts';
-import { type Database, type JobRow, jobs } from '@memetize/database';
+import { type JobRow, jobs } from '@memetize/database';
 import { hashInput, jobId } from '@memetize/shared';
 import { and, eq } from 'drizzle-orm';
+import type { Executor } from './entity';
 
 export interface EnqueueArgs {
   type: JobType;
@@ -29,7 +30,7 @@ export interface EnqueueResult {
  * A second enqueue with the same logical key returns the existing job instead
  * of creating a duplicate (spec section 4.2).
  */
-export async function enqueueJob(db: Database, args: EnqueueArgs): Promise<EnqueueResult> {
+export async function enqueueJob(db: Executor, args: EnqueueArgs): Promise<EnqueueResult> {
   const input = args.input ?? {};
   const workerVersion = args.workerVersion ?? WORKER_VERSION[args.type];
   const resourceClass = args.resourceClass ?? JOB_RESOURCE_CLASS[args.type];

@@ -10,6 +10,7 @@ import {
 } from '@memetize/database';
 import { claimNextJob, completeJob, enqueueJob, listJobsForEntity } from '@memetize/job-system';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { ProjectBusyError } from './busy';
 import { listSegmentMatches } from './match';
 import { listNarrativeSegments } from './narrative';
 import { reprocessProject } from './reprocess';
@@ -35,6 +36,23 @@ describe.skipIf(!handle)('reprocessProject (integration)', () => {
 
   afterAll(async () => {
     await handle?.close();
+  });
+
+  it('refuses to reprocess while one of the stage jobs is RUNNING (F09)', async () => {
+    const projectId = 'prj_reprocess_busy';
+    await seedProjectWithAudio(db, projectId);
+    await enqueueJob(db, { type: 'NARRATIVE', entityId: projectId, input: { projectId } });
+    // Claim it to RUNNING but do not complete it.
+    await claimNextJob(db, { entityId: projectId, types: ['NARRATIVE'] });
+
+    await expect(reprocessProject(db, projectId, 'narrative')).rejects.toBeInstanceOf(
+      ProjectBusyError,
+    );
+    // The running job was neither deleted nor cancelled.
+    const jobs = await listJobsForEntity(db, projectId);
+    expect(jobs.filter((job) => job.type === 'NARRATIVE' && job.status === 'RUNNING')).toHaveLength(
+      1,
+    );
   });
 
   it('reprocessing from "narrative" drops the old NARRATIVE job and enqueues a fresh one, without touching audio/lyrics', async () => {

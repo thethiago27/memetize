@@ -1,6 +1,8 @@
 import type { JobType } from '@memetize/contracts';
 import type { Database } from '@memetize/database';
-import { deleteJobsForEntity, enqueueJob } from '@memetize/job-system';
+import { countRunningForEntity, deleteJobsForEntity, enqueueJob } from '@memetize/job-system';
+import { ProjectBusyError } from './busy';
+import { lockProject } from './coordinate';
 import { getProjectAudio } from './projects';
 
 export const REPROCESS_STAGES = [
@@ -55,59 +57,66 @@ export async function reprocessProject(
   projectId: string,
   from: ReprocessStage,
 ): Promise<void> {
-  await deleteJobsForEntity(db, projectId, STAGE_JOBS[from]);
-
-  if (from === 'render') {
-    await enqueueJob(db, { type: 'RENDER', entityId: projectId, input: { projectId } });
-    return;
+  const stageJobs = STAGE_JOBS[from];
+  const audio =
+    from === 'audio' || from === 'lyrics' ? await getProjectAudio(db, projectId) : undefined;
+  if ((from === 'audio' || from === 'lyrics') && !audio) {
+    throw new Error(`project ${projectId} has no audio yet`);
   }
 
-  if (from === 'director') {
-    await enqueueJob(db, { type: 'DIRECTOR', entityId: projectId, input: { projectId } });
-    return;
-  }
+  // The whole command runs under the per-project lock so concurrent
+  // reprocess/generate/render calls serialize instead of racing (F09). We never
+  // delete a RUNNING job: refuse while one of the stage's jobs is in flight, so
+  // an active handler is never pulled out from under itself.
+  await db.transaction(async (tx) => {
+    await lockProject(tx, projectId);
+    if ((await countRunningForEntity(tx, projectId, stageJobs)) > 0) {
+      throw new ProjectBusyError(projectId);
+    }
+    await deleteJobsForEntity(tx, projectId, stageJobs);
 
-  if (from === 'timing') {
-    await enqueueJob(db, { type: 'TIMING', entityId: projectId, input: { projectId } });
-    return;
-  }
-
-  if (from === 'effects') {
-    await enqueueJob(db, { type: 'EFFECTS', entityId: projectId, input: { projectId } });
-    return;
-  }
-
-  if (from === 'match') {
-    await enqueueJob(db, { type: 'MATCH', entityId: projectId, input: { projectId } });
-    return;
-  }
-
-  if (from === 'narrative') {
-    await enqueueJob(db, { type: 'NARRATIVE', entityId: projectId, input: { projectId } });
-    return;
-  }
-
-  const audio = await getProjectAudio(db, projectId);
-  if (!audio) throw new Error(`project ${projectId} has no audio yet`);
-
-  if (from === 'audio') {
-    await enqueueJob(db, {
-      type: 'AUDIO_ANALYZE',
-      entityId: projectId,
-      input: { projectId, originalPath: audio.originalPath, durationMs: audio.durationMs },
-    });
-    return;
-  }
-
-  // from === 'lyrics'
-  await enqueueJob(db, {
-    type: 'LYRICS',
-    entityId: projectId,
-    input: {
-      projectId,
-      lyricsPath: audio.lyricsPath,
-      originalPath: audio.originalPath,
-      durationMs: audio.durationMs,
-    },
+    switch (from) {
+      case 'render':
+        await enqueueJob(tx, { type: 'RENDER', entityId: projectId, input: { projectId } });
+        return;
+      case 'director':
+        await enqueueJob(tx, { type: 'DIRECTOR', entityId: projectId, input: { projectId } });
+        return;
+      case 'timing':
+        await enqueueJob(tx, { type: 'TIMING', entityId: projectId, input: { projectId } });
+        return;
+      case 'effects':
+        await enqueueJob(tx, { type: 'EFFECTS', entityId: projectId, input: { projectId } });
+        return;
+      case 'match':
+        await enqueueJob(tx, { type: 'MATCH', entityId: projectId, input: { projectId } });
+        return;
+      case 'narrative':
+        await enqueueJob(tx, { type: 'NARRATIVE', entityId: projectId, input: { projectId } });
+        return;
+      case 'audio':
+        await enqueueJob(tx, {
+          type: 'AUDIO_ANALYZE',
+          entityId: projectId,
+          // biome-ignore lint/style/noNonNullAssertion: guarded above.
+          input: { projectId, originalPath: audio!.originalPath, durationMs: audio!.durationMs },
+        });
+        return;
+      case 'lyrics':
+        await enqueueJob(tx, {
+          type: 'LYRICS',
+          entityId: projectId,
+          input: {
+            projectId,
+            // biome-ignore lint/style/noNonNullAssertion: guarded above.
+            lyricsPath: audio!.lyricsPath,
+            // biome-ignore lint/style/noNonNullAssertion: guarded above.
+            originalPath: audio!.originalPath,
+            // biome-ignore lint/style/noNonNullAssertion: guarded above.
+            durationMs: audio!.durationMs,
+          },
+        });
+        return;
+    }
   });
 }

@@ -78,6 +78,25 @@ describe.skipIf(!handle)('insertTimelineVersion / getLatestTimeline (integration
     expect(latest?.id).toBe(second.id);
   });
 
+  it('serializes concurrent inserts into distinct versions under the entity lock (F09)', async () => {
+    const projectId = 'prj_timeline_concurrent';
+    await seedProject(db, projectId);
+
+    const inserts = Array.from({ length: 5 }, () =>
+      insertTimelineVersion(db, {
+        projectId,
+        data: timelineFor(projectId),
+        director: 'fixture',
+        directorVersion: '1.0.0',
+        promptVersion: 'v1',
+      }),
+    );
+    const rows = await Promise.all(inserts);
+    const versions = rows.map((row) => row.version).sort((a, b) => a - b);
+    // Every concurrent insert got a distinct version; none collided or failed.
+    expect(versions).toEqual([1, 2, 3, 4, 5]);
+  });
+
   it('keeps timelines from different projects on independent version counters', async () => {
     const a = 'prj_timeline_a';
     const b = 'prj_timeline_b';
