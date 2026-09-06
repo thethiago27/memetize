@@ -46,6 +46,9 @@ export function Preview({
           preload="auto"
           onEnded={transport.onEnded}
         >
+          {/* Captions are burned into the render, so this track carries no src.
+              It is here because `lint/a11y/useMediaCaption` requires a caption
+              track on every <video>; see the note in the translated-subtitles spec. */}
           <track kind="captions" srcLang="pt" label="Legendas" />
         </video>
       </div>

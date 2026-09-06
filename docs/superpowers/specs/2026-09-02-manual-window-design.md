@@ -8,12 +8,13 @@
 
 Let the editor choose which stretch of the song the video covers when the automatic pick is wrong. The choice is made on the "Análise" tab by dragging the window band, refined with `mm:ss` fields, saved on the project, and honored by the pipeline until the editor returns to the automatic choice.
 
-The rest of the pipeline is unchanged: narrative, match, director, timing, effects, and render already work from whatever `edit_windows` row is latest, and already support windows shorter than 60 seconds (short tracks).
+The rest of the pipeline is unchanged: narrative, match, director, timing, effects, and render already work from whatever `edit_windows` row is latest, and already support windows shorter than 30 seconds (short tracks).
 
 ## Rules
 
 - Start and end are free, in source time.
-- Duration between `MIN_MANUAL_WINDOW_MS = 5_000` and `MAX_OUTPUT_DURATION_MS = 60_000`, inclusive.
+- Duration between `MIN_MANUAL_WINDOW_MS = 5_000` and `MAX_OUTPUT_DURATION_MS = 30_000`, inclusive.
+  (Amended 2026-09-06 from 60_000; see the amendment note in the sixty-second-video design.)
 - `0 <= sourceStartMs < sourceEndMs <= audio.durationMs`.
 - Edges snap to the nearest downbeat while dragging; holding Shift disables snapping. The `mm:ss` fields never snap. Snapping is a Studio convenience; the API accepts any millisecond values that pass the rules above.
 
@@ -65,7 +66,7 @@ The handler inserts the returned selection exactly as it does now. Everything do
 - Click-to-seek is disabled in selection mode.
 - Below the chart, a `cluster`: field "Início" (`mm:ss`), field "Fim" (`mm:ss`), the resulting duration, "cobre N linhas da letra", and the buttons "Usar este trecho" (`btn-primary`) and "Cancelar" (`btn-ghost`).
 - The draft starts from the current window (`editWindow`) so small adjustments are one drag away.
-- Validation messages appear inline under the fields in `notice[data-tone="bad"]`: "Mínimo de 5 segundos", "Máximo de 60 segundos", "O fim precisa vir depois do início", "Fora da música".
+- Validation messages appear inline under the fields in `notice[data-tone="bad"]`: "Mínimo de 5 segundos", "Máximo de 30 segundos", "O fim precisa vir depois do início", "Fora da música".
 - "Usar este trecho" calls `PUT`, shows the toast "Trecho salvo. O motor está refazendo o vídeo com ele.", leaves selection mode, and lets the existing polling follow the jobs.
 
 ### Time helpers
@@ -82,11 +83,11 @@ The handler inserts the returned selection exactly as it does now. Everything do
 - Choosing a window per timeline version or keeping several manual windows.
 - Editing the window on the home cards.
 - Changing how the automatic selector scores candidates.
-- Windows longer than 60 seconds.
+- Windows longer than 30 seconds.
 
 ## Testing
 
-- Contracts: `ManualWindowInput` accepts 5 s and 60 s, rejects 4.999 s, 60.001 s, negative start, end before start.
+- Contracts: `ManualWindowInput` accepts 5 s and 30 s, rejects 4.999 s, 30.001 s, negative start, end before start.
 - Edit planner: `scoreEditWindow` returns a breakdown in `[0, 1]` for an arbitrary range and matches `selectEditWindow`'s winner score for the winner's range.
 - Projects (integration): `resolveEditWindow` returns the manual selection when the columns are set and the automatic one when null; `setManualWindow` writes the columns, drops `NARRATIVE` and downstream jobs, enqueues a fresh `NARRATIVE`; `clearManualWindow` nulls the columns and enqueues; both raise `ProjectBusyError` with a `RUNNING` job.
 - Narrative worker (integration): with the columns set, the inserted `edit_windows` row has `selector = 'manual'` and the chosen bounds.

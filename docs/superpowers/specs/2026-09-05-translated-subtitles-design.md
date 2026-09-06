@@ -165,7 +165,13 @@ After resolving assets: load `getLyrics` and `getSubtitles`. If lyrics have line
 
 - `GET /v1/projects/:id` and `pnpm cli project inspect` gain `subtitles: { language, sourceLanguage, translated, lineCount, model, modelVersion } | null`. `GET /v1/projects` is unchanged.
 - `pnpm cli project reprocess <id> --from subtitles` is accepted.
-- Studio: `labels.ts` maps `SUBTITLES` to `Legendas` in the job labels and pipeline steps, so the Stepper and Jobs tab show the step. The Análise or Renders panel shows one line: `Legendas: traduzidas de <sourceLanguage> · <n> linhas` or `Legendas: letra original (já em português / provedor fixture)`. No other UI changes. The storyboard preview does not draw captions; the rendered-video preview shows them by nature.
+- Studio: `labels.ts` maps `SUBTITLES` to `Legendas` in the job labels and pipeline steps, so the Stepper and Jobs tab show the step. The Análise or Renders panel shows one line: `Legendas: traduzidas de <sourceLanguage> · <n> linhas` or `Legendas: letra original (já em português / provedor fixture)`. No other UI changes.
+
+> **Note (2026-09-06).** One exception exists: an empty
+> `<track kind="captions">` on the preview `<video>`. Biome's
+> `lint/a11y/useMediaCaption` requires a caption track on every video element,
+> and the captions are burned into the render, so it carries no `src` and shows
+> nothing. It is a lint requirement, not a feature. The storyboard preview does not draw captions; the rendered-video preview shows them by nature.
 
 ## Errors
 

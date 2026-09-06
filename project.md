@@ -1,5 +1,31 @@
 # AI Meme Video Editor
 
+> **Status (2026-09-06): this is the original MVP specification, kept as the
+> founding document. It is no longer the sole source of truth.**
+>
+> Design decisions taken after it live in `docs/superpowers/specs/`, and where
+> the two disagree those documents and the code win. An audit found this file
+> being read as current, so the divergences are listed here rather than left to
+> be rediscovered:
+>
+> | This spec says | What the system does | Why |
+> |---|---|---|
+> | Runs entirely on the MacBook Air M4, "IA local — preferencialmente MLX" (§1, §5) | Vision, LLM and embeddings run through the Vercel AI Gateway; `fixture` is the only offline alternative. Transcription and audio analysis do have local paths (MLX, librosa). | Local multimodal models were not good enough for the editorial task. `PROVIDER_MODE=production` refuses a fixture so a simulated run is never mistaken for a real one. |
+> | The Director never touches the whole catalog (§30) | A deterministic coverage resolver may fall back to the catalog when a segment's shortlist cannot cover its span. | Continuous coverage is a hard requirement; the fallback is deterministic code, not the model, and every fallback is recorded as a decision. |
+> | `moment_usage` table; `recent_usage_penalty`, `same_asset_penalty` (§29-30) | `feedback_events` carries placement history, the ranker's `novelty` term uses it across projects, and same-asset is a hard skip in the diversity pass (`same_asset_relaxed` when nothing else is left). | The editorial-memory design superseded the table; the behaviours exist under different names and in a different stage. |
+> | `TranscriptionProvider` as a TypeScript interface (§21) | Transcription is a Python worker selected by `TRANSCRIPTION_PROVIDER`. | The Node↔Python protocol is the seam; a second abstraction over it earned nothing. |
+> | `typedi` in the stack (§2) | No DI container. | Composition roots (`createAppRuntime`, `createOrchestrator`) proved enough. |
+> | Renders the whole track | Renders one selected window (30 s, or the full track when shorter). | `docs/superpowers/specs/2026-08-30-continuous-sixty-second-video-design.md`, amended to 30 s on 2026-09-06. |
+> | No captions ("automatic caption styling" is out of scope, §75) | Translated captions are burned into the render. | `docs/superpowers/specs/2026-09-05-translated-subtitles-design.md`. |
+>
+> **Known gaps, still open.** These are asked for here and not built: `onsets`,
+> `loudness` and `silence` in the audio analyzer's output (§25); black/missing
+> frame detection in the production output validator (it exists only in an E2E
+> test, §55); per-run metrics persisted in the database (§58); `crop`/`position`
+> decided per clip (§34, only `zoom`/`hold`/`speed` are planned); the
+> `fixtures/timelines/golden-001.json` golden set (§68).
+
+
 ## Especificação Técnica — MVP Local
 
 **Status:** Ready for implementation

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { AUDIO_ANALYZER_DIR } from '@memetize/audio-analyzer';
 import { createTestDatabase, type Database, truncateAll } from '@memetize/database';
+import { recordFeedbackEvents } from '@memetize/feedback';
 import { ingestAsset } from '@memetize/media-catalog';
 import type { Orchestrator } from '@memetize/orchestrator';
 import {
@@ -240,6 +241,30 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
     expect((await getProject(db, project.id))?.status).toBe('TIMELINE_READY');
     expect(narrative.length).toBeGreaterThanOrEqual(1);
 
+    // Editorial memory reaches the Director's debug file (editorial-memory spec:
+    // "the Director debug file carries the lessons"). The plan's Task 19 claimed
+    // an E2E assertion on this, but the only one asserted an *empty* memory, so a
+    // handler that never built lessons would have passed.
+    const rememberedMomentId = segmentsWithShortlist[0]?.shortlist[0]?.momentId;
+    expect(rememberedMomentId).toBeTruthy();
+    const rememberedSegmentId = segmentsWithShortlist[0]?.segmentId;
+    await recordFeedbackEvents(db, [
+      {
+        projectId: project.id,
+        segmentId: rememberedSegmentId,
+        momentId: rememberedMomentId,
+        kind: 'CLIP_UP',
+        source: 'USER',
+      },
+      {
+        projectId: project.id,
+        segmentId: rememberedSegmentId,
+        momentId: rememberedMomentId,
+        kind: 'CLIP_UP',
+        source: 'USER',
+      },
+    ]);
+
     await reprocessProject(db, project.id, 'director');
     const afterReprocess = await orchestrator.drain({ entityId: project.id });
     expect(afterReprocess.map((outcome) => outcome.job.type)).toEqual([
@@ -252,6 +277,12 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
       1, 2, 3, 4, 5, 6, 7, 8, 9,
     ]);
     expect((await getProject(db, project.id))?.status).toBe('TIMELINE_READY');
+
+    const debugWithMemory = JSON.parse(
+      await readFile(directorDebugFile(config, project.id).absolute, 'utf8'),
+    );
+    expect(debugWithMemory.memory.lessons.length).toBeGreaterThan(0);
+    expect(debugWithMemory.memory.lessons.join('\n')).toContain(rememberedMomentId);
   }, 180_000);
 
   it('selects a thirty-second window for a long track and covers it continuously', async () => {

@@ -4,12 +4,21 @@
 **Status:** Approved for planning  
 **Branch:** `fix/continuous-sixty-second-video`
 
+> **Amendment — 2026-09-06.** The output window policy is **30 seconds**, not 60.
+> `MAX_OUTPUT_DURATION_MS` was reduced to `30_000` in `4c87e45`
+> ("adjust output window limits") and the acceptance tests were rewritten to
+> match, but this document was not, so for a while the specification and the
+> code disagreed and only the code was enforced. Every "60 second" / `60_000`
+> below now reads 30 / `30_000`; the file name keeps its original slug so
+> existing links still resolve. The design — one continuous, musically selected,
+> deterministic window — is unchanged; only the length is.
+
 ## Objective
 
 Produce a continuous vertical meme video from a music project with no black gaps, no renderer-created frozen tails, and cuts aligned to musical timing.
 
-- A source track of at most 60 seconds is used in full.
-- A source track longer than 60 seconds yields one continuous, musically selected window of exactly 60,000 ms.
+- A source track of at most 30 seconds is used in full.
+- A source track longer than 30 seconds yields one continuous, musically selected window of exactly 30,000 ms.
 - The rendered video covers the complete output window.
 - The renderer rejects an incomplete edit instead of concealing it with black frames or cloned frames.
 
@@ -41,9 +50,9 @@ The existing renderer tests deliberately accept black output for an empty or inc
 
 Let `trackDurationMs` be the probed source duration.
 
-- When `trackDurationMs <= 60_000`, select `[0, trackDurationMs]`.
-- When `trackDurationMs > 60_000`, select a bounded interval `[sourceStartMs, sourceStartMs + 60_000]`.
-- An exact 60-second track is not considered cropped.
+- When `trackDurationMs <= 30_000`, select `[0, trackDurationMs]`.
+- When `trackDurationMs > 30_000`, select a bounded interval `[sourceStartMs, sourceStartMs + 30_000]`.
+- An exact 30-second track is not considered cropped.
 - The timeline clock always begins at zero. Source-audio times remain absolute and are translated at the timeline boundary.
 
 The studio displays the selected source range, output duration, selector version, and a concise score explanation.
@@ -74,7 +83,7 @@ audio analysis
 Highlight Selector
         |
         v
-selected source window (full track or 60 seconds)
+selected source window (full track or 30 seconds)
         |
         v
 Narrative Coverage Planner
@@ -92,7 +101,7 @@ strict Timeline Validator
 FFmpeg renderer
 ```
 
-The selector runs before narrative matching and direction. This bounds downstream work to at most 60 seconds and avoids spending retrieval or model work on discarded parts of a long track.
+The selector runs before narrative matching and direction. This bounds downstream work to at most 30 seconds and avoids spending retrieval or model work on discarded parts of a long track.
 
 ## Component design
 
@@ -130,11 +139,11 @@ interface EditWindowSelection {
 For long tracks, candidate windows are generated from:
 
 - downbeats and section boundaries as possible starts;
-- downbeats and section boundaries as possible ends, translated back by 60,000 ms;
-- the first and last possible 60-second windows;
+- downbeats and section boundaries as possible ends, translated back by 30,000 ms;
+- the first and last possible 30-second windows;
 - lyric starts near a structural boundary.
 
-Candidates are clamped to `[0, trackDurationMs - 60_000]`, deduplicated, and scored. Every score component is normalized to `[0, 1]`, and the version-1 weights are `section=0.30`, `energy=0.20`, `lyrics=0.15`, `narrativeArc=0.15`, and `boundaries=0.20`. The narrative-arc component is a structural proxy available before LLM narrative analysis: it rewards a lower-energy setup followed by a higher-energy section or chorus in the final third. The boundary component rewards proximity to a downbeat or section edge and low local energy discontinuity. Ties resolve to the earliest start, making selection deterministic.
+Candidates are clamped to `[0, trackDurationMs - 30_000]`, deduplicated, and scored. Every score component is normalized to `[0, 1]`, and the version-1 weights are `section=0.30`, `energy=0.20`, `lyrics=0.15`, `narrativeArc=0.15`, and `boundaries=0.20`. The narrative-arc component is a structural proxy available before LLM narrative analysis: it rewards a lower-energy setup followed by a higher-energy section or chorus in the final third. The boundary component rewards proximity to a downbeat or section edge and low local energy discontinuity. Ties resolve to the earliest start, making selection deterministic.
 
 If analysis data is missing, the fallback is still deterministic: use the earliest valid full-duration window. Missing optional features do not produce `NaN` or an invalid range.
 
@@ -233,7 +242,7 @@ The latest selected window is returned by project-detail and project-list endpoi
 - selection reason;
 - `INSUFFICIENT_CATALOG` guidance when applicable.
 
-The target duration is an internal 60,000 ms policy for this increment. There is no misleading duration control with only one valid value. The API contract remains ready to accept a configurable target in a future feature.
+The target duration is an internal 30,000 ms policy for this increment. There is no misleading duration control with only one valid value. The API contract remains ready to accept a configurable target in a future feature.
 
 ## Error handling
 
@@ -254,8 +263,8 @@ No production change is written before its failing test at one of these seams.
 ### Highlight selection seam
 
 - 45-second track selects `[0, 45_000]`.
-- exact 60-second track selects `[0, 60_000]` and is not marked cropped.
-- long track selects exactly 60,000 ms inside source bounds.
+- exact 30-second track selects `[0, 30_000]` and is not marked cropped.
+- long track selects exactly 30,000 ms inside source bounds.
 - high-value chorus/payoff window beats a low-energy intro in a worked fixture.
 - missing lyrics, beats, sections, or energy uses a deterministic bounded fallback.
 - identical input yields identical selection and score breakdown.
@@ -296,7 +305,7 @@ No production change is written before its failing test at one of these seams.
 Generate moving synthetic source videos and both short and long synthetic tracks, then run the real local pipeline and FFmpeg:
 
 - short track output has its natural duration;
-- long track output is 60,000 ms within frame/codec tolerance;
+- long track output is 30,000 ms within frame/codec tolerance;
 - output remains 1080x1920 at 30 fps with AAC audio;
 - timeline JSON has complete coverage and no short source;
 - FFmpeg `blackdetect` finds no black interval in a fixture whose sources contain no black frames;
@@ -317,7 +326,7 @@ Generate moving synthetic source videos and both short and long synthetic tracks
 Before opening a pull request:
 
 - add a `CHANGELOG.md` entry describing selection, continuous coverage, strict validation, and timestamp correction;
-- update `README.md` with the 60-second policy, insufficient-catalog behavior, commands, and UI behavior;
+- update `README.md` with the 30-second policy, insufficient-catalog behavior, commands, and UI behavior;
 - pin any dependency added or changed to an exact current stable version after checking its official release source;
 - do not use prerelease dependencies.
 
@@ -326,7 +335,7 @@ Before opening a pull request:
 - crossfade or decorative transition effects (revised on 2026-09-01 by `2026-09-01-cut-styles-design.md`, which adds a closed vocabulary of transitions and clip styles while keeping slots contiguous; the "no black interval" check becomes "no black interval outside declared `dip_black` windows");
 - generative filler video;
 - looping or slow-motion stretching of short clips;
-- configurable output durations other than the approved 60-second maximum policy;
+- configurable output durations other than the approved 30-second maximum policy;
 - publishing or social-network upload;
 - renderer optimization without a measured baseline.
 
@@ -334,8 +343,8 @@ Before opening a pull request:
 
 The increment is complete when all of the following are proven in the local environment:
 
-1. tracks at or below 60 seconds use their full duration;
-2. longer tracks produce a deterministic, continuous 60-second selection;
+1. tracks at or below 30 seconds use their full duration;
+2. longer tracks produce a deterministic, continuous 30-second selection;
 3. no successful timeline has an empty frame interval or a source-short clip;
 4. no generated graph uses black gap filler or cloned-frame padding;
 5. mid-track audio starts at output timestamp zero and ends without an abrupt cut;

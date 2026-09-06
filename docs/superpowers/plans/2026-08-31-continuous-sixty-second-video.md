@@ -1,6 +1,10 @@
 # Continuous Sixty-Second Video Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Note (2026-09-06).** Every task here shipped; the boxes were never ticked,
+> so the plan read as untouched work. They are ticked now. The output window is
+> **30 seconds**, not 60 — see the amendment at the top of the design document.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Produce a deterministic full-track-or-60-second edit with continuous visual coverage, beat-aligned hard cuts, correctly rebased audio, and no renderer-created black or frozen frames.
 
@@ -95,7 +99,7 @@
 - Produces: `selectEditWindow(input: HighlightSelectionInput): EditWindowSelection`.
 - Produces constants: `MAX_OUTPUT_DURATION_MS = 60_000`, score weights totaling `1`, `MIN_VISUAL_SLOT_MS = 1_000`, `MAX_VISUAL_SLOT_MS = 4_000`.
 
-- [ ] **Step 1: Write the failing public-seam tests**
+- [x] **Step 1: Write the failing public-seam tests**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -144,13 +148,13 @@ describe('selectEditWindow', () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `pnpm exec vitest run packages/edit-planner/src/highlight.test.ts`
 
 Expected: FAIL because `packages/edit-planner/src/highlight.ts` and `selectEditWindow` do not exist.
 
-- [ ] **Step 3: Add the contracts and exact constants**
+- [x] **Step 3: Add the contracts and exact constants**
 
 Add to `packages/contracts/src/audio.ts`:
 
@@ -194,7 +198,7 @@ export const HIGHLIGHT_WEIGHTS = {
 } as const;
 ```
 
-- [ ] **Step 4: Implement candidate generation, normalized scoring, and deterministic tie-breaking**
+- [x] **Step 4: Implement candidate generation, normalized scoring, and deterministic tie-breaking**
 
 Use this public shape in `highlight.ts`:
 
@@ -223,7 +227,7 @@ Implementation rules:
 6. Compute the weighted sum with `HIGHLIGHT_WEIGHTS` and round stored component/total values to six decimals.
 7. Sort by total score descending and `sourceStartMs` ascending.
 
-- [ ] **Step 5: Add package metadata without a loose dependency**
+- [x] **Step 5: Add package metadata without a loose dependency**
 
 ```json
 {
@@ -243,7 +247,7 @@ Run: `pnpm install --lockfile-only`
 
 Expected: `pnpm-lock.yaml` includes `packages/edit-planner` and no external package is added.
 
-- [ ] **Step 6: Run tests and typecheck GREEN**
+- [x] **Step 6: Run tests and typecheck GREEN**
 
 Run: `pnpm exec vitest run packages/edit-planner/src/highlight.test.ts packages/contracts/src/audio.test.ts`
 
@@ -251,7 +255,7 @@ Run: `pnpm --filter @memetize/edit-planner typecheck`
 
 Expected: all commands pass.
 
-- [ ] **Step 7: Commit the highlight slice**
+- [x] **Step 7: Commit the highlight slice**
 
 ```bash
 git add packages/edit-planner packages/contracts/src/audio.ts pnpm-lock.yaml
@@ -280,7 +284,7 @@ git commit -m "feat: select deterministic sixty-second highlights"
 - Consumes: `EditWindowSelection` from Task 1.
 - Produces: `insertEditWindow(db, { projectId, selection })`, `getLatestEditWindow(db, projectId)`, and `listEditWindows(db, projectId)`.
 
-- [ ] **Step 1: Write the failing ID and persistence tests**
+- [x] **Step 1: Write the failing ID and persistence tests**
 
 Add `editWindowId()` expectation to `ids.test.ts`:
 
@@ -317,13 +321,13 @@ expect([first.version, second.version, other.version]).toEqual([1, 2, 1]);
 expect((await getLatestEditWindow(db, 'prj_window_a'))?.sourceStartMs).toBe(30_000);
 ```
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run: `pnpm exec vitest run packages/shared/src/ids.test.ts packages/projects/src/window.integration.test.ts`
 
 Expected: FAIL because the ID and repository functions do not exist. The database test may skip when `TEST_DATABASE_URL` is unavailable; the ID test must still fail.
 
-- [ ] **Step 3: Add the ID and database schema**
+- [x] **Step 3: Add the ID and database schema**
 
 Add `win` to `IdPrefix` and export `editWindowId`.
 
@@ -351,7 +355,7 @@ export const editWindows = pgTable('edit_windows', {
 
 Export row types and include `edit_windows` in `truncateAll` before `projects`.
 
-- [ ] **Step 4: Generate and inspect migration 0009**
+- [x] **Step 4: Generate and inspect migration 0009**
 
 Run: `pnpm --filter @memetize/database db:generate -- --name edit_windows`
 
@@ -361,7 +365,7 @@ Run: `rg -n "edit_windows|source_start_ms|edit_windows_unique" packages/database
 
 Expected: all three patterns are present.
 
-- [ ] **Step 5: Implement append-only versioning**
+- [x] **Step 5: Implement append-only versioning**
 
 Use the same transaction pattern as `insertTimelineVersion`:
 
@@ -388,7 +392,7 @@ export async function insertEditWindow(
 }
 ```
 
-- [ ] **Step 6: Verify migration and repository GREEN**
+- [x] **Step 6: Verify migration and repository GREEN**
 
 Run: `pnpm db:migrate`
 
@@ -396,7 +400,7 @@ Run with test DB configured: `pnpm exec vitest run packages/shared/src/ids.test.
 
 Expected: migration applies and tests pass.
 
-- [ ] **Step 7: Commit persistence**
+- [x] **Step 7: Commit persistence**
 
 ```bash
 git add packages/shared packages/database packages/projects/src/window.ts packages/projects/src/window.integration.test.ts packages/projects/src/index.ts
@@ -425,7 +429,7 @@ git commit -m "feat: persist selected edit windows"
 - Consumes: selected absolute source window, provider narrative suggestions, audio sections, beats/downbeats, and energy curve.
 - Produces: `planNarrativeCoverage(input: NarrativeCoverageInput): NarrativeSegment[]` whose ranges cover the source window exactly.
 
-- [ ] **Step 1: Write failing coverage tests**
+- [x] **Step 1: Write failing coverage tests**
 
 ```ts
 it('fills lyric gaps with instrumental spans and covers the window exactly', () => {
@@ -475,13 +479,13 @@ function lyric(startMs: number, endMs: number): CoverageSuggestion {
 }
 ```
 
-- [ ] **Step 2: Run the coverage test and verify RED**
+- [x] **Step 2: Run the coverage test and verify RED**
 
 Run: `pnpm exec vitest run packages/edit-planner/src/coverage.test.ts`
 
 Expected: FAIL because `planNarrativeCoverage` does not exist.
 
-- [ ] **Step 3: Add narrative source kind to contracts and persistence**
+- [x] **Step 3: Add narrative source kind to contracts and persistence**
 
 ```ts
 export const NarrativeSourceKind = z.enum(['LYRIC', 'INSTRUMENTAL']);
@@ -507,7 +511,7 @@ Run: `pnpm --filter @memetize/database db:generate -- --name narrative_source_ki
 
 Expected: `0010_narrative_source_kind.sql` adds a non-null text column with a safe default for historical rows and a check constraint for `LYRIC|INSTRUMENTAL`.
 
-- [ ] **Step 4: Implement deterministic normalization**
+- [x] **Step 4: Implement deterministic normalization**
 
 Implementation invariants in `coverage.ts`:
 
@@ -526,7 +530,7 @@ export function planNarrativeCoverage(input: NarrativeCoverageInput): NarrativeS
 
 Use half-open source ranges. Clamp suggestions, sort them, trim overlaps by advancing the later start, synthesize instrumental spans for every uncovered interval, and split spans longer than `4_000` ms at the strongest available beat. If the last split would be below `1_000` ms, merge it into the previous split. For an entire window shorter than `1_000` ms, emit one full-window span. Instrumental spans use the containing section type for `narrativeFunction`, `instrumental <type>` for meaning, `[type, 'instrumental']` as visual ideas, and nearest energy with neutral emotional defaults.
 
-- [ ] **Step 5: Verify coverage and persistence GREEN**
+- [x] **Step 5: Verify coverage and persistence GREEN**
 
 Run: `pnpm exec vitest run packages/edit-planner/src/coverage.test.ts packages/projects/src/narrative.integration.test.ts`
 
@@ -534,7 +538,7 @@ Run: `pnpm --filter @memetize/edit-planner typecheck && pnpm --filter @memetize/
 
 Expected: all tests and typechecks pass.
 
-- [ ] **Step 6: Commit continuous narrative coverage**
+- [x] **Step 6: Commit continuous narrative coverage**
 
 ```bash
 git add packages/contracts packages/database packages/projects packages/edit-planner
@@ -563,7 +567,7 @@ git commit -m "feat: plan continuous narrative coverage"
 - Changes `NarrativeAnalyzeInput` to include `sourceStartMs` and `sourceEndMs`; provider outputs remain in absolute source time.
 - Produces a debug artifact containing `window`, raw provider spans, and normalized spans.
 
-- [ ] **Step 1: Write failing window-scoped provider and handler tests**
+- [x] **Step 1: Write failing window-scoped provider and handler tests**
 
 Add a fixture-provider test:
 
@@ -601,13 +605,13 @@ for (let index = 1; index < segments.length; index += 1) {
 expect(segments.every((segment) => segment.endMs > segment.startMs)).toBe(true);
 ```
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run: `pnpm exec vitest run packages/model-providers/src/fixture.test.ts workers/narrative-analyzer/src/handler.integration.test.ts`
 
 Expected: FAIL because provider input lacks window fields and the handler does not persist/select a window.
 
-- [ ] **Step 3: Make the provider contract window-aware**
+- [x] **Step 3: Make the provider contract window-aware**
 
 ```ts
 export interface NarrativeAnalyzeInput {
@@ -622,7 +626,7 @@ export interface NarrativeAnalyzeInput {
 
 Update fixture and gateway tests to pass these fields. Bump `NARRATIVE_PROMPT_VERSION` to `v2` and explicitly require suggestions inside `[sourceStartMs, sourceEndMs]` with absolute source timestamps.
 
-- [ ] **Step 4: Integrate selection and coverage in the handler**
+- [x] **Step 4: Integrate selection and coverage in the handler**
 
 After loading audio and lyrics:
 
@@ -646,7 +650,7 @@ Add the exact internal dependency:
 "@memetize/edit-planner": "workspace:0.0.0"
 ```
 
-- [ ] **Step 5: Verify the integrated narrative slice GREEN**
+- [x] **Step 5: Verify the integrated narrative slice GREEN**
 
 Run: `pnpm install --lockfile-only`
 
@@ -656,7 +660,7 @@ Run: `pnpm --filter @memetize/narrative-analyzer typecheck`
 
 Expected: window is persisted, provider input is bounded, and normalized spans exactly cover the window.
 
-- [ ] **Step 6: Commit narrative integration**
+- [x] **Step 6: Commit narrative integration**
 
 ```bash
 git add packages/model-providers packages/prompts workers/narrative-analyzer pnpm-lock.yaml
@@ -680,7 +684,7 @@ git commit -m "feat: scope narrative planning to selected window"
 - Consumes: continuous normalized narrative spans.
 - Produces: up to six ranked/diversified candidates per span, allowing non-adjacent reuse while avoiding consecutive asset repetition.
 
-- [ ] **Step 1: Write failing adjacent-diversity tests**
+- [x] **Step 1: Write failing adjacent-diversity tests**
 
 Replace the global no-reuse assertion with this sequence:
 
@@ -701,21 +705,29 @@ expect(result.get('nar_3')?.[0]?.assetId).toBe('ast_a');
 
 Add a contract test that `SHORTLIST_LIMIT` equals `6`.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run: `pnpm exec vitest run packages/clip-ranker/src/diversity.test.ts packages/contracts/src/match.test.ts`
 
 Expected: FAIL because reuse is currently banned across the complete project and the shortlist limit is three.
 
-- [ ] **Step 3: Restrict the hard diversity rule to adjacent spans**
+- [x] **Step 3: Restrict the hard diversity rule to adjacent spans**
 
 Replace `usedAssetIds` as the hard skip with `lastAssetId`. Keep the existing category/subject penalties and `previouslyShortlisted` novelty signal. For a segment, first consider candidates whose asset differs from `lastAssetId`; relax with `same_asset_relaxed` only when no candidate survives. Set `SHORTLIST_LIMIT = 6`.
 
-- [ ] **Step 4: Add duration observability to matching debug output**
+- [x] **Step 4: Add duration observability to matching debug output**
 
 Include `segmentDurationMs` and each candidate's `momentDurationMs` in `match.json` debug entries. Do not filter short candidates here because the Director's Coverage Resolver needs them to tile a span.
 
-- [ ] **Step 5: Verify matching GREEN**
+> **Amended 2026-09-06 (F02).** `ensureCoverageCandidates` does now reorder at
+> this stage: when the top slice holds no moment long enough to cover the
+> segment, it swaps the lowest-scoring entries for the best covering ones,
+> keeping the list `RANK_LIMIT` long. It still filters nothing out of the full
+> ranking — short candidates remain available to tile — but the top slice is no
+> longer purely score-ordered. This was the fix for a spurious
+> `INSUFFICIENT_CATALOG` with a full catalog.
+
+- [x] **Step 5: Verify matching GREEN**
 
 Run: `pnpm exec vitest run packages/clip-ranker/src/diversity.test.ts packages/clip-ranker/src/rank.test.ts packages/contracts/src/match.test.ts apps/cli/src/matching.e2e.test.ts`
 
@@ -723,7 +735,7 @@ Run: `pnpm --filter @memetize/matching typecheck`
 
 Expected: adjacent repetition is avoided, non-adjacent reuse remains available, and each shortlist can contain six candidates.
 
-- [ ] **Step 6: Commit matching changes**
+- [x] **Step 6: Commit matching changes**
 
 ```bash
 git add packages/contracts packages/clip-ranker workers/matching
@@ -753,7 +765,7 @@ git commit -m "fix: keep enough diverse candidates for coverage"
 - Produces: `resolveCoverage(input): CoverageResolution` and a fully covered zero-based `Timeline`.
 - Throws: `InsufficientCatalogError` with code `INSUFFICIENT_CATALOG`.
 
-- [ ] **Step 1: Write failing resolver tests**
+- [x] **Step 1: Write failing resolver tests**
 
 ```ts
 it('tiles a three-second span with two short moments and no frozen tail', () => {
@@ -841,13 +853,13 @@ function insufficientFixture(): ResolveCoverageInput {
 }
 ```
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run: `pnpm exec vitest run packages/director/src/coverage.test.ts packages/director/src/assemble.test.ts`
 
 Expected: FAIL because `resolveCoverage` and `InsufficientCatalogError` do not exist.
 
-- [ ] **Step 3: Implement deterministic tiling**
+- [x] **Step 3: Implement deterministic tiling**
 
 Use these exports:
 
@@ -874,7 +886,7 @@ Add the exact internal dependency and refresh the lockfile:
 
 Run: `pnpm install --lockfile-only`
 
-- [ ] **Step 4: Make assembly source-window aware**
+- [x] **Step 4: Make assembly source-window aware**
 
 Change assembly inputs from `durationMs` to:
 
@@ -885,13 +897,13 @@ beats: readonly number[];
 
 Call `resolveCoverage`, subtract `window.sourceStartMs` from every absolute timeline boundary, set `timeline.durationMs = window.durationMs`, and set `audio.sourceStartMs = window.sourceStartMs`. Remove `Math.min(moment.durationMs, segmentDurationMs)` and never emit a source-short clip.
 
-- [ ] **Step 5: Integrate with the Director worker**
+- [x] **Step 5: Integrate with the Director worker**
 
 Load `getLatestEditWindow`; fail with `DIRECTOR_NO_WINDOW` when an old project has not been reprocessed from narrative. Fetch moments referenced by both `shortlist` and `ranked`, rebase audio beats only for assembly input, catch `InsufficientCatalogError`, set project status to `FAILED`, and throw `JobFailure('INSUFFICIENT_CATALOG', message, false)`. Add coverage decisions and edit-window version to `director.json`.
 
 Bump `DIRECTOR_PROMPT_VERSION` to `v2`: the provider selects a primary candidate for every non-empty shortlist, while the deterministic resolver owns fallback and tiling.
 
-- [ ] **Step 6: Verify director GREEN**
+- [x] **Step 6: Verify director GREEN**
 
 Run: `pnpm exec vitest run packages/director/src/coverage.test.ts packages/director/src/assemble.test.ts workers/director/src/validate.test.ts`
 
@@ -899,7 +911,7 @@ Run: `pnpm --filter @memetize/director typecheck && pnpm --filter @memetize/dire
 
 Expected: complete coverage, equal source/slot durations, deterministic fallback, and structured insufficient-catalog failure.
 
-- [ ] **Step 7: Commit director coverage**
+- [x] **Step 7: Commit director coverage**
 
 ```bash
 git add packages/director packages/prompts/src/director.ts workers/director pnpm-lock.yaml
@@ -923,7 +935,7 @@ git commit -m "fix: resolve every edit span into usable clips"
 - Consumes: zero-based beats, shared clip boundaries, and `momentId -> { startMs, endMs }` source bounds.
 - Produces: a gap-free Timeline where each adjusted internal boundary is written to both neighboring clips.
 
-- [ ] **Step 1: Replace independent-movement expectations with failing shared-boundary tests**
+- [x] **Step 1: Replace independent-movement expectations with failing shared-boundary tests**
 
 ```ts
 it('snaps one shared cut without creating a gap', () => {
@@ -978,13 +990,13 @@ function sourceBoundFixture(): Timeline {
 }
 ```
 
-- [ ] **Step 2: Run timing tests and verify RED**
+- [x] **Step 2: Run timing tests and verify RED**
 
 Run: `pnpm exec vitest run packages/timing/src/optimize.test.ts`
 
 Expected: FAIL because the current optimizer moves whole clips independently.
 
-- [ ] **Step 3: Implement shared-boundary snapping**
+- [x] **Step 3: Implement shared-boundary snapping**
 
 Change context to include:
 
@@ -994,7 +1006,7 @@ sourceBoundsByMomentId: ReadonlyMap<string, { startMs: number; endMs: number }>;
 
 Add `MIN_TIMED_CLIP_MS = 1_000` to `packages/timing/src/constants.ts`. Iterate internal boundaries only. For a candidate target, calculate the previous and next durations after the move. Reject targets that create a duration below `MIN_TIMED_CLIP_MS`, exceed either moment's available duration from its selected source start, or leave source ranges out of bounds. On acceptance, write the target to both adjacent timeline ranges and resize their source end points to equal the new durations. Keep timeline `0` and `durationMs` fixed.
 
-- [ ] **Step 4: Rebase worker beats and load source bounds**
+- [x] **Step 4: Rebase worker beats and load source bounds**
 
 Use `sourceStartMs = sourceVersion.data.audio.sourceStartMs`. Convert only beats inside the selected source window:
 
@@ -1006,7 +1018,7 @@ const beats = mergeBeats(audio.beats, audio.downbeats)
 
 Query moment bounds for timeline moment IDs through `ctx.db.query.moments.findMany` and pass the map to the pure optimizer.
 
-- [ ] **Step 5: Verify timing GREEN**
+- [x] **Step 5: Verify timing GREEN**
 
 Run: `pnpm exec vitest run packages/timing/src/beats.test.ts packages/timing/src/optimize.test.ts`
 
@@ -1014,7 +1026,7 @@ Run: `pnpm --filter @memetize/timing typecheck && pnpm --filter @memetize/timing
 
 Expected: every adjacent pair shares one boundary and every source remains usable.
 
-- [ ] **Step 6: Commit shared timing**
+- [x] **Step 6: Commit shared timing**
 
 ```bash
 git add packages/timing workers/timing
@@ -1042,7 +1054,7 @@ git commit -m "fix: snap shared clip boundaries to beats"
 - Produces: FFmpeg graph without black/tpad fallback and debug performance metrics.
 - Adds hard issue codes: `EMPTY_TIMELINE`, `TIMELINE_GAP`, and `SOURCE_SHORTER_THAN_SLOT`.
 
-- [ ] **Step 1: Change validator tests from warning to hard failure**
+- [x] **Step 1: Change validator tests from warning to hard failure**
 
 ```ts
 expect(validateTimeline(timeline({ durationMs: 3_000, clips: [] }))).toMatchObject({
@@ -1069,17 +1081,17 @@ expect(graph.filterComplex).toContain(
 );
 ```
 
-- [ ] **Step 2: Run renderer tests and verify RED**
+- [x] **Step 2: Run renderer tests and verify RED**
 
 Run: `pnpm exec vitest run packages/renderer/src/validate-timeline.test.ts packages/renderer/src/graph.test.ts`
 
 Expected: FAIL because gaps/empty/source-short are warnings and the graph still creates black and clone padding.
 
-- [ ] **Step 3: Make validation strict**
+- [x] **Step 3: Make validation strict**
 
 Extend `TimelineIssue['code']`. Detect every positive initial, internal, or trailing gap. Move empty/source-short conditions from `warnings` into `errors`. Preserve historical `RenderWarningCode` values so existing JSON rows still parse.
 
-- [ ] **Step 4: Remove renderer fallbacks and rebase audio**
+- [x] **Step 4: Remove renderer fallbacks and rebase audio**
 
 Add:
 
@@ -1098,7 +1110,7 @@ atrim=start=<sourceStart>:duration=<timelineDuration>,asetpts=PTS-STARTPTS,<cond
 
 Use fade-in only when `sourceStartMs > 0`; fade-out only when `sourceStartMs + durationMs < audioDurationMs`. Keep three-decimal second formatting.
 
-- [ ] **Step 5: Add renderer wall-time metrics**
+- [x] **Step 5: Add renderer wall-time metrics**
 
 Measure with `performance.now()` around timeline validation, graph construction, FFmpeg, and output probing. Persist in `render.json`:
 
@@ -1115,11 +1127,11 @@ performance: {
 
 Pass `projectAudio.durationMs` as `audioDurationMs`.
 
-- [ ] **Step 6: Replace empty-black E2E expectation**
+- [x] **Step 6: Replace empty-black E2E expectation**
 
 The no-catalog pipeline must now fail at Director with `INSUFFICIENT_CATALOG`; it must create no render row and no MP4. Update the renderer E2E test accordingly.
 
-- [ ] **Step 7: Verify renderer GREEN**
+- [x] **Step 7: Verify renderer GREEN**
 
 Run: `pnpm exec vitest run packages/renderer/src/validate-timeline.test.ts packages/renderer/src/graph.test.ts packages/renderer/src/validate-output.test.ts`
 
@@ -1127,7 +1139,7 @@ Run: `pnpm --filter @memetize/renderer typecheck && pnpm --filter @memetize/rend
 
 Expected: strict tests pass and graph snapshots contain no fallback filters.
 
-- [ ] **Step 8: Commit validation and rendering**
+- [x] **Step 8: Commit validation and rendering**
 
 ```bash
 git add packages/renderer workers/renderer apps/cli/src/renderer.e2e.test.ts
@@ -1151,7 +1163,7 @@ git commit -m "fix: reject incomplete timelines before rendering"
 - Consumes: `getLatestEditWindow` and existing job error fields.
 - Produces: `editWindow` in project detail/list responses and visible selection/failure information in CLI and web studio.
 
-- [ ] **Step 1: Write the failing API response test**
+- [x] **Step 1: Write the failing API response test**
 
 Seed an edit window, request the project, and assert:
 
@@ -1165,17 +1177,17 @@ expect(response.json().editWindow).toMatchObject({
 });
 ```
 
-- [ ] **Step 2: Run API test and verify RED**
+- [x] **Step 2: Run API test and verify RED**
 
 Run: `pnpm exec vitest run apps/api/src/app.test.ts`
 
 Expected: FAIL because project responses omit `editWindow`.
 
-- [ ] **Step 3: Return edit-window metadata from API routes**
+- [x] **Step 3: Return edit-window metadata from API routes**
 
 Fetch `getLatestEditWindow` in both list and detail endpoints. Detail returns the complete record; list returns `outputDurationMs`, `sourceStartMs`, and `sourceEndMs` for compact rendering.
 
-- [ ] **Step 4: Update web types and display**
+- [x] **Step 4: Update web types and display**
 
 Add exact `EditWindowRow` and job error fields in `apps/web/src/lib/api.ts`. In the project page, render a compact panel:
 
@@ -1196,11 +1208,11 @@ Add exact `EditWindowRow` and job error fields in `apps/web/src/lib/api.ts`. In 
 
 For a failed job, show `errorCode` and `errorMessage`; special-case `INSUFFICIENT_CATALOG` with guidance to add more or longer source videos.
 
-- [ ] **Step 5: Add CLI inspection output**
+- [x] **Step 5: Add CLI inspection output**
 
 Print selected absolute source range, output duration, selector/version, and total score immediately after audio analysis details.
 
-- [ ] **Step 6: Verify API and UI GREEN**
+- [x] **Step 6: Verify API and UI GREEN**
 
 Run: `pnpm exec vitest run apps/api/src/app.test.ts`
 
@@ -1208,7 +1220,7 @@ Run: `pnpm --filter @memetize/api typecheck && pnpm --filter @memetize/web typec
 
 Expected: API test, typechecks, and production web build pass.
 
-- [ ] **Step 7: Commit product visibility**
+- [x] **Step 7: Commit product visibility**
 
 ```bash
 git add apps/api apps/web apps/cli/src/commands/project.ts
@@ -1231,7 +1243,7 @@ git commit -m "feat: show selected window and catalog failures"
 - Verifies the complete public pipeline, real FFmpeg output, documentation, and performance evidence.
 - Produces no new production interface.
 
-- [ ] **Step 1: Add moving fixtures and failing duration/coverage assertions**
+- [x] **Step 1: Add moving fixtures and failing duration/coverage assertions**
 
 Generate source videos with FFmpeg `testsrc2` rather than static colors:
 
@@ -1271,7 +1283,7 @@ function assertContinuous(timeline: Timeline): void {
 }
 ```
 
-- [ ] **Step 2: Run E2E tests and prove the duration assertion is red-capable**
+- [x] **Step 2: Run E2E tests and prove the duration assertion is red-capable**
 
 Run with `TEST_DATABASE_URL` configured:
 
@@ -1279,11 +1291,11 @@ Run with `TEST_DATABASE_URL` configured:
 
 Before the real run, temporarily change the long-track expectation from `60_000` to `59_999`, run the two tests, and confirm the long-track assertion fails. Restore `60_000` immediately and rerun. Expected after restoration: both suites pass if Tasks 1–9 are fully integrated; otherwise use the first real failure to close the missing integration and rerun its narrow test before these suites.
 
-- [ ] **Step 3: Add real output checks**
+- [x] **Step 3: Add real output checks**
 
 After rendering, run ffprobe and `blackdetect` through `execFileAsync`. Assert duration within 200 ms, video/audio `start_time` within one frame of zero, and no `black_start` output for the non-black moving fixtures. Assert the saved filter graph contains neither `color=c=black` nor `tpad=stop_mode=clone`.
 
-- [ ] **Step 4: Re-run the original artifact diagnostic**
+- [x] **Step 4: Re-run the original artifact diagnostic**
 
 Run:
 
@@ -1299,17 +1311,17 @@ Reprocess command:
 pnpm cli project reprocess prj_aiu3rd27bizmr6q2k8ez7 --from narrative
 ```
 
-- [ ] **Step 5: Capture performance evidence**
+- [x] **Step 5: Capture performance evidence**
 
 Record old artifact metrics (`172_251` ms, 27 clips, four unique sources) and the newly reprocessed/rendered `performance` block. Report selection, narrative, FFmpeg wall time, clip count, unique source count, and output duration. Do not add a timing threshold to CI. If repeated inputs remain dominant, record source-input deduplication as a measured follow-up instead of adding an unbenchmarked `split` graph.
 
-- [ ] **Step 6: Add README and changelog**
+- [x] **Step 6: Add README and changelog**
 
 `README.md` must document prerequisites, setup, project/asset commands, the full-track-or-60-second policy, deterministic window selection, continuous-coverage guarantee, `INSUFFICIENT_CATALOG`, render output, and test commands.
 
 `CHANGELOG.md` must include an `Unreleased` entry covering highlight selection, instrumental gap coverage, multi-clip resolution, shared timing, strict validation, audio timestamp rebasing, fade behavior, UI visibility, and measured performance.
 
-- [ ] **Step 7: Run the complete verification matrix**
+- [x] **Step 7: Run the complete verification matrix**
 
 Run:
 
@@ -1329,7 +1341,7 @@ pnpm exec vitest run apps/cli/src/matching.e2e.test.ts apps/cli/src/director.e2e
 
 Expected: every command passes. If an environment prerequisite is absent, record the exact skipped command and missing prerequisite; do not claim it passed.
 
-- [ ] **Step 8: Run review and cleanup gates**
+- [x] **Step 8: Run review and cleanup gates**
 
 Invoke the `code-review` skill against the branch diff from `2156ed9`. Fix all correctness findings, rerun the narrow tests for each fix, then run:
 
@@ -1341,7 +1353,7 @@ git status --short
 
 Expected: no temporary debug markers, no whitespace errors, and only intended files changed.
 
-- [ ] **Step 9: Commit documentation and final verification changes**
+- [x] **Step 9: Commit documentation and final verification changes**
 
 ```bash
 git add apps/cli/src/director.e2e.test.ts apps/cli/src/renderer.e2e.test.ts README.md CHANGELOG.md

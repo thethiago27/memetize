@@ -127,7 +127,7 @@ once; otherwise a render with lyrics fails with `RENDER_SUBTITLES_MISSING`.
 ## Output window
 
 - Tracks of **30,000 ms or less** use the full source.
-- Longer tracks select one continuous, deterministic **30,000 ms** window (`structural-highlight` v1.0.0). The manual window in the Studio is bounded the same way (5 to 30 seconds).
+- Longer tracks select one continuous, deterministic **30,000 ms** window (`structural-highlight` v1.1.0). The manual window in the Studio is bounded the same way (5 to 30 seconds).
 - The timeline clock always starts at zero. Audio trim uses the absolute source range.
 
 ## Continuous coverage
@@ -206,7 +206,14 @@ pnpm --filter @memetize/web build
 Integration and E2E suites need `TEST_DATABASE_URL` plus FFmpeg and the Python worker virtualenvs (`docker compose up -d db` provides PostgreSQL+pgvector on `:5433`; create `memetize_test` next to `memetize`). Without those, the suites skip under plain `pnpm test` — they are not a pass. The gate is:
 
 ```bash
-pnpm test:integration   # REQUIRE_INTEGRATION_TESTS=1: a missing or broken TEST_DATABASE_URL fails the run
+pnpm test:integration   # REQUIRE_INTEGRATION_TESTS=1: a missing dependency fails the run
 ```
 
-CI runs it in `.github/workflows/integration.yml` with a real database, FFmpeg and the Python virtualenvs. Locally, FFmpeg- and Python-dependent suites still skip when those tools are absent; only the database is mandatory.
+Under that flag a missing or broken `TEST_DATABASE_URL`, a missing FFmpeg, and a
+missing Python virtualenv are all hard errors, so a CI run whose `uv sync` or
+FFmpeg install failed fails instead of reporting a green suite that skipped
+those cases. Locally, without the flag, those suites still skip.
+
+CI runs it in `.github/workflows/integration.yml` with a real database, FFmpeg
+and the Python virtualenvs, alongside `pnpm lint`, `pnpm typecheck`, `pnpm py:test`
+and the Studio build.

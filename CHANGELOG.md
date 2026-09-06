@@ -2,6 +2,58 @@
 
 ## Unreleased
 
+### Audit follow-up (2026-09-06)
+
+- Every worker publishes its domain writes through `ctx.publish`, so an attempt
+  that lost its lease or whose generation was superseded writes nothing —
+  seven handlers wrote with `ctx.db` outside that transaction. Mid-pipeline
+  entity statuses (`NORMALIZING`, `PLANNING`, `RENDERING`) go through the new
+  `ctx.progress`, which takes the same lock and checks; the two handler-level
+  `FAILED` writes are gone (the orchestrator's hook already did it, with the
+  generation check).
+- `setManualWindow`/`clearManualWindow` run their idle check, window write and
+  reprocess in one transaction under the project lock; `deleteProject` locks the
+  project's job rows before deciding; asset ingest commits the asset row, its
+  generation and its first job together.
+- One HTTP error envelope: `statusForDomainError` plus an app-level handler.
+  `reprocess` answers `409 PROJECT_BUSY` instead of a 500, `generate`/`render`
+  keep the real cause instead of relabelling everything `409 GENERATE_FAILED`,
+  and a 500 no longer returns the internal message. Command preconditions are
+  typed (`ProjectStateError`/`AssetStateError`: `NO_MATCH`, `NO_TIMELINE`, …).
+- `API_PORT` and `JOB_MAINTENANCE_INTERVAL_MS` are validated config, not ad hoc
+  `process.env` reads. An absolute `STORAGE_PATH` is supported (keys are then
+  stored relative to the storage root); `resolveStorage` confines every caller
+  to it, not just the media route.
+- The renderer's time model lives in one function (`clipTimeModel`) that both
+  the graph and the validator use: a `speed_up` clip with an incoming crossfade
+  no longer passes validation and then trims from before its source start.
+  A clip occupying no output frame is rejected instead of silently dropped,
+  output codecs are checked by name, and subtitle overlay windows are half-open
+  so two captions never show at once.
+- The window selector's boundaries term actually varies (selector `1.1.0`): it
+  compared energy at `t` with `t - 1 ms` against a coarser curve, and required a
+  window edge to land exactly on a downbeat, which the end edge never does.
+- The timing optimizer no longer grows a take past its moment when the moment's
+  bounds are unknown, and decides against the sources it has already rewritten.
+- Python workers share one protocol module: a malformed request keeps its job
+  id (so the structured error survives), and failures are classified
+  retryable/permanent instead of always permanent. `runPythonWorker` survives an
+  EPIPE and no longer hands the subprocess `AI_GATEWAY_API_KEY`.
+- Frame extraction and transcript audio extraction bound their ffmpeg calls;
+  the subtitles handler turns a provider fault into a retryable `JobFailure`.
+- Lease recovery is no longer blocked by a long drain, and the heartbeat stands
+  down while a publication holds the job row.
+- `swapClip` reserves a transition handle like the coverage resolver does.
+  `storage/timelines/{projectId}/v{n}.json` is written per version. The
+  Director's prompts are frozen literals, so editing one version no longer
+  rewrites the text recorded for older ones.
+- `REQUIRE_INTEGRATION_TESTS=1` now also covers FFmpeg and the Python
+  virtualenvs: a CI run whose `uv sync` failed fails instead of reporting a
+  green suite that skipped those cases. CI runs `pnpm lint` and the Studio build.
+- Studio: `prefers-reduced-motion` works (the reset had zero specificity);
+  polling is one hook with a stale-response guard, backoff and a hidden-tab
+  pause; toast timers are cleaned up on unmount.
+
 - Burn translated TikTok-style captions into the render: `SUBTITLES` translates
   lyric lines to `pt-BR` (fixture keeps the original), rasterizes them with
   Inter Bold, and FFmpeg overlays the PNGs. `LLM_SUBTITLES_MODEL` overrides the
@@ -11,7 +63,7 @@
 
 - Per-stage LLM models: `LLM_MOMENTS_MODEL`, `LLM_NARRATIVE_MODEL` and `LLM_DIRECTOR_MODEL` override `LLM_MODEL` for one gateway stage each; provenance (`extractorVersion` / `directorVersion`) records the model that actually ran.
 - Cap the output window at 30 seconds (`MAX_OUTPUT_DURATION_MS`, `MANUAL_WINDOW_MAX_MS`, Studio copy and bounds): tracks up to 30 s render in full, longer ones get a 30 s highlight.
-- Accept a rendered video stream that ends somewhat before the audio as a `DURATION_DRIFT` warning when it still covers at least 80% of the timeline (`VIDEO_MIN_COVERAGE`); a truncated video, unknown coverage, or a late-starting stream remain hard failures.
+- Accept a rendered video stream that ends somewhat before the audio as a `DURATION_DRIFT` warning when it still covers at least 98% of the timeline (`VIDEO_MIN_COVERAGE`); a truncated video, unknown coverage, or a late-starting stream remain hard failures. The floor was 80%, which published a 48 s video under a 60 s track as valid.
 
 - Fix renders rejected with `RENDER_OUTPUT_INVALID` because the video stream came out a few frames shorter than the audio: every clip segment is now placed on the output frame grid and cut to an exact frame count (`fps`, a short clone pad, `trim=end_frame`), and xfade offsets/durations are expressed in whole frames, so the concatenated video is exactly `durationMs` long instead of losing up to one frame per cut.
 
@@ -32,7 +84,7 @@
 - Restyle Studio with Tailwind CSS v4, Outfit, and a cool Afterglow palette (coral signal on graphite) while keeping the existing semantic classes.
 - Give the Studio editor one clock: a transport bar (play, pause, timecode, position slider) drives either the rendered video or, when there is no current render, a storyboard that plays the project's music while the preview shows the thumbnail of the clip under the playhead. The timeline strip now spans the editor's width, measures itself so pointer positions map exactly to time, gets a ruler with downbeat marks and a draggable playhead, and selects a clip on a plain click. A stale render can still be watched through "Ver render vN". Clip swaps show the returned timeline before the reload, buttons disable only on their own action, and rows in the Narrativa tab select their clip. The editor fits the viewport: a one-line header, pipeline chips, the preview sized to the height left beside a scrolling inspector, and the strip pinned at the bottom, with the tabs below.
 - `GET /v1/media/*` honors HTTP `Range` requests (`206`, `Accept-Ranges`, `416`), so the browser can seek inside renders and music instead of restarting the download from zero on every seek.
-- Choose the stretch of the song by hand: `PUT`/`DELETE /v1/projects/:id/window`, `pnpm cli project window --start --end | --auto`, and "Escolher trecho" on the Studio's Análise tab (drag the band or its edges with downbeat snapping, refine in mm:ss, 5 to 60 seconds). The pick lives on the project (`manual_window_start_ms` / `manual_window_end_ms`), `NARRATIVE` honors it with `selector = 'manual'`, and saving or clearing reruns the pipeline from narrative.
+- Choose the stretch of the song by hand: `PUT`/`DELETE /v1/projects/:id/window`, `pnpm cli project window --start --end | --auto`, and "Escolher trecho" on the Studio's Análise tab (drag the band or its edges with downbeat snapping, refine in mm:ss, 5 to 30 seconds). The pick lives on the project (`manual_window_start_ms` / `manual_window_end_ms`), `NARRATIVE` honors it with `selector = 'manual'`, and saving or clearing reruns the pipeline from narrative.
 - Add an "Análise" tab to the Studio editor: sections, energy curve with beats and downbeats, and every lyric line on one source-time axis, with the selected 60-second window highlighted. The playhead follows the preview, the current lyric line lights up, and clicking inside the window seeks the video. No API change.
 - Delete a project: `DELETE /v1/projects/:id`, `pnpm cli project delete`, and an "Excluir" button with confirmation in the Studio editor. Removes jobs, derived rows, and storage under `audio/`, `cache/`, and `renders/`; keeps `feedback_events` (editorial memory); answers `409 PROJECT_BUSY` while a job is RUNNING.
 

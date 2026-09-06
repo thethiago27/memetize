@@ -86,9 +86,9 @@
 
 - [x] **Task 17: Lessons and examples.** `buildLessons`, `buildExamples`. Unit tests for ordering, caps, dedupe.
 - [x] **Task 18: Provider contract and prompt v3.** `memory` on `DirectTimelineInput`, prompt v3, fixture unchanged, gateway payload. Tests for prompt version and fixture determinism.
-- [x] **Task 19: Director handler.** Build memory from feedback and current shortlists; record it in the debug file. E2E assertion on the debug file.
+- [x] **Task 19: Director handler.** Build memory from feedback and current shortlists; record it in the debug file. E2E assertion on the debug file. (2026-09-06: the E2E only asserted an *empty* memory, so a handler that never built lessons would have passed. `director.e2e.test.ts` now seeds feedback and asserts the lessons reach the debug file.)
 
 ## Phase 5: Wrap-up
 
 - [x] **Task 20: Docs.** README section, CHANGELOG entries.
-- [ ] **Task 21: Verification.** `pnpm exec vitest run`, `pnpm typecheck`, `pnpm lint`, `pnpm --filter @memetize/web build`.
+- [x] **Task 21: Verification.** `pnpm exec vitest run`, `pnpm typecheck`, `pnpm lint`, `pnpm --filter @memetize/web build`. (All four run in CI as of 2026-09-06.)
