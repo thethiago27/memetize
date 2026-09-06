@@ -1,87 +1,49 @@
-"""Node <-> Python protocol entry point (spec sections 9 and 10).
+"""Node <-> Python protocol entry point for the audio analyzer (spec sections 9, 10).
 
-Reads a WorkerRequest as JSON on stdin, writes a single JSON WorkerResult on
-stdout, and sends logs to stderr. Exit code 0 means success.
+The protocol itself lives in `memetize_worker.protocol`, shared with the other
+Python workers; this file only says what this worker does.
 """
 
 from __future__ import annotations
 
-import json
 import sys
-import time
+from pathlib import Path
 from typing import Any
 
+# Each worker is a `package = false` uv project with its own virtualenv, so the
+# shared protocol module is reached by path rather than as a dependency. Doing
+# it here (instead of via PYTHONPATH) means it also works when a test or a shell
+# spawns `python -m <worker>` directly.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python-shared"))
 
-def _log(event: str, **fields: Any) -> None:
-    payload = {"level": "info", "worker": "audio-analyzer", "event": event, **fields}
-    print(json.dumps(payload), file=sys.stderr, flush=True)
+from memetize_worker.protocol import log, run_worker
 
 
-def _emit(payload: dict[str, Any]) -> None:
-    print(json.dumps(payload), flush=True)
+def handle(input_data: dict[str, Any]) -> dict[str, Any]:
+    from audio_analyzer.analyzer import analyze_audio
+
+    project_id = input_data.get("projectId")
+    result = analyze_audio(
+        input_data.get("durationMs"),
+        provider=input_data.get("provider") or "fixture",
+        path=input_data.get("path"),
+    )
+    log("audio-analyzer", "audio_analyze_completed", projectId=project_id, beatCount=len(result["beats"]))
+    return {
+        "projectId": project_id,
+        "durationMs": result["durationMs"],
+        "bpm": result["bpm"],
+        "beats": result["beats"],
+        "downbeats": result["downbeats"],
+        "sections": result["sections"],
+        "energyCurve": result["energyCurve"],
+        "analyzer": result["analyzer"],
+        "analyzerVersion": result["analyzerVersion"],
+    }
 
 
 def main() -> int:
-    started = time.time()
-    raw = sys.stdin.read()
-
-    try:
-        request = json.loads(raw)
-    except json.JSONDecodeError as error:
-        _emit(
-            {
-                "jobId": "",
-                "status": "failed",
-                "error": {"code": "BAD_REQUEST", "message": str(error), "retryable": False},
-            }
-        )
-        return 1
-
-    job_id = request.get("jobId", "")
-    worker_version = request.get("workerVersion", "1.0.0")
-    input_data = request.get("input", {})
-    project_id = input_data.get("projectId")
-    duration_ms = input_data.get("durationMs")
-    provider = input_data.get("provider") or "fixture"
-    path = input_data.get("path")
-
-    try:
-        from audio_analyzer.analyzer import analyze_audio
-
-        result = analyze_audio(duration_ms, provider=provider, path=path)
-    except Exception as error:  # noqa: BLE001 - report any failure through the protocol
-        _emit(
-            {
-                "jobId": job_id,
-                "status": "failed",
-                "error": {"code": "AUDIO_ANALYZE_ERROR", "message": str(error), "retryable": False},
-            }
-        )
-        return 1
-
-    _log("audio_analyze_completed", projectId=project_id, beatCount=len(result["beats"]))
-    _emit(
-        {
-            "jobId": job_id,
-            "status": "success",
-            "output": {
-                "projectId": project_id,
-                "durationMs": result["durationMs"],
-                "bpm": result["bpm"],
-                "beats": result["beats"],
-                "downbeats": result["downbeats"],
-                "sections": result["sections"],
-                "energyCurve": result["energyCurve"],
-                "analyzer": result["analyzer"],
-                "analyzerVersion": result["analyzerVersion"],
-            },
-            "metadata": {
-                "processingTimeMs": int((time.time() - started) * 1000),
-                "workerVersion": worker_version,
-            },
-        }
-    )
-    return 0
+    return run_worker(worker="audio-analyzer", error_code="AUDIO_ANALYZE_ERROR", handle=handle)
 
 
 if __name__ == "__main__":

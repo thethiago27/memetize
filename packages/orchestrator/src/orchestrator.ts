@@ -71,7 +71,8 @@ export class Orchestrator {
   private stopping = false;
   private readonly inflight = new Set<Promise<RunOutcome>>();
   private maintenanceTimer: NodeJS.Timeout | null = null;
-  private maintenanceRunning = false;
+  private reconcileRunning = false;
+  private drainRunning = false;
 
   constructor(private readonly options: OrchestratorOptions) {
     this.logger = options.logger ?? createLogger();
@@ -114,22 +115,48 @@ export class Orchestrator {
     this.maintenanceTimer = null;
   }
 
-  /** One recovery pass: reconcile, then drain everything runnable. Safe to call directly. */
+  /**
+   * One recovery pass: reconcile, then drain everything runnable. Safe to call
+   * directly.
+   *
+   * The two halves are guarded separately on purpose. Reconciliation is a short
+   * database pass; a drain can run up to 1000 jobs in series, and a single long
+   * RENDER holds it for minutes. Under one shared guard that long drain also
+   * suspended reconciliation, so abandoned leases went unfinalized for as long
+   * as the render lasted — against the recovery interval the README documents.
+   * Now a tick still reconciles while a previous drain is in flight; only the
+   * drain itself is skipped.
+   */
   async maintenanceTick(): Promise<{ reconciled: number; ran: number }> {
-    if (this.stopping || this.maintenanceRunning) return { reconciled: 0, ran: 0 };
-    this.maintenanceRunning = true;
+    if (this.stopping) return { reconciled: 0, ran: 0 };
+    let reconciled = 0;
+    let ran = 0;
+
+    if (!this.reconcileRunning) {
+      this.reconcileRunning = true;
+      try {
+        reconciled = await this.reconcile();
+      } catch (error) {
+        this.logger.error('maintenance_reconcile_failed', {
+          message: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        this.reconcileRunning = false;
+      }
+    }
+
+    if (this.stopping || this.drainRunning) return { reconciled, ran };
+    this.drainRunning = true;
     try {
-      const reconciled = await this.reconcile();
-      const outcomes = await this.drain();
-      return { reconciled, ran: outcomes.length };
+      ran = (await this.drain()).length;
     } catch (error) {
-      this.logger.error('maintenance_tick_failed', {
+      this.logger.error('maintenance_drain_failed', {
         message: error instanceof Error ? error.message : String(error),
       });
-      return { reconciled: 0, ran: 0 };
     } finally {
-      this.maintenanceRunning = false;
+      this.drainRunning = false;
     }
+    return { reconciled, ran };
   }
 
   private registeredTypes(): JobType[] {
@@ -262,11 +289,24 @@ export class Orchestrator {
     const exec = scheduler.withSlot(job.resourceClass, async (): Promise<RunOutcome> => {
       const startedAt = Date.now();
       logger.info('job_started');
+      // Holder (not a bare `let`) so the closure's assignment is visible to the
+      // control-flow analysis below.
+      const state: { published: JobRow | null; publishFailure: unknown; publishing: boolean } = {
+        published: null,
+        publishFailure: null,
+        publishing: false,
+      };
       // Heartbeat: renew the lease well before it expires so a long FFmpeg/Python
       // step keeps ownership; losing it means another worker reclaimed the job.
       // The publication path re-checks ownership in the database regardless.
+      //
+      // It stands down while a publication is in flight: that transaction holds
+      // this very row `FOR UPDATE` until it commits — which for RENDER includes
+      // moving the validated MP4 — so a renewal would block on it and pin a pool
+      // connection for the duration, for no gain.
       const heartbeat = setInterval(
         () => {
+          if (state.publishing) return;
           void renewLease(db, job.id, leaseToken, leaseMs).then((held) => {
             if (!held) logger.warn('job_lease_lost');
           });
@@ -275,22 +315,19 @@ export class Orchestrator {
       );
       if (typeof heartbeat.unref === 'function') heartbeat.unref();
 
-      // Holder (not a bare `let`) so the closure's assignment is visible to the
-      // control-flow analysis below.
-      const state: { published: JobRow | null; publishFailure: unknown } = {
-        published: null,
-        publishFailure: null,
-      };
       const publishOnce = async (
         fn: (ctx: PublishContext) => Promise<Record<string, unknown>>,
       ): Promise<JobRow> => {
         if (state.published) throw new Error(`job ${job.id}: publish() called more than once`);
+        state.publishing = true;
         try {
           state.published = await this.publishCompletion(job, leaseToken, fn);
           return state.published;
         } catch (error) {
           state.publishFailure = error;
           throw error;
+        } finally {
+          state.publishing = false;
         }
       };
       const publish = async (
@@ -305,7 +342,15 @@ export class Orchestrator {
           logger,
           enqueue: (enqueueArgs) => enqueueJob(db, this.stampGeneration(job, enqueueArgs)),
           publish,
-          progress: (fn) => this.markProgress(job, leaseToken, fn),
+          progress: async (fn) => {
+            // Same row lock as a publication, so the heartbeat stands down here too.
+            state.publishing = true;
+            try {
+              return await this.markProgress(job, leaseToken, fn);
+            } finally {
+              state.publishing = false;
+            }
+          },
         });
         // Handlers that did not publish themselves are completed here, under the
         // same lock/ownership/generation checks and with the same continuations.

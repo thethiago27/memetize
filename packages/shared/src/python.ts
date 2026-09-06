@@ -13,6 +13,48 @@ export interface PythonRunOptions {
   env?: NodeJS.ProcessEnv;
 }
 
+/**
+ * Environment passed through to a Python worker. The parent's whole `process.env`
+ * used to be forwarded, which handed every subprocess `AI_GATEWAY_API_KEY` and
+ * `DATABASE_URL` — credentials no Python worker needs. Only what a Python
+ * toolchain actually requires is inherited; anything else a worker needs is
+ * passed explicitly through `options.env`.
+ */
+const INHERITED_ENV_KEYS = [
+  'PATH',
+  'HOME',
+  'LANG',
+  'LC_ALL',
+  'TMPDIR',
+  'TEMP',
+  'TMP',
+  'SHELL',
+  'USER',
+  'LOGNAME',
+  'SystemRoot',
+  'PATHEXT',
+  'PYTHONPATH',
+  'PYTHONHOME',
+  'PYTHONUNBUFFERED',
+  'VIRTUAL_ENV',
+  'UV_CACHE_DIR',
+  'UV_PYTHON',
+  'UV_PROJECT_ENVIRONMENT',
+  'HF_HOME',
+  'HUGGINGFACE_HUB_CACHE',
+  'XDG_CACHE_HOME',
+  'XDG_DATA_HOME',
+] as const;
+
+function inheritedEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const inherited: NodeJS.ProcessEnv = {};
+  for (const key of INHERITED_ENV_KEYS) {
+    const value = env[key];
+    if (value !== undefined) inherited[key] = value;
+  }
+  return inherited;
+}
+
 export interface PythonRunResult {
   stdout: string;
   stderr: string;
@@ -34,11 +76,12 @@ export interface PythonRunResult {
 export function runPythonWorker(options: PythonRunOptions): Promise<PythonRunResult> {
   const command = options.command ?? 'uv';
   const args = options.args ?? ['run', 'python', '-m', options.module];
+  const env = { ...inheritedEnv(process.env), ...options.env };
 
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
-      env: { ...process.env, ...options.env },
+      env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
@@ -76,6 +119,11 @@ export function runPythonWorker(options: PythonRunOptions): Promise<PythonRunRes
       finish(() => resolvePromise({ stdout, stderr, exitCode, signal }));
     });
 
+    // A worker that dies before reading its request makes this write fail with
+    // EPIPE. Without a listener that `error` is unhandled on the stream and
+    // takes the whole worker process down, so it is swallowed here: `close`
+    // still fires and the caller sees the real exit code and stderr.
+    child.stdin.on('error', () => undefined);
     child.stdin.write(JSON.stringify(options.request));
     child.stdin.end();
   });

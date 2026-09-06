@@ -38,10 +38,22 @@ export function createSubtitlesHandler(): JobHandler {
       language = SUBTITLE_TARGET_LANGUAGE;
     } else {
       const { llm } = createProviders(ctx.config);
-      const result = await llm.translateLyrics({
-        lines: lyrics.lines.map((line) => line.text),
-        targetLanguage: SUBTITLE_TARGET_LANGUAGE,
-      });
+      let result: Awaited<ReturnType<typeof llm.translateLyrics>>;
+      try {
+        result = await llm.translateLyrics({
+          lines: lyrics.lines.map((line) => line.text),
+          targetLanguage: SUBTITLE_TARGET_LANGUAGE,
+        });
+      } catch (error) {
+        // A provider fault is a structured, retryable job failure like every
+        // other worker's — not an unhandled error that reaches the orchestrator
+        // as `UNHANDLED_ERROR`.
+        throw new JobFailure(
+          'SUBTITLES_TRANSLATE_ERROR',
+          error instanceof Error ? error.message : String(error),
+          true,
+        );
+      }
       if (result.lines.length !== lyrics.lines.length) {
         throw new JobFailure(
           'SUBTITLES_INVALID_OUTPUT',
