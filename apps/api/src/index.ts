@@ -1,7 +1,6 @@
 import { createAppRuntime } from '@memetize/runtime';
 import { buildApi } from './app';
 
-const port = Number.parseInt(process.env.API_PORT ?? '8787', 10);
 const runtime = createAppRuntime();
 const app = await buildApi(runtime);
 
@@ -11,8 +10,7 @@ const app = await buildApi(runtime);
 // attempt is resumed without a new HTTP request or a manual `worker run` (F08).
 const reconciled = await runtime.orchestrator.reconcile();
 if (reconciled > 0) runtime.logger.warn('startup_reconciled_jobs', { count: reconciled });
-const maintenanceMs = Number.parseInt(process.env.JOB_MAINTENANCE_INTERVAL_MS ?? '30000', 10);
-runtime.orchestrator.startMaintenance(maintenanceMs);
+runtime.orchestrator.startMaintenance(runtime.config.jobMaintenanceIntervalMs);
 void runtime.orchestrator.maintenanceTick();
 
 let shuttingDown = false;
@@ -29,5 +27,5 @@ const shutdown = async () => {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-await app.listen({ host: '127.0.0.1', port });
-runtime.logger.info('api_listening', { port });
+await app.listen({ host: '127.0.0.1', port: runtime.config.apiPort });
+runtime.logger.info('api_listening', { port: runtime.config.apiPort });

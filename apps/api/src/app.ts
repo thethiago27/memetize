@@ -3,6 +3,7 @@ import multipart from '@fastify/multipart';
 import { describeProviders } from '@memetize/model-providers';
 import type { AppRuntime } from '@memetize/runtime';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { registerErrorHandler } from './errors';
 import { registerAssetRoutes } from './routes/assets';
 import { registerFeedbackRoutes } from './routes/feedback';
 import { registerJobRoutes } from './routes/jobs';
@@ -12,6 +13,8 @@ import { registerSearchRoutes } from './routes/search';
 
 export async function buildApi(runtime: AppRuntime): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
+  // One error envelope for the whole API, and no internal message on a 500.
+  registerErrorHandler(app, (event, fields) => runtime.logger.error(event, fields));
   await app.register(cors, {
     origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
     // @fastify/cors 11 defaults to GET,HEAD,POST; the Studio also issues PUT

@@ -20,8 +20,6 @@ import {
   listRenders,
   listSegmentMatches,
   listTimelineVersions,
-  ManualWindowError,
-  ProjectBusyError,
   renderProject,
   reprocessProject,
   setManualWindow,
@@ -29,9 +27,9 @@ import {
   swapClip,
 } from '@memetize/projects';
 import type { AppRuntime } from '@memetize/runtime';
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { kickDrain } from '../drain';
-import { sendError, sendSwapError } from '../errors';
+import { sendCommandError, sendError, sendSwapError } from '../errors';
 import { removeUpload, saveUpload } from '../upload';
 
 export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime): void {
@@ -185,9 +183,7 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
       });
       if (!deleted) return sendError(reply, 404, 'NOT_FOUND', `project not found: ${id}`);
     } catch (error) {
-      if (error instanceof ProjectBusyError)
-        return sendError(reply, 409, error.code, error.message);
-      throw error;
+      return sendCommandError(reply, error);
     }
     return { ok: true };
   });
@@ -199,7 +195,7 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
       kickDrain(runtime, id);
       return { ok: true, manualWindow };
     } catch (error) {
-      return sendWindowError(reply, error);
+      return sendCommandError(reply, error);
     }
   });
 
@@ -210,7 +206,7 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
       kickDrain(runtime, id);
       return { ok: true };
     } catch (error) {
-      return sendWindowError(reply, error);
+      return sendCommandError(reply, error);
     }
   });
 
@@ -221,8 +217,9 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
     try {
       await generateTimeline(runtime.db, id);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return sendError(reply, 409, 'GENERATE_FAILED', message);
+      // A busy project keeps its own `409 PROJECT_BUSY`; anything unrecognized
+      // reaches the app error handler instead of being relabelled here.
+      return sendCommandError(reply, error);
     }
     kickDrain(runtime, id);
     return { ok: true };
@@ -235,8 +232,7 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
     try {
       await renderProject(runtime.db, id);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return sendError(reply, 409, 'RENDER_FAILED', message);
+      return sendCommandError(reply, error);
     }
     kickDrain(runtime, id);
     return { ok: true };
@@ -250,7 +246,13 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
     if (!from.success) return sendError(reply, 400, 'INVALID_INPUT', from.error.message);
     const project = await getProject(runtime.db, id);
     if (!project) return sendError(reply, 404, 'NOT_FOUND', `project not found: ${id}`);
-    await reprocessProject(runtime.db, id, from.data);
+    try {
+      await reprocessProject(runtime.db, id, from.data);
+    } catch (error) {
+      // Without this a `ProjectBusyError` escaped as a 500 instead of the
+      // documented `409 PROJECT_BUSY` (the asset route always caught it).
+      return sendCommandError(reply, error);
+    }
     kickDrain(runtime, id);
     return { ok: true, from: from.data };
   });
@@ -273,13 +275,4 @@ export function registerProjectRoutes(app: FastifyInstance, runtime: AppRuntime)
       return sendSwapError(reply, error);
     }
   });
-}
-
-function sendWindowError(reply: FastifyReply, error: unknown) {
-  if (error instanceof ProjectBusyError) return sendError(reply, 409, error.code, error.message);
-  if (error instanceof ManualWindowError) {
-    const status = error.code === 'NOT_FOUND' ? 404 : error.code === 'NO_AUDIO' ? 409 : 400;
-    return sendError(reply, status, error.code, error.message);
-  }
-  throw error;
 }

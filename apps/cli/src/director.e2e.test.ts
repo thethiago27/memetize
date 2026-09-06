@@ -107,6 +107,8 @@ describe.skipIf(!handle || !ffmpegAvailable || !pyEnvReady)('director pipeline (
       rootDir: tmp,
       storageDir: join(tmp, 'storage'),
       storageDirRelative: 'storage',
+      apiPort: 8787,
+      jobMaintenanceIntervalMs: 30_000,
       resources: { CPU_LIGHT: 4, CPU_HEAVY: 1, GPU: 1, IO: 4, RENDER: 1 },
       embeddingDimensions: 384,
       providerMode: 'demo',

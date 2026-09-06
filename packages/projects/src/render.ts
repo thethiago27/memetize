@@ -8,6 +8,7 @@ import {
 import { reserveVersion } from '@memetize/job-system';
 import { renderId } from '@memetize/shared';
 import { desc, eq } from 'drizzle-orm';
+import { ProjectStateError } from './busy';
 import { lockProject } from './coordinate';
 import { reprocessProject } from './reprocess';
 import { getLatestTimeline } from './timeline';
@@ -115,7 +116,8 @@ export function listRenders(db: Executor, projectId: string): Promise<RenderRow[
 export async function renderProject(db: Executor, projectId: string): Promise<void> {
   const timeline = await getLatestTimeline(db, projectId);
   if (!timeline) {
-    throw new Error(
+    throw new ProjectStateError(
+      'NO_TIMELINE',
       `project ${projectId} has no timeline yet — run 'project create' or 'project generate' first`,
     );
   }

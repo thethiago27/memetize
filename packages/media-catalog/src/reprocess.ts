@@ -42,6 +42,23 @@ export class AssetBusyError extends Error {
   }
 }
 
+/** Codes a command refuses with because the asset is not in a state for it. */
+export type AssetStateCode = 'NOT_FOUND' | 'NO_ANALYSIS';
+
+/**
+ * A command's precondition on the asset's own state. Typed rather than a bare
+ * `Error` so the HTTP edge answers with a status instead of a 500.
+ */
+export class AssetStateError extends Error {
+  constructor(
+    readonly code: AssetStateCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'AssetStateError';
+  }
+}
+
 /**
  * `asset reprocess --from <stage>` (spec section 42): starts a new generation
  * for the asset (F09/F11) and enqueues the stage's first job for it, under the
@@ -63,10 +80,10 @@ export async function reprocessAsset(
   // Only the stages whose input names a file need the asset row itself.
   const asset = from === 'frames' || from === 'transcript' ? await getAsset(db, assetId) : null;
   if ((from === 'frames' || from === 'transcript') && !asset) {
-    throw new Error(`asset not found: ${assetId}`);
+    throw new AssetStateError('NOT_FOUND', `asset not found: ${assetId}`);
   }
   if (from === 'frames' && !asset?.analysisPath) {
-    throw new Error(`asset ${assetId} has no analysisPath yet`);
+    throw new AssetStateError('NO_ANALYSIS', `asset ${assetId} has no analysisPath yet`);
   }
 
   return db.transaction(async (tx) => {

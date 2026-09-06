@@ -6,7 +6,7 @@ import {
   enqueueJob,
   stepKeyFor,
 } from '@memetize/job-system';
-import { ProjectBusyError } from './busy';
+import { ProjectBusyError, ProjectStateError } from './busy';
 import { lockProject, startProjectGeneration } from './coordinate';
 import { getProjectAudio } from './projects';
 import { getLatestTimeline } from './timeline';
@@ -84,7 +84,7 @@ export async function reprocessProject(
   const needsAudio = from === 'audio' || from === 'lyrics';
   const audio = needsAudio ? await getProjectAudio(db, projectId) : undefined;
   if (needsAudio && !audio) {
-    throw new Error(`project ${projectId} has no audio yet`);
+    throw new ProjectStateError('NO_AUDIO', `project ${projectId} has no audio yet`);
   }
 
   return db.transaction(async (tx) => {

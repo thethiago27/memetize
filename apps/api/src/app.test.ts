@@ -1,6 +1,7 @@
 import {
   createTestDatabase,
   type Database,
+  jobs,
   mediaAssets,
   moments,
   projects,
@@ -481,6 +482,76 @@ describe.skipIf(!handle)('studio API (inject)', () => {
         durationMs: 2000,
         thumbnailPath: 'storage/frames/scn_m/2000.jpg',
       },
+    });
+  });
+
+  // A RUNNING job makes every command on the project refuse with the documented
+  // `409 PROJECT_BUSY` (README, "Jobs, generations, and recovery"). `reprocess`
+  // used to let `ProjectBusyError` escape as a 500, and `generate`/`render`
+  // flattened every cause into one route-specific 409 code.
+  describe('a busy project refuses commands with 409 PROJECT_BUSY', () => {
+    const projectId = 'prj_api_busy';
+
+    beforeEach(async () => {
+      await db.insert(projects).values({ id: projectId, filename: 'song.mp3', status: 'PLANNING' });
+      // Preconditions satisfied — a completed MATCH for `generate`, a timeline
+      // for `render` — so what each command refuses on is the RUNNING job, not
+      // its own state check.
+      await db.insert(jobs).values({
+        id: 'job_api_busy_match',
+        type: 'MATCH',
+        entityId: projectId,
+        status: 'COMPLETED',
+        resourceClass: 'CPU_LIGHT',
+        inputHash: 'hash_api_busy_match',
+        workerVersion: '2.0.0',
+      });
+      await insertTimelineVersion(db, {
+        projectId,
+        data: Timeline.parse({
+          projectId,
+          durationMs: 1000,
+          audio: { path: 'storage/audio/x.mp3', timelineStartMs: 0, sourceStartMs: 0 },
+          clips: [
+            {
+              id: 'clp_1',
+              momentId: 'mom_a',
+              timeline: { startMs: 0, endMs: 1000 },
+              source: { assetId: 'ast_1', startMs: 0, endMs: 1000 },
+              reason: { segmentId: 'nar_1', semanticScore: 0.5, finalScore: 0.5 },
+            },
+          ],
+        }),
+        director: 'fixture',
+        directorVersion: '1.0.0',
+        promptVersion: 'v1',
+      });
+      // RENDER is downstream of every stage under test, so one RUNNING render
+      // makes all four commands refuse.
+      await db.insert(jobs).values({
+        id: 'job_api_busy',
+        type: 'RENDER',
+        entityId: projectId,
+        status: 'RUNNING',
+        resourceClass: 'RENDER',
+        inputHash: 'hash_api_busy',
+        workerVersion: '1.0.0',
+      });
+    });
+
+    it.each([
+      ['reprocess', { method: 'POST' as const, url: `/v1/projects/${projectId}/reprocess` }],
+      ['generate', { method: 'POST' as const, url: `/v1/projects/${projectId}/generate` }],
+      ['render', { method: 'POST' as const, url: `/v1/projects/${projectId}/render` }],
+      ['delete', { method: 'DELETE' as const, url: `/v1/projects/${projectId}` }],
+    ])('%s', async (_name, request) => {
+      const app = await appPromise;
+      const response = await app.inject({
+        ...request,
+        ...(request.url.endsWith('/reprocess') ? { payload: { from: 'match' } } : {}),
+      });
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error.code).toBe('PROJECT_BUSY');
     });
   });
 

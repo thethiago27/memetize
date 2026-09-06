@@ -85,6 +85,8 @@ describe.skipIf(!handle)('narrative handler window coverage (integration)', () =
       rootDir: storageDir,
       storageDir: join(storageDir, 'storage'),
       storageDirRelative: 'storage',
+      apiPort: 8787,
+      jobMaintenanceIntervalMs: 30_000,
     };
     const handler = createNarrativeHandler();
     await handler(
@@ -182,6 +184,8 @@ describe.skipIf(!handle)('narrative handler window coverage (integration)', () =
       rootDir: storageDir,
       storageDir: join(storageDir, 'storage'),
       storageDirRelative: 'storage',
+      apiPort: 8787,
+      jobMaintenanceIntervalMs: 30_000,
     };
     const handler = createNarrativeHandler();
     await handler(

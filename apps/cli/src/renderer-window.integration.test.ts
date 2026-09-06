@@ -20,6 +20,8 @@ const config: AppConfig = {
   rootDir: process.cwd(),
   storageDir: 'storage',
   storageDirRelative: 'storage',
+  apiPort: 8787,
+  jobMaintenanceIntervalMs: 30_000,
   resources: { CPU_LIGHT: 1, CPU_HEAVY: 1, GPU: 1, IO: 1, RENDER: 1 },
   embeddingDimensions: 384,
   providerMode: 'demo',

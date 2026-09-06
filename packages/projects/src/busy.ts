@@ -9,6 +9,25 @@ export class ProjectBusyError extends Error {
   }
 }
 
+/** Codes a command refuses with because the project is not in a state for it. */
+export type ProjectStateCode = 'NO_MATCH' | 'NO_TIMELINE' | 'NO_AUDIO' | 'NO_ANALYSIS';
+
+/**
+ * A command's precondition on the project's own state — "generate needs a
+ * completed MATCH", "render needs a timeline". Typed rather than a bare
+ * `Error` so the HTTP edge can answer `409 <code>` instead of turning a
+ * caller's mistake into a 500.
+ */
+export class ProjectStateError extends Error {
+  constructor(
+    readonly code: ProjectStateCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ProjectStateError';
+  }
+}
+
 /**
  * Throws `ProjectBusyError` while a job for the project is RUNNING: an
  * in-flight worker would otherwise write against rows being replaced.

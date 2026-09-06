@@ -1,5 +1,6 @@
 import type { Executor } from '@memetize/database';
 import { listJobsForEntity } from '@memetize/job-system';
+import { ProjectStateError } from './busy';
 import { reprocessProject } from './reprocess';
 
 /**
@@ -14,7 +15,8 @@ export async function generateTimeline(db: Executor, projectId: string): Promise
   const jobs = await listJobsForEntity(db, projectId);
   const match = jobs.find((job) => job.type === 'MATCH');
   if (match?.status !== 'COMPLETED') {
-    throw new Error(
+    throw new ProjectStateError(
+      'NO_MATCH',
       `project ${projectId} has no completed MATCH yet — run 'project create' or 'project reprocess --from match' first`,
     );
   }

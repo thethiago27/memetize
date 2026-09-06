@@ -22,6 +22,8 @@ const config: AppConfig = {
   rootDir: '/tmp',
   storageDir: '/tmp/storage',
   storageDirRelative: 'storage',
+  apiPort: 8787,
+  jobMaintenanceIntervalMs: 30_000,
   resources: { CPU_LIGHT: 4, CPU_HEAVY: 1, GPU: 1, IO: 4, RENDER: 1 },
   embeddingDimensions: EMBEDDING_DIMENSIONS,
   providerMode: 'demo',

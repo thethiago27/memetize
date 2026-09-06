@@ -1,7 +1,6 @@
 import { AssetReprocessFrom, ExclusionInput, ReprocessBody } from '@memetize/contracts';
 import { excludeRange, includeRange, listActiveBans } from '@memetize/feedback';
 import {
-  AssetBusyError,
   getAsset,
   ingestAsset,
   listAssets,
@@ -12,7 +11,7 @@ import {
 import type { AppRuntime } from '@memetize/runtime';
 import type { FastifyInstance } from 'fastify';
 import { kickDrain } from '../drain';
-import { sendError } from '../errors';
+import { sendCommandError, sendError } from '../errors';
 import { removeUpload, saveUpload } from '../upload';
 
 export function registerAssetRoutes(app: FastifyInstance, runtime: AppRuntime): void {
@@ -87,8 +86,7 @@ export function registerAssetRoutes(app: FastifyInstance, runtime: AppRuntime): 
     try {
       await reprocessAsset(runtime.db, id, from.data);
     } catch (error) {
-      if (error instanceof AssetBusyError) return sendError(reply, 409, error.code, error.message);
-      throw error;
+      return sendCommandError(reply, error);
     }
     kickDrain(runtime, id);
     return { ok: true, from: from.data };

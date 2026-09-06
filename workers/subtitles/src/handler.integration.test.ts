@@ -31,6 +31,8 @@ describe.skipIf(!handle)('subtitles handler (integration)', () => {
       rootDir: storageDir,
       storageDir: join(storageDir, 'storage'),
       storageDirRelative: 'storage',
+      apiPort: 8787,
+      jobMaintenanceIntervalMs: 30_000,
     };
   }
 

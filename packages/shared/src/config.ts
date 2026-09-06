@@ -24,6 +24,10 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   TEST_DATABASE_URL: z.string().optional(),
   STORAGE_PATH: z.string().default('./storage'),
+  /** HTTP port for the API process. */
+  API_PORT: z.coerce.number().int().positive().default(8787),
+  /** How often the API reconciles abandoned jobs and drains what is runnable (F08). */
+  JOB_MAINTENANCE_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
   MAX_CPU_LIGHT_WORKERS: z.coerce.number().int().positive().default(4),
   MAX_CPU_HEAVY_WORKERS: z.coerce.number().int().positive().default(1),
   MAX_GPU_WORKERS: z.coerce.number().int().positive().default(1),
@@ -86,8 +90,17 @@ export interface AppConfig {
   rootDir: string;
   /** Absolute storage root, used for actual filesystem I/O. */
   storageDir: string;
-  /** Storage root as configured, used to build repo-relative paths stored in the DB. */
+  /**
+   * The prefix stored keys carry, for a repo-relative `STORAGE_PATH` (e.g.
+   * `storage`). Empty when `STORAGE_PATH` is absolute, in which case keys are
+   * stored relative to the storage root itself. `storagePath`/`resolveStorage`
+   * are the only things that should read it.
+   */
   storageDirRelative: string;
+  /** HTTP port for the API process. */
+  apiPort: number;
+  /** Interval of the API's job maintenance loop, in ms (F08). */
+  jobMaintenanceIntervalMs: number;
   resources: Record<ResourceClass, number>;
   /** Width of every vector in `moment_embeddings.embedding` (spec section 23). */
   embeddingDimensions: number;
@@ -116,16 +129,14 @@ export interface AppConfig {
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = EnvSchema.parse(env);
-  // Stored paths are persisted relative to the repo root and resolved back
-  // against it, so an absolute STORAGE_PATH would make storageDirRelative a bogus
-  // key and break media resolution. Reject it explicitly until relative-to-
-  // storage keys are supported (minor issue in the report).
-  if (isAbsolute(parsed.STORAGE_PATH)) {
-    throw new Error(
-      `STORAGE_PATH must be a repo-relative path, not an absolute one (got "${parsed.STORAGE_PATH}")`,
-    );
-  }
-  const storageDirRelative = parsed.STORAGE_PATH.replace(/^\.\//, '').replace(/\/+$/, '');
+  // A repo-relative STORAGE_PATH keeps its prefix in stored keys, so rows
+  // written by earlier versions keep resolving. An absolute one has no
+  // meaningful repo-relative prefix, so keys are stored relative to the storage
+  // root instead and `resolveStorage` reads both shapes — storage outside the
+  // repo (e.g. `/dados/memetize`) now resolves correctly.
+  const storageDirRelative = isAbsolute(parsed.STORAGE_PATH)
+    ? ''
+    : parsed.STORAGE_PATH.replace(/^\.\//, '').replace(/\/+$/, '');
   const testUrl = parsed.TEST_DATABASE_URL?.trim();
   return {
     databaseUrl: parsed.DATABASE_URL,
@@ -133,6 +144,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     rootDir: repoRoot,
     storageDir: resolve(repoRoot, parsed.STORAGE_PATH),
     storageDirRelative,
+    apiPort: parsed.API_PORT,
+    jobMaintenanceIntervalMs: parsed.JOB_MAINTENANCE_INTERVAL_MS,
     resources: {
       CPU_LIGHT: parsed.MAX_CPU_LIGHT_WORKERS,
       CPU_HEAVY: parsed.MAX_CPU_HEAVY_WORKERS,
