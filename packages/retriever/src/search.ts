@@ -109,7 +109,10 @@ export async function searchMomentsByVector(
       startMs: row.startMs,
       endMs: row.endMs,
       description: row.description,
-      score: 1 - Number(row.distance),
+      // Clamped like the feedback index: both feed the same ranker, and
+      // `SearchHit` documents scores as plain numbers in [0, 1]. A cosine
+      // distance can round just outside it.
+      score: Math.max(0, Math.min(1, 1 - Number(row.distance))),
     }),
   );
 }

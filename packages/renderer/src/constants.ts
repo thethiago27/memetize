@@ -1,4 +1,5 @@
 import { WORKER_VERSION } from '@memetize/contracts';
+import type { FadeStyle, OverlapStyle } from '@memetize/timeline';
 
 /**
  * Shared thresholds for the Renderer (spec sections 38-39). Kept as named
@@ -46,12 +47,13 @@ export const OUTPUT_AUDIO_CODEC = 'aac';
 export { MAX_TRANSITION_SLOT_FRACTION } from '@memetize/timeline';
 
 /** `xfade=transition=` names for the overlapping styles. */
-export const XFADE_TRANSITION_BY_STYLE = {
+/** Typed by `OverlapStyle`/`FadeStyle`, so a new style fails to compile until it is mapped. */
+export const XFADE_TRANSITION_BY_STYLE: Record<OverlapStyle, string> = {
   crossfade: 'fade',
   whip: 'slideleft',
-} as const;
+};
 
-export const FADE_COLOR_BY_STYLE = {
+export const FADE_COLOR_BY_STYLE: Record<FadeStyle, string> = {
   dip_black: 'black',
   flash: 'white',
-} as const;
+};

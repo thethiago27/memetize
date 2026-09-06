@@ -90,6 +90,30 @@ export const TRANSITION_STYLES = ['hard', 'dip_black', 'flash', 'crossfade', 'wh
 export const TransitionStyle = z.enum(TRANSITION_STYLES);
 export type TransitionStyle = z.infer<typeof TransitionStyle>;
 
+/**
+ * Styles that overlap their neighbour in time, and so need a `D/2` source
+ * handle on each side of the cut.
+ */
+export const OVERLAP_STYLES = ['crossfade', 'whip'] as const;
+export type OverlapStyle = (typeof OVERLAP_STYLES)[number];
+
+/** Styles that dip through a colour at the cut without overlapping. */
+export const FADE_STYLES = ['dip_black', 'flash'] as const;
+export type FadeStyle = (typeof FADE_STYLES)[number];
+
+/**
+ * The partition lives here, with the vocabulary itself: the planner and the
+ * renderer each used to declare their own copy, so adding a style could leave
+ * one of them silently treating it as neither.
+ */
+export function isOverlapStyle(style: TransitionStyle): style is OverlapStyle {
+  return (OVERLAP_STYLES as readonly string[]).includes(style);
+}
+
+export function isFadeStyle(style: TransitionStyle): style is FadeStyle {
+  return (FADE_STYLES as readonly string[]).includes(style);
+}
+
 export const CLIP_STYLES = ['none', 'hold', 'speed_up', 'slow_down'] as const;
 export const ClipStyle = z.enum(CLIP_STYLES);
 export type ClipStyle = z.infer<typeof ClipStyle>;

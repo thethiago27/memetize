@@ -13,6 +13,7 @@ import {
   MAX_OUTPUT_DURATION_MS,
   STRUCTURAL_ALIGNMENT_TOLERANCE_MS,
 } from './constants';
+import { nearestEnergy } from './energy';
 
 const HIGH_VALUE_SECTIONS = new Set(['chorus', 'payoff', 'climax']);
 const LYRIC_BOUNDARY_PROXIMITY_MS = 2_000;
@@ -149,7 +150,7 @@ function scoreSection(startMs: number, endMs: number, sections: readonly AudioSe
 function scoreEnergy(startMs: number, endMs: number, energyCurve: readonly EnergyPoint[]): number {
   const points = energyCurve.filter((point) => point.timeMs >= startMs && point.timeMs <= endMs);
   if (points.length === 0) {
-    const nearest = energyAt(Math.floor((startMs + endMs) / 2), energyCurve);
+    const nearest = nearestEnergy(Math.floor((startMs + endMs) / 2), energyCurve);
     return nearest ?? 0;
   }
   const mean = points.reduce((sum, point) => sum + point.value, 0) / points.length;
@@ -192,8 +193,8 @@ function scoreBoundaries(startMs: number, endMs: number, input: HighlightSelecti
 
   // Measured across a real interval: the energy curve is sampled coarsely, so
   // comparing `t` with `t - 1ms` returned the same sample every time.
-  const energyAtStart = energyAt(startMs, input.energyCurve);
-  const energyBefore = energyAt(startMs - BOUNDARY_ENERGY_LOOKBACK_MS, input.energyCurve);
+  const energyAtStart = nearestEnergy(startMs, input.energyCurve);
+  const energyBefore = nearestEnergy(startMs - BOUNDARY_ENERGY_LOOKBACK_MS, input.energyCurve);
   const discontinuity =
     energyAtStart === null || energyBefore === null ? 0 : Math.abs(energyAtStart - energyBefore);
   const smoothness = 1 - clamp01(discontinuity);
@@ -224,21 +225,6 @@ function collectStructuralTimes(
   }
   for (const downbeat of downbeats) times.add(downbeat);
   return [...times];
-}
-
-function energyAt(timeMs: number, energyCurve: readonly EnergyPoint[]): number | null {
-  if (energyCurve.length === 0) return null;
-  let best = energyCurve[0];
-  if (!best) return null;
-  let bestDistance = Math.abs(best.timeMs - timeMs);
-  for (const point of energyCurve) {
-    const distance = Math.abs(point.timeMs - timeMs);
-    if (distance < bestDistance) {
-      best = point;
-      bestDistance = distance;
-    }
-  }
-  return best.value;
 }
 
 function overlap(aStart: number, aEnd: number, bStart: number, bEnd: number): number {

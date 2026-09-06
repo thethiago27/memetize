@@ -1,8 +1,11 @@
-import type {
-  TimelineClip,
-  TimelineEffect,
-  TimelineTransitionOut,
-  TransitionStyle,
+import {
+  type FadeStyle,
+  isFadeStyle,
+  isOverlapStyle,
+  type OverlapStyle,
+  type TimelineClip,
+  type TimelineEffect,
+  type TimelineTransitionOut,
 } from '@memetize/timeline';
 import { FADE_COLOR_BY_STYLE, XFADE_TRANSITION_BY_STYLE } from './constants';
 
@@ -12,16 +15,9 @@ import { FADE_COLOR_BY_STYLE, XFADE_TRANSITION_BY_STYLE } from './constants';
  * fragments, plus the parsers `validateTimeline` uses to accept them.
  */
 
-export type OverlapStyle = keyof typeof XFADE_TRANSITION_BY_STYLE;
-export type FadeStyle = keyof typeof FADE_COLOR_BY_STYLE;
-
-export function isOverlapStyle(style: TransitionStyle): style is OverlapStyle {
-  return style in XFADE_TRANSITION_BY_STYLE;
-}
-
-export function isFadeStyle(style: TransitionStyle): style is FadeStyle {
-  return style in FADE_COLOR_BY_STYLE;
-}
+/** The cut vocabulary and its partition live in `@memetize/timeline`. */
+export type { FadeStyle, OverlapStyle };
+export { isFadeStyle, isOverlapStyle };
 
 export interface ParsedHold {
   startMs: number;

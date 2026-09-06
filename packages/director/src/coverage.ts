@@ -378,6 +378,14 @@ function absorbRemainder(
   return true;
 }
 
+/**
+ * How much source a moment really has. The stored `durationMs` is a
+ * denormalization of `[startMs, endMs]`, and coverage cuts takes inside that
+ * interval — so when the two disagree, trusting `durationMs` sized a take
+ * against material the interval does not contain. The interval wins; the
+ * smaller of the two is the only length both agree on.
+ */
 function momentDuration(moment: AssembleMoment): number {
-  return moment.durationMs > 0 ? moment.durationMs : Math.max(0, moment.endMs - moment.startMs);
+  const intervalMs = Math.max(0, moment.endMs - moment.startMs);
+  return moment.durationMs > 0 ? Math.min(moment.durationMs, intervalMs) : intervalMs;
 }

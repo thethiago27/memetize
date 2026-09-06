@@ -26,8 +26,6 @@
   --rule: var(--color-rule);
   --signal: var(--color-signal);
   --signal-ink: var(--color-signal-ink);
-  --amber: var(--color-signal);
-  --amber-ink: var(--color-signal-ink);
   --tape: var(--color-tape);
   --cut: var(--color-cut);
   --ok: var(--color-ok);
@@ -60,7 +58,6 @@ body {
 }
 
 body {
-  --font-slate: var(--font-body);
   font-family: var(--font-body), "Outfit", sans-serif;
   font-size: 15px;
   line-height: 1.45;
@@ -87,7 +84,7 @@ button:disabled {
 }
 
 :focus-visible {
-  outline: 2px solid var(--amber);
+  outline: 2px solid var(--signal);
   outline-offset: 2px;
 }
 
@@ -127,14 +124,14 @@ p {
 }
 
 .wordmark {
-  font-family: var(--font-slate), "Outfit", sans-serif;
+  font-family: var(--font-body), "Outfit", sans-serif;
   font-weight: 700;
   font-size: 1.5rem;
   letter-spacing: -0.02em;
 }
 
 .wordmark span {
-  color: var(--amber);
+  color: var(--signal);
 }
 
 .nav {
@@ -184,7 +181,7 @@ p {
 }
 
 .headline {
-  font-family: var(--font-slate), "Outfit", sans-serif;
+  font-family: var(--font-body), "Outfit", sans-serif;
   font-size: clamp(1.8rem, 3vw, 2.6rem);
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -194,7 +191,7 @@ p {
 }
 
 .section-title {
-  font-family: var(--font-slate), "Outfit", sans-serif;
+  font-family: var(--font-body), "Outfit", sans-serif;
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--tape);
@@ -285,10 +282,10 @@ p {
 }
 
 .notice {
-  border: 1px solid var(--amber);
+  border: 1px solid var(--signal);
   border-radius: var(--radius);
   padding: var(--space) calc(var(--space) * 1.5);
-  color: var(--amber);
+  color: var(--signal);
   background: color-mix(in srgb, var(--signal) 6%, transparent);
 }
 
@@ -329,9 +326,9 @@ p {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid var(--amber);
+  border: 1px solid var(--signal);
   background: transparent;
-  color: var(--amber);
+  color: var(--signal);
   padding: 7px 14px;
   border-radius: var(--radius);
   font-weight: 600;
@@ -353,8 +350,8 @@ p {
 }
 
 .btn-primary {
-  background: var(--amber);
-  color: var(--amber-ink);
+  background: var(--signal);
+  color: var(--signal-ink);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -462,7 +459,7 @@ p {
 }
 
 .card:hover {
-  border-color: var(--amber);
+  border-color: var(--signal);
 }
 
 .card-title {
@@ -559,7 +556,7 @@ p {
 }
 
 .dropzone[data-over="true"] {
-  border-color: var(--amber);
+  border-color: var(--signal);
   background: color-mix(in srgb, var(--signal) 6%, transparent);
 }
 
@@ -663,11 +660,11 @@ p {
 }
 
 .step[data-state="RUNNING"] {
-  color: var(--amber);
+  color: var(--signal);
 }
 
 .step[data-state="RUNNING"] .step-bar {
-  background: var(--amber);
+  background: var(--signal);
   animation: pulse 1.2s ease-in-out infinite;
 }
 
@@ -676,7 +673,7 @@ p {
 }
 
 .step[data-state="PENDING"] .step-bar {
-  background: var(--amber);
+  background: var(--signal);
 }
 
 .step[data-state="FAILED"] {
@@ -856,7 +853,7 @@ p {
 }
 
 .clip[data-selected="true"] {
-  box-shadow: inset 0 0 0 2px var(--amber);
+  box-shadow: inset 0 0 0 2px var(--signal);
 }
 
 .clip[data-playing="true"]::after {
@@ -907,7 +904,7 @@ p {
 }
 
 .cut-marker[data-style="whip"] {
-  background: repeating-linear-gradient(135deg, var(--amber) 0 3px, transparent 3px 6px);
+  background: repeating-linear-gradient(135deg, var(--signal) 0 3px, transparent 3px 6px);
 }
 
 .clip-fx {
@@ -918,7 +915,7 @@ p {
   padding: 1px 4px;
   border-radius: 3px;
   background: rgba(0, 0, 0, 0.65);
-  color: var(--amber);
+  color: var(--signal);
   font-family: var(--font-mono), "IBM Plex Mono", monospace;
   font-size: 0.6rem;
   letter-spacing: 0.02em;
@@ -1011,7 +1008,7 @@ p {
 
 .transport-range {
   width: 100%;
-  accent-color: var(--amber);
+  accent-color: var(--signal);
 }
 
 /* Storyboard preview */
@@ -1083,7 +1080,7 @@ p {
 }
 
 .moment[data-current="true"] {
-  border-color: var(--amber);
+  border-color: var(--signal);
 }
 
 .moment-body {
@@ -1122,11 +1119,11 @@ p {
 }
 
 .star[data-on="true"] {
-  color: var(--amber);
+  color: var(--signal);
 }
 
 .star:hover {
-  color: var(--amber);
+  color: var(--signal);
 }
 
 /* Tabs */
@@ -1156,7 +1153,7 @@ p {
 
 .tab[data-active="true"] {
   color: var(--ink);
-  border-bottom-color: var(--amber);
+  border-bottom-color: var(--signal);
 }
 
 .frames {
@@ -1301,7 +1298,7 @@ p {
   top: 2px;
   transform: translateX(2px);
   font-size: 0.7rem;
-  color: var(--amber);
+  color: var(--signal);
 }
 
 .analysis .window-label[data-edge="end"] {
@@ -1341,8 +1338,8 @@ p {
 }
 
 .analysis .energy polygon {
-  fill: color-mix(in srgb, var(--amber) 40%, transparent);
-  stroke: var(--amber);
+  fill: color-mix(in srgb, var(--signal) 40%, transparent);
+  stroke: var(--signal);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
@@ -1392,9 +1389,9 @@ p {
 }
 
 .analysis .lyric[data-current="true"] {
-  background: var(--amber);
-  border-color: var(--amber);
-  color: var(--amber-ink);
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--signal-ink);
 }
 
 .analysis .track-ruler {
@@ -1431,9 +1428,9 @@ p {
   position: absolute;
   top: 18px;
   bottom: 0;
-  background: color-mix(in srgb, var(--amber) 10%, transparent);
-  border-left: 1px solid var(--amber);
-  border-right: 1px solid var(--amber);
+  background: color-mix(in srgb, var(--signal) 10%, transparent);
+  border-left: 1px solid var(--signal);
+  border-right: 1px solid var(--signal);
   pointer-events: none;
 }
 
@@ -1443,7 +1440,7 @@ p {
   bottom: 0;
   width: 2px;
   margin-left: -1px;
-  background: var(--amber);
+  background: var(--signal);
   pointer-events: none;
 }
 
@@ -1453,9 +1450,9 @@ p {
 }
 
 .analysis .window.draft {
-  background: color-mix(in srgb, var(--amber) 18%, transparent);
-  border-left: 2px solid var(--amber);
-  border-right: 2px solid var(--amber);
+  background: color-mix(in srgb, var(--signal) 18%, transparent);
+  border-left: 2px solid var(--signal);
+  border-right: 2px solid var(--signal);
   pointer-events: auto;
   cursor: grab;
   touch-action: none;
@@ -1483,7 +1480,7 @@ p {
   height: 28px;
   margin-top: -14px;
   border-radius: 2px;
-  background: var(--amber);
+  background: var(--signal);
 }
 
 .analysis .handle[data-edge="start"] {

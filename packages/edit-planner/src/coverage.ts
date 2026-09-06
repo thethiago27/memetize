@@ -1,5 +1,6 @@
 import type { AudioSection, EnergyPoint, NarrativeSegment } from '@memetize/contracts';
 import { MAX_VISUAL_SLOT_MS, MIN_VISUAL_SLOT_MS } from './constants';
+import { nearestEnergy } from './energy';
 
 export interface NarrativeCoverageInput {
   window: { sourceStartMs: number; sourceEndMs: number };
@@ -11,7 +12,8 @@ export interface NarrativeCoverageInput {
 
 export type CoverageSuggestion = Omit<NarrativeSegment, 'sourceKind'>;
 
-interface Span extends NarrativeSegment {}
+/** A narrative segment while it is still being placed; same shape, clearer name. */
+type Span = NarrativeSegment;
 
 export function planNarrativeCoverage(input: NarrativeCoverageInput): NarrativeSegment[] {
   const { sourceStartMs, sourceEndMs } = input.window;
@@ -85,7 +87,7 @@ function instrumentalSpan(startMs: number, endMs: number, input: NarrativeCovera
     visualIdeas: [type, 'instrumental'],
     literalness: 0.5,
     ironyPotential: 0.5,
-    energy: nearestEnergy(startMs, input.energyCurve),
+    energy: nearestEnergy(startMs, input.energyCurve) ?? 0.5,
   };
 }
 
@@ -96,9 +98,25 @@ function splitSpan(span: Span, beats: readonly number[]): Span[] {
   const pieces: Span[] = [];
   let cursor = span.startMs;
   while (span.endMs - cursor > MAX_VISUAL_SLOT_MS) {
+    const remainingMs = span.endMs - cursor;
     const ideal = cursor + MAX_VISUAL_SLOT_MS;
-    const cut = pickSplitBeat(beats, cursor, span.endMs, ideal);
-    if (cut === null || span.endMs - cut < MIN_VISUAL_SLOT_MS) break;
+    const beat = pickSplitBeat(beats, cursor, span.endMs, ideal);
+
+    // What is left is longer than one slot but shorter than two, so no single
+    // cut at `ideal` can leave a usable tail: split it evenly instead. Both
+    // halves land between MIN and MAX because `remainingMs <= MAX + MIN`.
+    if (span.endMs - ideal < MIN_VISUAL_SLOT_MS) {
+      const half = cursor + Math.round(remainingMs / 2);
+      const evenCut = beat !== null && Math.abs(beat - half) < MIN_VISUAL_SLOT_MS ? beat : half;
+      pieces.push({ ...span, startMs: cursor, endMs: evenCut });
+      cursor = evenCut;
+      break;
+    }
+
+    // Prefer a beat, but never give up on the split: returning here left a span
+    // longer than MAX_VISUAL_SLOT_MS, which is exactly what this function exists
+    // to prevent. A span with no usable beat is cut on time.
+    const cut = beat !== null && span.endMs - beat >= MIN_VISUAL_SLOT_MS ? beat : ideal;
     pieces.push({ ...span, startMs: cursor, endMs: cut });
     cursor = cut;
   }
@@ -149,19 +167,4 @@ function containingSection(
   );
   if (containing) return containing;
   return sections.find((section) => section.startMs <= startMs && startMs < section.endMs);
-}
-
-function nearestEnergy(timeMs: number, energyCurve: readonly EnergyPoint[]): number {
-  if (energyCurve.length === 0) return 0.5;
-  let best = energyCurve[0];
-  if (!best) return 0.5;
-  let bestDistance = Math.abs(best.timeMs - timeMs);
-  for (const point of energyCurve) {
-    const distance = Math.abs(point.timeMs - timeMs);
-    if (distance < bestDistance) {
-      best = point;
-      bestDistance = distance;
-    }
-  }
-  return best.value;
 }

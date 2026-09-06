@@ -1,6 +1,8 @@
 import type {
   ClipStyle,
   CutDowngradeReason,
+  FadeStyle,
+  OverlapStyle,
   Timeline,
   TimelineClip,
   TimelineEffect,
@@ -19,9 +21,6 @@ import {
   TRANSITION_CLAMP_MS,
 } from './constants';
 import type { CutDecision, CutSourceBounds, CutStylesContext, CutStylesResult } from './types';
-
-type OverlapStyle = 'crossfade' | 'whip';
-type FadeStyle = 'dip_black' | 'flash';
 
 /** What a resolved clip style means for the source the clip consumes. */
 interface ClipShape {
