@@ -10,10 +10,8 @@ import {
   buildBoundaryFadeFilters,
   buildHoldFilter,
   buildSpeedFilter,
-  handlesFor,
+  clipTimeModel,
   isOverlapStyle,
-  parseHoldEffect,
-  parseSpeedEffect,
   toSeconds,
   transitionOutOf,
   xfadeTransitionName,
@@ -130,9 +128,12 @@ export function buildFfmpegGraph(
     const frames =
       slotFrames + (incomingFrames?.headFrames ?? 0) + (outgoingFrames?.tailFrames ?? 0);
     if (frames <= 0) {
-      // A clip shorter than one frame that lands between two grid lines has no
-      // frame of its own; its time is already accounted for by its neighbours.
-      return;
+      // A clip that occupies no frame of the output grid cannot be rendered:
+      // silently dropping it used to desynchronize the join, because the
+      // previous clip had already extended into a transition this clip was
+      // supposed to complete. `validateTimeline` rejects these before any
+      // spawn, so reaching here means the graph was built without validating.
+      throw new Error(`buildFfmpegGraph: clip "${clip.id}" occupies no output frame`);
     }
 
     const inputIndex = inputs.length;
@@ -212,19 +213,10 @@ function buildSegment(params: {
   frames: number;
 }): { chain: string; lengthMs: number } {
   const { clip, canvas } = params;
-  const slotMs = clip.timeline.endMs - clip.timeline.startMs;
-  const { headMs, tailMs } = handlesFor(params.incoming, params.outgoing);
-  const lengthMs = headMs + slotMs + tailMs;
-
-  const speed = firstParsed(clip, parseSpeedEffect);
-  const factor = speed?.factor ?? 1;
-  const hold = firstParsed(clip, parseHoldEffect);
-  const holdMs = hold ? hold.endMs - hold.startMs : 0;
-  // A frozen tail covers the hold and any outgoing handle; nothing after it moves.
-  const motionMs = hold ? headMs + slotMs - holdMs : lengthMs;
-
-  const trimStartMs = clip.source.startMs - headMs * factor;
-  const trimEndMs = trimStartMs + motionMs * factor;
+  // One time model, shared with `validateTimeline`, so what the graph consumes
+  // and what the validator checks can never drift apart.
+  const { slotMs, headMs, tailMs, lengthMs, factor, holdMs, trimStartMs, trimEndMs } =
+    clipTimeModel(clip, params.incoming, params.outgoing);
 
   const filters: string[] = [
     `trim=start=${toSeconds(trimStartMs)}:end=${toSeconds(trimEndMs)}`,
@@ -244,7 +236,7 @@ function buildSegment(params: {
     filters.push(buildZoomFilter(shifted, clip, canvas));
   }
 
-  if (hold) filters.push(buildHoldFilter(holdMs, tailMs));
+  if (holdMs > 0) filters.push(buildHoldFilter(holdMs, tailMs));
   filters.push(
     ...buildBoundaryFadeFilters({
       incoming: params.incoming,
@@ -266,17 +258,6 @@ function buildSegment(params: {
   );
 
   return { chain: `[${params.inputIndex}:v]${filters.join(',')}`, lengthMs };
-}
-
-function firstParsed<T>(
-  clip: TimelineClip,
-  parse: (effect: TimelineClip['effects'][number], clip: TimelineClip) => T | null,
-): T | null {
-  for (const effect of clip.effects) {
-    const parsed = parse(effect, clip);
-    if (parsed !== null) return parsed;
-  }
-  return null;
 }
 
 /**
@@ -367,8 +348,12 @@ function joinSegments(
 }
 
 /**
- * Composites each caption PNG over the joined video for its window. Cues are
- * contiguous, so two overlays are never enabled at the same instant.
+ * Composites each caption PNG over the joined video for its window.
+ *
+ * The window is half-open — `gte(t,start)*lt(t,end)` rather than
+ * `between(t,start,end)`. `between` is inclusive at both ends and cues are
+ * contiguous, so at the exact instant one cue ended and the next began both
+ * overlays were enabled and the captions stacked for one frame.
  */
 function buildSubtitleOverlays(
   cues: readonly RenderedCue[],
@@ -382,9 +367,8 @@ function buildSubtitleOverlays(
     const y = Math.round(canvasHeight * BASELINE_RATIO - cue.height);
     const prev = index === 0 ? '[vjoin]' : `[vs${index - 1}]`;
     const next = index === cues.length - 1 ? '[vout]' : `[vs${index}]`;
-    ops.push(
-      `${prev}[${inputIndex}:v]overlay=x=(W-w)/2:y=${y}:enable='between(t,${toSeconds(cue.startMs)},${toSeconds(cue.endMs)})'${next}`,
-    );
+    const enable = `gte(t,${toSeconds(cue.startMs)})*lt(t,${toSeconds(cue.endMs)})`;
+    ops.push(`${prev}[${inputIndex}:v]overlay=x=(W-w)/2:y=${y}:enable='${enable}'${next}`);
   });
   return ops;
 }

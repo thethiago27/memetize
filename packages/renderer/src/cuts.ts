@@ -78,6 +78,82 @@ export function handlesFor(
   return { headMs, tailMs };
 }
 
+/** The clip's playback factor (1 with no `speed` effect). */
+export function speedFactorOf(clip: TimelineClip): number {
+  for (const effect of clip.effects) {
+    const parsed = parseSpeedEffect(effect, clip);
+    if (parsed) return parsed.factor;
+  }
+  return 1;
+}
+
+/** The clip's frozen-tail length in output ms (0 with no `hold` effect). */
+export function holdMsOf(clip: TimelineClip): number {
+  for (const effect of clip.effects) {
+    const parsed = parseHoldEffect(effect, clip);
+    if (parsed) return parsed.endMs - parsed.startMs;
+  }
+  return 0;
+}
+
+/** How much source time a clip consumes, and where. */
+export interface ClipTimeModel extends ClipHandles {
+  /** Output ms of the clip's own slot. */
+  slotMs: number;
+  /** Output ms of the whole rendered segment: `head + slot + tail`. */
+  lengthMs: number;
+  factor: number;
+  holdMs: number;
+  /** Output ms that actually move (the frozen tail is not decoded). */
+  motionMs: number;
+  /** Source instant the segment starts decoding at — negative means out of bounds. */
+  trimStartMs: number;
+  /** Source instant it stops decoding at. */
+  trimEndMs: number;
+  /** Source ms consumed at or after `clip.source.startMs`. */
+  consumedAfterStartMs: number;
+}
+
+/**
+ * The renderer's time model for one clip — the single answer to "what source
+ * does this consume", used both to build the FFmpeg trim and to validate the
+ * timeline before spawning it.
+ *
+ * It has to be one function: the validator used to check the head handle
+ * against `headMs` while the graph consumed `headMs * factor`, so a `speed_up`
+ * clip with an incoming crossfade passed validation and was then trimmed from
+ * before its source start. The same divergence applied to the source-length
+ * check, which compared against the slot alone and ignored both the factor and
+ * the outgoing handle.
+ */
+export function clipTimeModel(
+  clip: TimelineClip,
+  incoming: TimelineTransitionOut | null,
+  outgoing: TimelineTransitionOut,
+): ClipTimeModel {
+  const slotMs = clip.timeline.endMs - clip.timeline.startMs;
+  const { headMs, tailMs } = handlesFor(incoming, outgoing);
+  const lengthMs = headMs + slotMs + tailMs;
+  const factor = speedFactorOf(clip);
+  const holdMs = holdMsOf(clip);
+  // A frozen tail covers the hold and any outgoing handle; nothing after it moves.
+  const motionMs = holdMs > 0 ? headMs + slotMs - holdMs : lengthMs;
+  const trimStartMs = clip.source.startMs - headMs * factor;
+  const trimEndMs = trimStartMs + motionMs * factor;
+  return {
+    slotMs,
+    headMs,
+    tailMs,
+    lengthMs,
+    factor,
+    holdMs,
+    motionMs,
+    trimStartMs,
+    trimEndMs,
+    consumedAfterStartMs: trimEndMs - clip.source.startMs,
+  };
+}
+
 /**
  * `fade` filters for a dip through black or white: the outgoing side fades
  * out over the last `D/2` of its rendered segment, the incoming side fades

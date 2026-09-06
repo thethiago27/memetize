@@ -1,3 +1,5 @@
+import { WORKER_VERSION } from '@memetize/contracts';
+
 /**
  * Shared thresholds for the Renderer (spec sections 38-39). Kept as named
  * constants — not magic numbers — so `validateTimeline`, `validateOutput`
@@ -17,12 +19,28 @@ export const AUDIO_DRIFT_MS = 300;
  * frame-grid cut keeps clips exact, but source files that end before the
  * moment the catalog recorded still lose frames, and a slightly early video
  * end is acceptable output. Below this fraction of the timeline the video is
- * considered truncated and the render is rejected (a 1 s video under 60 s of
- * audio still fails).
+ * considered truncated and the render is rejected.
+ *
+ * The floor was 0.8, which let a video a fifth shorter than its audio — 48 s
+ * under a 60 s track — publish as valid with only a warning (F07). Real
+ * shortfalls observed in renders are around 2%, so that is the tolerance.
  */
-export const VIDEO_MIN_COVERAGE = 0.8;
+export const VIDEO_MIN_COVERAGE = 0.98;
 export const RENDERER_NAME = 'ffmpeg';
-export const RENDERER_VERSION = '1.1.0';
+
+/**
+ * The renderer's version, taken from the job registry rather than declared
+ * again here. Job identity is `jobType+entityId+inputHash+workerVersion` (spec
+ * section 4.2), so the two must be the same string: while they were separate,
+ * burning subtitles into the output bumped this to 1.1.0 while
+ * `WORKER_VERSION.RENDER` still said 1.0.0, which made a pre-subtitles render
+ * look reusable for a timeline that now carries captions.
+ */
+export const RENDERER_VERSION = WORKER_VERSION.RENDER;
+
+/** Codecs the renderer always produces; anything else means the encode is not ours. */
+export const OUTPUT_VIDEO_CODEC = 'h264';
+export const OUTPUT_AUDIO_CODEC = 'aac';
 
 /**
  * Cut styles (cut-styles spec). A transition may never take more than this

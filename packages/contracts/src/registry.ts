@@ -47,6 +47,8 @@ export const WORKER_VERSION: Record<JobType, string> = {
   DIRECTOR: '1.2.0',
   TIMING: '1.0.0',
   EFFECTS: '1.2.0',
-  RENDER: '1.0.0',
+  // Bumped to 1.1.0 with burned-in subtitles; `RENDERER_VERSION` in
+  // `@memetize/renderer` is defined from this value, not alongside it.
+  RENDER: '1.1.0',
   FEEDBACK_EMBED: '1.0.0',
 };

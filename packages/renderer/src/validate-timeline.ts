@@ -1,7 +1,13 @@
 import type { RenderWarning } from '@memetize/contracts';
 import type { Timeline, TimelineClip, TimelineEffect } from '@memetize/timeline';
 import { MAX_TRANSITION_SLOT_FRACTION, MIN_CLIP_MS } from './constants';
-import { isOverlapStyle, parseHoldEffect, parseSpeedEffect, transitionOutOf } from './cuts';
+import {
+  clipTimeModel,
+  isOverlapStyle,
+  parseHoldEffect,
+  parseSpeedEffect,
+  transitionOutOf,
+} from './cuts';
 import type { TimelineIssue, TimelineValidation } from './types';
 import { isRenderableZoom } from './zoom';
 
@@ -102,15 +108,6 @@ export function validateTimeline(
       warnings.push({ code: 'CLIP_TOO_SHORT', clipId: clip.id, durationMs: slotMs });
     }
 
-    const sourceMs = clip.source.endMs - clip.source.startMs;
-    if (sourceMs < slotMs) {
-      errors.push({
-        code: 'SOURCE_SHORTER_THAN_SLOT',
-        clipId: clip.id,
-        message: `clip "${clip.id}" source (${sourceMs}ms) is shorter than its slot (${slotMs}ms)`,
-      });
-    }
-
     if (clip.effects.some((effect) => !isRenderableEffect(effect, clip))) {
       warnings.push({
         code: 'UNKNOWN_EFFECT',
@@ -120,6 +117,7 @@ export function validateTimeline(
     }
   }
 
+  validateFrameGrid(sorted, timeline.canvas.fps, errors);
   validateTransitions(sorted, errors);
 
   let cursorMs = 0;
@@ -153,10 +151,49 @@ function isRenderableEffect(effect: TimelineEffect, clip: TimelineClip): boolean
 }
 
 /**
+ * Every clip must occupy at least one frame of the output grid. The graph
+ * cannot render one that does not — it used to drop it, which desynchronized
+ * the join, because its neighbour had already extended into a transition the
+ * dropped clip was supposed to complete.
+ */
+function validateFrameGrid(
+  sorted: readonly TimelineClip[],
+  fps: number,
+  errors: TimelineIssue[],
+): void {
+  for (let index = 0; index < sorted.length; index += 1) {
+    const clip = sorted[index];
+    if (!clip) continue;
+    const previous = sorted[index - 1] ?? null;
+    const incoming = previous ? transitionOutOf(previous, false) : null;
+    const outgoing = transitionOutOf(clip, index === sorted.length - 1);
+    const frameAt = (ms: number) => Math.round((ms * fps) / 1000);
+    const slotFrames = frameAt(clip.timeline.endMs) - frameAt(clip.timeline.startMs);
+    const headFrames =
+      incoming && isOverlapStyle(incoming.style) ? Math.floor(frameAt(incoming.durationMs) / 2) : 0;
+    const outgoingFrames = isOverlapStyle(outgoing.style) ? frameAt(outgoing.durationMs) : 0;
+    const tailFrames = outgoingFrames - Math.floor(outgoingFrames / 2);
+    if (slotFrames + headFrames + tailFrames <= 0) {
+      errors.push({
+        code: 'CLIP_HAS_NO_FRAMES',
+        clipId: clip.id,
+        message: `clip "${clip.id}" occupies no frame at ${fps}fps (${clip.timeline.startMs}ms-${clip.timeline.endMs}ms)`,
+      });
+    }
+  }
+}
+
+/**
  * Cut-styles time model: a transition is capped at a third of the smaller
- * neighboring slot, an overlapping one needs its `D/2` head handle to exist
- * in source time, and a clip's incoming plus outgoing transitions must fit
- * inside its slot.
+ * neighboring slot, an overlapping one needs its head handle to exist in
+ * source time, a clip's incoming plus outgoing transitions must fit inside
+ * its slot, and its declared source must cover everything the graph decodes.
+ *
+ * The handle and source checks go through `clipTimeModel`, the same function
+ * the graph builds its trim from. They used to be spelled out here in output
+ * ms and so ignored the playback factor, which let a `speed_up` clip with an
+ * incoming crossfade pass validation and then be trimmed from before its
+ * source start.
  */
 function validateTransitions(sorted: readonly TimelineClip[], errors: TimelineIssue[]): void {
   for (let index = 0; index < sorted.length; index += 1) {
@@ -166,7 +203,8 @@ function validateTransitions(sorted: readonly TimelineClip[], errors: TimelineIs
     const next = sorted[index + 1] ?? null;
     const incoming = previous ? transitionOutOf(previous, false) : null;
     const outgoing = transitionOutOf(clip, next === null);
-    const slotMs = clip.timeline.endMs - clip.timeline.startMs;
+    const model = clipTimeModel(clip, incoming, outgoing);
+    const { slotMs } = model;
 
     if (next && outgoing.durationMs > 0) {
       const nextSlotMs = next.timeline.endMs - next.timeline.startMs;
@@ -180,15 +218,21 @@ function validateTransitions(sorted: readonly TimelineClip[], errors: TimelineIs
       }
     }
 
-    if (incoming && isOverlapStyle(incoming.style)) {
-      const headMs = incoming.durationMs / 2;
-      if (clip.source.startMs - headMs < 0) {
-        errors.push({
-          code: 'TRANSITION_HANDLE_OUT_OF_BOUNDS',
-          clipId: clip.id,
-          message: `clip "${clip.id}" needs a ${headMs}ms head handle but its source starts at ${clip.source.startMs}ms`,
-        });
-      }
+    if (model.headMs > 0 && model.trimStartMs < 0) {
+      errors.push({
+        code: 'TRANSITION_HANDLE_OUT_OF_BOUNDS',
+        clipId: clip.id,
+        message: `clip "${clip.id}" needs a ${model.headMs}ms head handle at ${model.factor}x (${model.headMs * model.factor}ms of source) but its source starts at ${clip.source.startMs}ms`,
+      });
+    }
+
+    const sourceMs = clip.source.endMs - clip.source.startMs;
+    if (sourceMs < model.consumedAfterStartMs) {
+      errors.push({
+        code: 'SOURCE_SHORTER_THAN_SLOT',
+        clipId: clip.id,
+        message: `clip "${clip.id}" source (${sourceMs}ms) is shorter than the ${model.consumedAfterStartMs}ms it must supply for its ${slotMs}ms slot at ${model.factor}x`,
+      });
     }
 
     const incomingMs = incoming?.durationMs ?? 0;

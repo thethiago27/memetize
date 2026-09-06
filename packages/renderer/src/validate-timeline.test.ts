@@ -385,3 +385,76 @@ function sourceShortTimeline(): Timeline {
     ],
   });
 }
+
+describe('validateTimeline: the time model the graph actually consumes', () => {
+  it('accounts for the speed factor in the head handle a crossfade needs', () => {
+    // The graph trims from `source.startMs - headMs * factor`. With a 400ms
+    // crossfade the head is 200ms of output, but at 2x that is 400ms of source,
+    // so a take starting 300ms in is trimmed from -100ms. Checking the handle in
+    // output ms alone accepted this.
+    const tl = timeline({
+      durationMs: 4000,
+      clips: [
+        clip({
+          id: 'clp_1',
+          timeline: { startMs: 0, endMs: 2000 },
+          source: { assetId: 'ast_1', startMs: 0, endMs: 2000 },
+          transitionOut: { style: 'crossfade', durationMs: 400, requested: 'crossfade' },
+        }),
+        clip({
+          id: 'clp_2',
+          timeline: { startMs: 2000, endMs: 4000 },
+          source: { assetId: 'ast_2', startMs: 300, endMs: 4700 },
+          effects: [{ type: 'speed', startMs: 2000, endMs: 4000, factor: 2 }],
+        }),
+      ],
+    });
+    const result = validateTimeline(tl);
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({ code: 'TRANSITION_HANDLE_OUT_OF_BOUNDS', clipId: 'clp_2' }),
+    );
+  });
+
+  it('requires the source to cover the slot times the speed factor', () => {
+    // A 2x clip over a 2000ms slot decodes 4000ms of source; a 2000ms take is
+    // half of what the graph reads.
+    const tl = timeline({
+      durationMs: 2000,
+      clips: [
+        clip({
+          id: 'clp_1',
+          timeline: { startMs: 0, endMs: 2000 },
+          source: { assetId: 'ast_1', startMs: 0, endMs: 2000 },
+          effects: [{ type: 'speed', startMs: 0, endMs: 2000, factor: 2 }],
+        }),
+      ],
+    });
+    const result = validateTimeline(tl);
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({ code: 'SOURCE_SHORTER_THAN_SLOT', clipId: 'clp_1' }),
+    );
+  });
+
+  it('rejects a clip that occupies no frame of the output grid', () => {
+    // 10ms at 30fps rounds to the same frame on both edges. The graph used to
+    // drop such a clip, which desynchronized the join.
+    const tl = timeline({
+      durationMs: 2000,
+      clips: [
+        clip({ id: 'clp_1', timeline: { startMs: 0, endMs: 1990 } }),
+        clip({
+          id: 'clp_2',
+          timeline: { startMs: 1990, endMs: 2000 },
+          source: { assetId: 'ast_2', startMs: 0, endMs: 1000 },
+        }),
+      ],
+    });
+    const result = validateTimeline(tl);
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({ code: 'CLIP_HAS_NO_FRAMES', clipId: 'clp_2' }),
+    );
+  });
+});

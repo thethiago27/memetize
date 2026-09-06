@@ -6,10 +6,12 @@ import type {
   LyricLine,
 } from '@memetize/contracts';
 import {
+  BOUNDARY_ENERGY_LOOKBACK_MS,
   HIGHLIGHT_SELECTOR,
   HIGHLIGHT_SELECTOR_VERSION,
   HIGHLIGHT_WEIGHTS,
   MAX_OUTPUT_DURATION_MS,
+  STRUCTURAL_ALIGNMENT_TOLERANCE_MS,
 } from './constants';
 
 const HIGH_VALUE_SECTIONS = new Set(['chorus', 'payoff', 'climax']);
@@ -179,14 +181,19 @@ function scoreNarrativeArc(startMs: number, endMs: number, input: HighlightSelec
   return clamp01(Math.max(rise, climaxInFinalThird));
 }
 
+/**
+ * How well the window's edges sit on the music: each edge scores up to 0.5 for
+ * landing on (or near) a section boundary or downbeat, and the start is
+ * penalized for cutting across a jump in energy.
+ */
 function scoreBoundaries(startMs: number, endMs: number, input: HighlightSelectionInput): number {
   const structural = collectStructuralTimes(input.sections, input.downbeats);
-  const startHit = structural.has(startMs) ? 0.5 : 0;
-  const endHit = structural.has(endMs) ? 0.5 : 0;
-  const alignment = startHit + endHit;
+  const alignment = 0.5 * alignmentAt(startMs, structural) + 0.5 * alignmentAt(endMs, structural);
 
+  // Measured across a real interval: the energy curve is sampled coarsely, so
+  // comparing `t` with `t - 1ms` returned the same sample every time.
   const energyAtStart = energyAt(startMs, input.energyCurve);
-  const energyBefore = energyAt(startMs - 1, input.energyCurve);
+  const energyBefore = energyAt(startMs - BOUNDARY_ENERGY_LOOKBACK_MS, input.energyCurve);
   const discontinuity =
     energyAtStart === null || energyBefore === null ? 0 : Math.abs(energyAtStart - energyBefore);
   const smoothness = 1 - clamp01(discontinuity);
@@ -194,17 +201,29 @@ function scoreBoundaries(startMs: number, endMs: number, input: HighlightSelecti
   return clamp01(0.7 * alignment + 0.3 * smoothness);
 }
 
+/** 1 exactly on a structural time, falling linearly to 0 at the tolerance. */
+function alignmentAt(timeMs: number, structural: readonly number[]): number {
+  if (structural.length === 0) return 0;
+  let nearest = Number.POSITIVE_INFINITY;
+  for (const time of structural) {
+    const distance = Math.abs(time - timeMs);
+    if (distance < nearest) nearest = distance;
+  }
+  if (nearest >= STRUCTURAL_ALIGNMENT_TOLERANCE_MS) return 0;
+  return 1 - nearest / STRUCTURAL_ALIGNMENT_TOLERANCE_MS;
+}
+
 function collectStructuralTimes(
   sections: readonly AudioSection[],
   downbeats: readonly number[],
-): Set<number> {
+): number[] {
   const times = new Set<number>();
   for (const section of sections) {
     times.add(section.startMs);
     times.add(section.endMs);
   }
   for (const downbeat of downbeats) times.add(downbeat);
-  return times;
+  return [...times];
 }
 
 function energyAt(timeMs: number, energyCurve: readonly EnergyPoint[]): number | null {

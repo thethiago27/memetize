@@ -160,3 +160,22 @@ describe('validateOutput', () => {
     expect(longer.valid).toBe(false);
   });
 });
+
+describe('validateOutput: codecs and the coverage floor', () => {
+  it('rejects an output encoded with codecs the renderer never produces', () => {
+    // Presence alone was checked, so a file that decoded as something else
+    // passed. The README promises the codecs match.
+    expect(validateOutput(probe({ videoCodec: 'vp9' }), timeline(4000)).valid).toBe(false);
+    expect(validateOutput(probe({ audioCodec: 'opus' }), timeline(4000)).valid).toBe(false);
+  });
+
+  it('rejects a video stream a fifth shorter than its audio', () => {
+    // 48s of video under a 60s track: valid under the old 0.8 floor, with only
+    // a DURATION_DRIFT warning (F07).
+    const result = validateOutput(
+      probe({ durationMs: 60_000, videoDurationMs: 48_000, audioDurationMs: 60_000 }),
+      timeline(60_000),
+    );
+    expect(result.valid).toBe(false);
+  });
+});

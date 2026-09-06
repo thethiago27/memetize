@@ -424,8 +424,10 @@ describe('buildFfmpegGraph with burned-in subtitles', () => {
     });
 
     expect(graph.filterComplex).toContain('[vjoin]');
-    expect(graph.filterComplex).toContain("enable='between(t,0.000,1.500)'");
-    expect(graph.filterComplex).toContain("enable='between(t,1.500,3.000)'");
+    // Half-open windows: `between` is inclusive at both ends, so at t=1.500
+    // both cues would have been enabled and the captions would stack.
+    expect(graph.filterComplex).toContain("enable='gte(t,0.000)*lt(t,1.500)'");
+    expect(graph.filterComplex).toContain("enable='gte(t,1.500)*lt(t,3.000)'");
     expect(graph.filterComplex).toMatch(/\[vjoin\]\[2:v\]overlay=.*\[vs0\]/);
     expect(graph.filterComplex).toMatch(/\[vs0\]\[3:v\]overlay=.*\[vout\]/);
     expect(graph.inputs.map((input) => input.kind)).toEqual(['audio', 'video', 'image', 'image']);

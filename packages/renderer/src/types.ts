@@ -18,7 +18,8 @@ export interface TimelineIssue {
     | 'TIMELINE_WINDOW_MISMATCH'
     | 'TRANSITION_TOO_LONG'
     | 'TRANSITION_HANDLE_OUT_OF_BOUNDS'
-    | 'OVERLAPPING_TRANSITIONS';
+    | 'OVERLAPPING_TRANSITIONS'
+    | 'CLIP_HAS_NO_FRAMES';
   message: string;
   clipId?: string;
 }

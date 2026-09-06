@@ -57,7 +57,7 @@ export function optimizeTiming(timeline: Timeline, context: TimingContext): Timi
     let adjustedBoundaryMs = originalBoundaryMs;
     if (
       target &&
-      canMoveBoundary(previous, next, previousRange, nextRange, target.timeMs, context)
+      canMoveBoundary(previous, next, previousRange, nextRange, target.timeMs, sourceById, context)
     ) {
       adjustedBoundaryMs = target.timeMs;
       snappedTo = target.isDownbeat ? 'downbeat' : 'beat';
@@ -96,17 +96,34 @@ function canMoveBoundary(
   previousRange: TimelineRange,
   nextRange: TimelineRange,
   targetMs: number,
+  sourceById: Map<string, TimelineClip['source']>,
   context: TimingContext,
 ): boolean {
   const previousDuration = targetMs - previousRange.startMs;
   const nextDuration = nextRange.endMs - targetMs;
   if (previousDuration < MIN_TIMED_CLIP_MS || nextDuration < MIN_TIMED_CLIP_MS) return false;
 
-  if (!sourceFits(previous.momentId, previous.source, previousDuration, context)) return false;
-  if (!sourceFits(next.momentId, next.source, nextDuration, context)) return false;
+  // Decide against the sources this pass has already rewritten, not against the
+  // clip's original ones: `resizeSource` writes into `sourceById`, so reading
+  // `clip.source` here meant approving a move on one state and applying it to
+  // another.
+  const previousSource = sourceById.get(previous.id) ?? previous.source;
+  const nextSource = sourceById.get(next.id) ?? next.source;
+  if (!sourceFits(previous.momentId, previousSource, previousDuration, context)) return false;
+  if (!sourceFits(next.momentId, nextSource, nextDuration, context)) return false;
   return true;
 }
 
+/**
+ * Whether a take of `durationMs` can be cut for this clip.
+ *
+ * With the moment's bounds known, `fitSource` answers it. Without them the only
+ * safe answer is "not longer than the source it already has": the caller's
+ * contract is that a take stays inside its moment, and growing past the current
+ * range with no bounds to check against is exactly how a timeline ended up
+ * pointing past the moment the catalog recorded — invisible to the renderer,
+ * which only compares source length against the slot.
+ */
 function sourceFits(
   momentId: string,
   source: TimelineClip['source'],
@@ -114,7 +131,7 @@ function sourceFits(
   context: TimingContext,
 ): boolean {
   const bounds = context.sourceBoundsByMomentId.get(momentId);
-  if (!bounds) return durationMs >= 0;
+  if (!bounds) return durationMs >= 0 && durationMs <= source.endMs - source.startMs;
   return fitSource(source, durationMs, bounds) !== null;
 }
 
@@ -170,7 +187,9 @@ function resizeSource(
     source.startMs = fitted.startMs;
     source.endMs = fitted.endMs;
   } else {
-    source.endMs = source.startMs + durationMs;
+    // No bounds to fit against: shrink only, never grow past the take the
+    // Director already cut (`sourceFits` refuses the move otherwise).
+    source.endMs = source.startMs + Math.min(durationMs, source.endMs - source.startMs);
   }
 }
 

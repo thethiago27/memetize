@@ -74,6 +74,21 @@ function lineCountFits(lines: readonly string[]): boolean {
   return lines.length > 0 && lines.length <= MAX_LINES;
 }
 
+/** Shortens `text` with a trailing ellipsis until it measures within `maxWidth`. */
+function truncateToWidth(
+  ctx: SKRSContext2D,
+  text: string,
+  fontSize: number,
+  maxWidth: number,
+): string {
+  if (measureWidth(ctx, text, fontSize) <= maxWidth) return text;
+  let take = text.length;
+  while (take > 0 && measureWidth(ctx, `${text.slice(0, take).trimEnd()}…`, fontSize) > maxWidth) {
+    take -= 1;
+  }
+  return take > 0 ? `${text.slice(0, take).trimEnd()}…` : '…';
+}
+
 /**
  * Wraps `text` to at most three lines, shrinking the font down to 60% of the
  * base size when needed, then hard-wrapping leftover words.
@@ -97,9 +112,15 @@ export function layoutCue(text: string, canvas: TimelineCanvas): CueLayout {
       lines = wrapLine(probe, trimmed, fontSize, maxWidth);
     }
     if (lines.length > MAX_LINES) {
-      const kept = lines.slice(0, MAX_LINES - 1);
-      const overflow = lines.slice(MAX_LINES - 1).join(' ');
-      kept.push(overflow);
+      // Joining the leftover lines into one used to produce a line wider than
+      // `maxWidth`, so the PNG came out wider than the canvas and the centered
+      // overlay was cropped on both sides. Keep the lines that fit and mark the
+      // truncation instead.
+      const kept = lines.slice(0, MAX_LINES);
+      const last = kept[MAX_LINES - 1];
+      if (last !== undefined) {
+        kept[MAX_LINES - 1] = truncateToWidth(probe, last, fontSize, maxWidth);
+      }
       lines = kept;
     }
   }

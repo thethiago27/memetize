@@ -1,6 +1,12 @@
 import type { RenderValidation, RenderWarning } from '@memetize/contracts';
 import type { Timeline } from '@memetize/timeline';
-import { AUDIO_DRIFT_MS, DURATION_DRIFT_MS, VIDEO_MIN_COVERAGE } from './constants';
+import {
+  AUDIO_DRIFT_MS,
+  DURATION_DRIFT_MS,
+  OUTPUT_AUDIO_CODEC,
+  OUTPUT_VIDEO_CODEC,
+  VIDEO_MIN_COVERAGE,
+} from './constants';
 import type { OutputProbe } from './types';
 
 /**
@@ -25,12 +31,15 @@ export function validateOutput(probe: OutputProbe, timeline: Timeline): RenderVa
   }
 
   const { width, height, fps } = timeline.canvas;
+  // Codecs are checked by name, not merely for presence: the README promises the
+  // output's codecs match, and a file that decodes as something else is not the
+  // MP4 this renderer was asked to produce.
   const invalid =
     probe.width !== width ||
     probe.height !== height ||
     probe.fpsMilli !== fps * 1000 ||
-    probe.videoCodec === null ||
-    probe.audioCodec === null;
+    probe.videoCodec !== OUTPUT_VIDEO_CODEC ||
+    probe.audioCodec !== OUTPUT_AUDIO_CODEC;
 
   if (invalid) {
     return { valid: false, warnings };
