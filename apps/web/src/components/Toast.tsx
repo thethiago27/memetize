@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 type Tone = 'ok' | 'bad';
 
@@ -23,14 +31,27 @@ export function useToast(): ToastApi {
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seq = useRef(0);
+  // Tracked so unmounting cancels them; an orphan timer would call setState on
+  // an unmounted provider.
+  const timers = useRef<number[]>([]);
 
   const notify = useCallback((text: string, tone: Tone = 'ok') => {
     seq.current += 1;
     const id = seq.current;
     setToasts((current) => [...current, { id, text, tone }]);
-    window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
+      timers.current = timers.current.filter((entry) => entry !== timer);
       setToasts((current) => current.filter((toast) => toast.id !== id));
     }, 3600);
+    timers.current.push(timer);
+  }, []);
+
+  useEffect(() => {
+    const pending = timers;
+    return () => {
+      for (const timer of pending.current) window.clearTimeout(timer);
+      pending.current = [];
+    };
   }, []);
 
   const value = useMemo(() => ({ notify }), [notify]);

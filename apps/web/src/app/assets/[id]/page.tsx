@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { use, useCallback, useEffect, useState } from 'react';
+import { use, useCallback, useState } from 'react';
 import { StatusPill } from '../../../components/StatusPill';
 import { Thumb } from '../../../components/Thumb';
 import { useToast } from '../../../components/Toast';
@@ -13,7 +13,7 @@ import {
   mediaUrl,
 } from '../../../lib/api';
 import { ASSET_STATUS_LABEL, assetTone } from '../../../lib/labels';
-import { useInterval } from '../../../lib/use-interval';
+import { usePolledResource } from '../../../lib/use-polled-resource';
 
 const TERMINAL = new Set(['READY', 'FAILED']);
 
@@ -28,23 +28,23 @@ function covered(range: ExcludedRange, exclusions: ExcludedRange[]): boolean {
 export default function AssetPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { notify } = useToast();
-  const [detail, setDetail] = useState<AssetDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   /** Selected frames as "sceneId:timestampMs". */
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
-  const load = useCallback(() => {
-    api
-      .getAsset(id)
-      .then(setDetail)
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
-  }, [id]);
-
-  useEffect(load, [load]);
-  useInterval(load, detail !== null && !TERMINAL.has(detail.asset.status));
+  const {
+    data: detail,
+    error,
+    reload: load,
+  } = usePolledResource(
+    useCallback(() => api.getAsset(id), [id]),
+    useCallback(
+      (loaded: AssetDetail | null) => loaded !== null && !TERMINAL.has(loaded.asset.status),
+      [],
+    ),
+  );
 
   if (error)
     return (
@@ -373,6 +373,8 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
                             disabled={gone || busy !== null}
                             onChange={(event) => togglePicked(key, event.target.checked)}
                           />
+                          {/* biome-ignore lint/performance/noImgElement: media is served by
+                              the local Studio API, not a remote host next/image can optimize. */}
                           <img src={mediaUrl(frame.path) ?? ''} alt="" loading="lazy" />
                           <span>
                             {formatTimecode(frame.timestampMs)}

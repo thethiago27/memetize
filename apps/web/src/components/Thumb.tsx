@@ -14,7 +14,12 @@ export function Thumb({
   const url = mediaUrl(path);
   return (
     <div className={`thumb ${className}`.trim()}>
-      {url ? <img src={url} alt={alt} loading="lazy" /> : <span>{fallback}</span>}
+      {url ? (
+        // biome-ignore lint/performance/noImgElement: media comes from the local Studio API, not a remote host next/image can optimize.
+        <img src={url} alt={alt} loading="lazy" />
+      ) : (
+        <span>{fallback}</span>
+      )}
     </div>
   );
 }

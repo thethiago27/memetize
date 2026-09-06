@@ -177,11 +177,6 @@ p {
   flex-wrap: wrap;
 }
 
-.page-head > .stack {
-  min-width: 0;
-  flex: 1 1 20rem;
-}
-
 .lede {
   color: var(--tape);
   max-width: 48rem;
@@ -263,6 +258,11 @@ p {
 .stack {
   display: grid;
   gap: var(--space);
+}
+
+.page-head > .stack {
+  min-width: 0;
+  flex: 1 1 20rem;
 }
 
 .cluster {
@@ -580,6 +580,11 @@ p {
   padding: 0;
   background: rgba(0, 0, 0, 0.6);
   cursor: default;
+}
+
+.overlay-scrim:focus,
+.overlay-scrim:focus-visible {
+  outline: none;
 }
 
 .dialog {
@@ -1236,10 +1241,24 @@ p {
   background: var(--cut);
 }
 
+/*
+ * DESIGN.md: "kill animation and transition under prefers-reduced-motion".
+ * A bare `*` selector has zero specificity, so `.toast { animation: rise }` and
+ * the `.lamp-dot`/busy pulses all won and kept moving. `!important` is the
+ * correct tool here: this rule must beat every author style by definition.
+ */
 @media (prefers-reduced-motion: reduce) {
-  * {
-    animation: none;
-    transition: none;
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: a reset must beat every author style. */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: a reset must beat every author style. */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: a reset must beat every author style. */
+    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: a reset must beat every author style. */
+    scroll-behavior: auto !important;
   }
 }
 

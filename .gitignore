@@ -33,5 +33,8 @@ __pycache__/
 .ruff_cache/
 .python-version
 
+# Local verification artifacts (screenshots from a design pass, pnpm's store)
+.tmp-theme-verify/
+
 # macOS
 .DS_Store

@@ -74,6 +74,9 @@ jobs:
       - name: Sync Python workers
         run: pnpm py:sync
 
+      - name: Lint
+        run: pnpm lint
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -82,3 +85,6 @@ jobs:
 
       - name: Python worker tests
         run: pnpm py:test
+
+      - name: Studio build
+        run: pnpm --filter @memetize/web build

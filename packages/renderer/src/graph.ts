@@ -215,8 +215,11 @@ function buildSegment(params: {
   const { clip, canvas } = params;
   // One time model, shared with `validateTimeline`, so what the graph consumes
   // and what the validator checks can never drift apart.
-  const { slotMs, headMs, tailMs, lengthMs, factor, holdMs, trimStartMs, trimEndMs } =
-    clipTimeModel(clip, params.incoming, params.outgoing);
+  const { headMs, tailMs, lengthMs, factor, holdMs, trimStartMs, trimEndMs } = clipTimeModel(
+    clip,
+    params.incoming,
+    params.outgoing,
+  );
 
   const filters: string[] = [
     `trim=start=${toSeconds(trimStartMs)}:end=${toSeconds(trimEndMs)}`,

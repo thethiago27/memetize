@@ -20,7 +20,7 @@ import {
 } from '../../../lib/api';
 import { clipAt, outputDownbeats } from '../../../lib/strip-geometry';
 import { useEditorActions } from '../../../lib/use-editor-actions';
-import { useInterval } from '../../../lib/use-interval';
+import { usePolledResource } from '../../../lib/use-polled-resource';
 import { useTransport } from '../../../lib/use-transport';
 
 const NO_CLIPS: TimelineClip[] = [];
@@ -34,25 +34,23 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const router = useRouter();
   const { notify } = useToast();
-  const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<EditorTab>('narrativa');
   const [preferRender, setPreferRender] = useState(false);
 
-  const load = useCallback(() => {
-    api
-      .getProject(id)
-      .then((next) => {
-        setDetail(next);
-        setError(null);
-      })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
-  }, [id]);
-
-  useEffect(load, [load]);
+  const {
+    data: detail,
+    error,
+    reload: load,
+    mutate: mutateDetail,
+  } = usePolledResource(
+    useCallback(() => api.getProject(id), [id]),
+    useCallback(
+      (loaded: ProjectDetail | null) => loaded !== null && hasActiveJobs(loaded.jobs),
+      [],
+    ),
+  );
   const jobsActive = detail !== null && hasActiveJobs(detail.jobs);
-  useInterval(load, jobsActive);
 
   const clips = detail?.timeline?.data.clips ?? NO_CLIPS;
   // Older API processes answer without these fields; never let a missing map crash the editor.
@@ -137,7 +135,7 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
   };
   /** A swap answers with the new timeline: show it before the reload lands. */
   const applyTimeline = (timeline: TimelineVersion) =>
-    setDetail((current) => (current ? { ...current, timeline } : current));
+    mutateDetail((current) => (current ? { ...current, timeline } : current));
 
   return (
     <>

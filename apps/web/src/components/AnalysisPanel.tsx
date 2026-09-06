@@ -385,7 +385,9 @@ export function AnalysisPanel({
                 toPercent(line.endMs, durationMs) - toPercent(line.startMs, durationMs);
               return (
                 <div
-                  key={`${line.startMs}-${line.endMs}-${line.text}`}
+                  // Keyed by the line's span alone: including the text remounts the
+                  // row whenever a translation lands, losing focus and selection.
+                  key={`${line.startMs}-${line.endMs}`}
                   className="lyric"
                   data-current={currentLine === line ? 'true' : 'false'}
                   style={{ left: pct(line.startMs), width: width(line.startMs, line.endMs) }}

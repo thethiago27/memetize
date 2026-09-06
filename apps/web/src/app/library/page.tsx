@@ -1,39 +1,35 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { StatusPill } from '../../components/StatusPill';
 import { Thumb } from '../../components/Thumb';
 import { useToast } from '../../components/Toast';
 import { type AssetRow, api, formatTimecode } from '../../lib/api';
 import { ASSET_STATUS_LABEL, assetTone } from '../../lib/labels';
-import { useInterval } from '../../lib/use-interval';
+import { usePolledResource } from '../../lib/use-polled-resource';
 
 const TERMINAL = new Set(['READY', 'FAILED']);
 
 export default function LibraryPage() {
   const { notify } = useToast();
-  const [assets, setAssets] = useState<AssetRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [over, setOver] = useState(false);
   const [uploading, setUploading] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(() => {
-    api
-      .listAssets()
-      .then((data) => {
-        setAssets(data.assets);
-        setError(null);
-      })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
-  }, []);
-
-  useEffect(load, [load]);
-  useInterval(
-    load,
-    (assets ?? []).some((asset) => !TERMINAL.has(asset.status)),
+  const {
+    data,
+    error,
+    reload: load,
+  } = usePolledResource(
+    useCallback(() => api.listAssets(), []),
+    useCallback(
+      (loaded: { assets: AssetRow[] } | null) =>
+        (loaded?.assets ?? []).some((asset) => !TERMINAL.has(asset.status)),
+      [],
+    ),
   );
+  const assets = data?.assets ?? null;
 
   const upload = async (files: FileList | File[]) => {
     const list = Array.from(files).filter((file) => file.type.startsWith('video/'));

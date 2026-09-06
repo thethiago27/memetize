@@ -2,39 +2,31 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Dialog } from '../components/Dialog';
 import { StatusPill } from '../components/StatusPill';
 import { useToast } from '../components/Toast';
 import { api, formatTimecode, type ProjectListRow } from '../lib/api';
 import { PROJECT_STATUS_LABEL, projectTone, shortName } from '../lib/labels';
-import { useInterval } from '../lib/use-interval';
+import { usePolledResource } from '../lib/use-polled-resource';
 
 const TERMINAL = new Set(['TIMELINE_READY', 'COMPLETED', 'FAILED']);
 
 export default function ProjectsPage() {
   const router = useRouter();
   const { notify } = useToast();
-  const [projects, setProjects] = useState<ProjectListRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(() => {
-    api
-      .listProjects()
-      .then((data) => {
-        setProjects(data.projects);
-        setError(null);
-      })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
-  }, []);
-
-  useEffect(load, [load]);
-  useInterval(
-    load,
-    (projects ?? []).some((project) => !TERMINAL.has(project.status)),
+  const { data: listed, error } = usePolledResource(
+    useCallback(() => api.listProjects(), []),
+    useCallback(
+      (loaded: { projects: ProjectListRow[] } | null) =>
+        (loaded?.projects ?? []).some((project) => !TERMINAL.has(project.status)),
+      [],
+    ),
   );
+  const projects = listed?.projects ?? null;
 
   return (
     <>

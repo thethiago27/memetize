@@ -52,6 +52,7 @@ export function Dialog({ labelledBy, onClose, children, as = 'div', onSubmit }: 
       <button
         type="button"
         className="overlay-scrim"
+        tabIndex={-1}
         aria-label="Fechar"
         onClick={() => onCloseRef.current()}
       />
