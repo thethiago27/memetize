@@ -1,4 +1,5 @@
-export const SUBTITLES_PROMPT_VERSION = '1.0.0';
+/** `vN`, like every other prompt in this package — not a semver string. */
+export const SUBTITLES_PROMPT_VERSION = 'v1';
 
 export const SUBTITLES_PROMPT_V1 = `You translate song lyrics for burned-in video captions.
 

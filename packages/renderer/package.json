@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@memetize/contracts": "workspace:*",
+    "@memetize/shared": "workspace:*",
     "@memetize/timeline": "workspace:*",
     "@napi-rs/canvas": "^0.1.80"
   }

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { Dialog } from '../components/Dialog';
 import { StatusPill } from '../components/StatusPill';
 import { useToast } from '../components/Toast';
 import { api, formatTimecode, type ProjectListRow } from '../lib/api';
@@ -57,14 +58,21 @@ export default function ProjectsPage() {
       ) : null}
 
       {projects === null ? (
-        <p className="mute">Carregando…</p>
+        <div className="grid" role="status" aria-label="Carregando projetos">
+          {['a', 'b', 'c', 'd', 'e', 'f'].map((key) => (
+            <div key={key} className="card skeleton" aria-hidden="true">
+              <span className="skel skel-title" />
+              <span className="skel skel-meta" />
+            </div>
+          ))}
+        </div>
       ) : projects.length === 0 ? (
         <div className="empty">Nenhum projeto ainda. Crie um a partir de uma música.</div>
       ) : (
         <div className="grid">
           {projects.map((project) => (
             <Link key={project.id} href={`/projects/${project.id}`} className="card">
-              <div className="cluster" style={{ justifyContent: 'space-between' }}>
+              <div className="cluster cluster-spread">
                 <StatusPill
                   label={PROJECT_STATUS_LABEL[project.status] ?? project.status}
                   tone={projectTone(project.status)}
@@ -89,61 +97,65 @@ export default function ProjectsPage() {
       )}
 
       {open ? (
-        <div className="overlay">
-          <form
-            className="dialog"
-            onSubmit={async (event) => {
-              event.preventDefault();
-              const form = event.currentTarget;
-              const audio = (form.elements.namedItem('audio') as HTMLInputElement).files?.[0];
-              const lyrics = (form.elements.namedItem('lyrics') as HTMLInputElement).files?.[0];
-              if (!audio) return;
-              setBusy(true);
-              try {
-                const created = await api.uploadProject(audio, lyrics);
-                notify('Projeto criado. O motor já começou a análise.');
-                router.push(`/projects/${created.project.id}`);
-              } catch (err) {
-                notify(err instanceof Error ? err.message : String(err), 'bad');
-                setBusy(false);
-              }
-            }}
-          >
-            <h2 className="section-title">Novo projeto</h2>
-            <div className="field">
-              <label htmlFor="audio">Música (mp3, wav)</label>
-              <input
-                className="input"
-                id="audio"
-                name="audio"
-                type="file"
-                accept="audio/*"
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="lyrics">Letra sincronizada (.lrc ou .txt, opcional)</label>
-              <input className="input" id="lyrics" name="lyrics" type="file" accept=".lrc,.txt" />
-            </div>
-            <p className="mute small">
-              Músicas com mais de 30 segundos viram um trecho contínuo de 30 segundos escolhido pelo
-              motor.
-            </p>
-            <div className="cluster" style={{ justifyContent: 'flex-end' }}>
-              <button
-                className="btn btn-ghost"
-                type="button"
-                disabled={busy}
-                onClick={() => setOpen(false)}
-              >
-                Cancelar
-              </button>
-              <button className="btn btn-primary" type="submit" disabled={busy}>
-                {busy ? 'Enviando…' : 'Criar projeto'}
-              </button>
-            </div>
-          </form>
-        </div>
+        <Dialog
+          as="form"
+          labelledBy="new-project-title"
+          onClose={() => {
+            if (!busy) setOpen(false);
+          }}
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const audio = (form.elements.namedItem('audio') as HTMLInputElement).files?.[0];
+            const lyrics = (form.elements.namedItem('lyrics') as HTMLInputElement).files?.[0];
+            if (!audio) return;
+            setBusy(true);
+            try {
+              const created = await api.uploadProject(audio, lyrics);
+              notify('Projeto criado. O motor já começou a análise.');
+              router.push(`/projects/${created.project.id}`);
+            } catch (err) {
+              notify(err instanceof Error ? err.message : String(err), 'bad');
+              setBusy(false);
+            }
+          }}
+        >
+          <h2 className="section-title" id="new-project-title">
+            Novo projeto
+          </h2>
+          <div className="field">
+            <label htmlFor="audio">Música (mp3, wav)</label>
+            <input
+              className="input"
+              id="audio"
+              name="audio"
+              type="file"
+              accept="audio/*"
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="lyrics">Letra sincronizada (.lrc ou .txt, opcional)</label>
+            <input className="input" id="lyrics" name="lyrics" type="file" accept=".lrc,.txt" />
+          </div>
+          <p className="hint">
+            Músicas com mais de 30 segundos viram um trecho contínuo de 30 segundos escolhido pelo
+            motor.
+          </p>
+          <div className="cluster cluster-end">
+            <button
+              className="btn btn-ghost"
+              type="button"
+              disabled={busy}
+              onClick={() => setOpen(false)}
+            >
+              Cancelar
+            </button>
+            <button className="btn btn-primary" type="submit" disabled={busy}>
+              {busy ? 'Enviando…' : 'Criar projeto'}
+            </button>
+          </div>
+        </Dialog>
       ) : null}
     </>
   );

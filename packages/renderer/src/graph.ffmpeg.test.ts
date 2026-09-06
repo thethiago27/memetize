@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { requireIntegrationDependency } from '@memetize/shared';
 import {
   DEFAULT_DIRECTION,
   DEFAULT_TRANSFORM,
@@ -26,7 +27,7 @@ async function ffmpegAvailable(): Promise<boolean> {
   }
 }
 
-const available = await ffmpegAvailable();
+const available = requireIntegrationDependency('ffmpeg', await ffmpegAvailable());
 
 /**
  * F04: a real FFmpeg render must succeed for every mix of hard cuts and

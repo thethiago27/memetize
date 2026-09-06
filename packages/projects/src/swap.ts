@@ -4,6 +4,7 @@ import {
   moments as momentsTable,
   type TimelineVersionRow,
 } from '@memetize/database';
+import { TRANSITION_HANDLE_RESERVE_MS } from '@memetize/edit-planner';
 import { beatMsFromBpm, resolveCutStyles } from '@memetize/effects';
 import {
   buildSegmentContext,
@@ -132,6 +133,15 @@ export async function swapClip(db: Executor, params: SwapClipParams): Promise<Sw
       );
     }
 
+    // Center the take within the moment so an overlapping transition still has
+    // a source handle on each side (F05), exactly as the coverage resolver does
+    // when it cuts a take. Pinning the take to `moment.startMs` left no head
+    // handle, so `resolveCutStyles` below downgraded the swapped clip's
+    // crossfade to `no_source_handle` even for a moment with room to spare.
+    const spareRoomMs = Math.max(0, moment.durationMs - slotMs);
+    const headReserveMs = Math.min(TRANSITION_HANDLE_RESERVE_MS, Math.floor(spareRoomMs / 2));
+    const sourceStartMs = moment.startMs + headReserveMs;
+
     const nextClips = source.data.clips.map((entry) => {
       if (entry.id !== clip.id) return entry;
       return {
@@ -139,8 +149,8 @@ export async function swapClip(db: Executor, params: SwapClipParams): Promise<Sw
         momentId: moment.id,
         source: {
           assetId: moment.assetId,
-          startMs: moment.startMs,
-          endMs: moment.startMs + slotMs,
+          startMs: sourceStartMs,
+          endMs: sourceStartMs + slotMs,
         },
         reason: {
           ...entry.reason,

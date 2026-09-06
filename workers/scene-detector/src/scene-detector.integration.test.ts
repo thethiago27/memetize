@@ -5,13 +5,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { runPythonWorker } from '@memetize/shared';
+import { requireIntegrationDependency, runPythonWorker } from '@memetize/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const execFileAsync = promisify(execFile);
 const WORKER_DIR = fileURLToPath(new URL('..', import.meta.url));
 // Only run once the Python environment has been provisioned (`uv sync`).
-const pyEnvReady = existsSync(join(WORKER_DIR, '.venv'));
+const pyEnvReady = requireIntegrationDependency(
+  'the scene-detector Python virtualenv (pnpm py:sync)',
+  existsSync(join(WORKER_DIR, '.venv')),
+);
 
 async function hasFfmpeg(): Promise<boolean> {
   try {
@@ -21,7 +24,7 @@ async function hasFfmpeg(): Promise<boolean> {
     return false;
   }
 }
-const ffmpegAvailable = await hasFfmpeg();
+const ffmpegAvailable = requireIntegrationDependency('ffmpeg', await hasFfmpeg());
 
 describe.skipIf(!pyEnvReady || !ffmpegAvailable)(
   'scene-detector python worker (integration)',

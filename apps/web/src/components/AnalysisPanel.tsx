@@ -26,6 +26,7 @@ import {
   type SubtitlesSummary,
 } from '../lib/api';
 import { LYRIC_SOURCE_LABEL, sectionColor, sectionLabel } from '../lib/labels';
+import { Dialog } from './Dialog';
 
 const TICK_MS = 10_000;
 const MIN_TEXT_FRACTION = 0.015;
@@ -203,7 +204,7 @@ export function AnalysisPanel({
 
   return (
     <div className="stack analysis">
-      <div className="cluster" style={{ justifyContent: 'space-between' }}>
+      <div className="cluster cluster-spread">
         <div className="cluster">
           <span className="pill">{Math.round(audio.bpm)} bpm</span>
           <span className="pill">{formatTimecode(audio.durationMs)}</span>
@@ -455,7 +456,7 @@ export function AnalysisPanel({
         <div className="stack window-editor">
           <div className="cluster">
             <label className="field-inline">
-              <span className="mute small">Início</span>
+              <span>Início</span>
               <input
                 className="input mono"
                 value={startField}
@@ -469,7 +470,7 @@ export function AnalysisPanel({
               />
             </label>
             <label className="field-inline">
-              <span className="mute small">Fim</span>
+              <span>Fim</span>
               <input
                 className="input mono"
                 value={endField}
@@ -486,9 +487,7 @@ export function AnalysisPanel({
               {formatTimecode(Math.max(0, draft.endMs - draft.startMs))} · cobre {covered}{' '}
               {covered === 1 ? 'linha' : 'linhas'} da letra
             </span>
-            <span className="mute small">
-              Arraste as bordas; Shift desliga o encaixe no downbeat.
-            </span>
+            <span className="hint">Arraste as bordas; Shift desliga o encaixe no downbeat.</span>
             <span style={{ flex: 1 }} />
             <button
               className="btn btn-ghost"
@@ -527,39 +526,42 @@ export function AnalysisPanel({
       ) : null}
 
       {confirmClear ? (
-        <div className="overlay">
-          <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="clear-title">
-            <h2 className="section-title" id="clear-title">
-              Voltar à escolha automática?
-            </h2>
-            <p>A IA vai escolher o trecho de novo e o vídeo será refeito.</p>
-            <div className="cluster" style={{ justifyContent: 'flex-end' }}>
-              <button
-                className="btn btn-ghost"
-                type="button"
-                disabled={saving}
-                onClick={() => setConfirmClear(false)}
-              >
-                Cancelar
-              </button>
-              <button
-                className="btn btn-primary"
-                type="button"
-                disabled={saving}
-                onClick={async () => {
-                  setSaving(true);
-                  try {
-                    if (await onClearWindow()) setConfirmClear(false);
-                  } finally {
-                    setSaving(false);
-                  }
-                }}
-              >
-                {saving ? 'Refazendo…' : 'Voltar à automática'}
-              </button>
-            </div>
+        <Dialog
+          labelledBy="clear-title"
+          onClose={() => {
+            if (!saving) setConfirmClear(false);
+          }}
+        >
+          <h2 className="section-title" id="clear-title">
+            Voltar à escolha automática?
+          </h2>
+          <p>A IA vai escolher o trecho de novo e o vídeo será refeito.</p>
+          <div className="cluster cluster-end">
+            <button
+              className="btn btn-ghost"
+              type="button"
+              disabled={saving}
+              onClick={() => setConfirmClear(false)}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn btn-primary"
+              type="button"
+              disabled={saving}
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  if (await onClearWindow()) setConfirmClear(false);
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            >
+              {saving ? 'Refazendo…' : 'Voltar à automática'}
+            </button>
           </div>
-        </div>
+        </Dialog>
       ) : null}
     </div>
   );

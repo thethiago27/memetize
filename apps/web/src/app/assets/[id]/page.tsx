@@ -52,7 +52,7 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
         {error}
       </p>
     );
-  if (!detail) return <p className="mute">Carregando…</p>;
+  if (!detail) return <div className="empty">Carregando o asset…</div>;
 
   const exclusions = detail.exclusions ?? [];
 
@@ -136,7 +136,7 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
         ← Biblioteca
       </Link>
       <div className="page-head">
-        <div className="cluster" style={{ alignItems: 'flex-start' }}>
+        <div className="cluster cluster-start">
           <Thumb
             path={detail.asset.thumbnailPath}
             alt={detail.asset.filename}
@@ -180,7 +180,7 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
 
       <section className="panel">
         <h2 className="section-title">Trechos excluídos</h2>
-        <p className="mute small">
+        <p className="hint">
           Um trecho excluído nunca vira clipe, mesmo depois de reprocessar o vídeo. Exclua cenas
           inteiras abaixo ou informe um intervalo em segundos.
         </p>
@@ -205,28 +205,32 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
             });
           }}
         >
-          <input
-            className="input"
-            style={{ width: 120 }}
-            inputMode="decimal"
-            placeholder="início (s)"
-            value={from}
-            onChange={(event) => setFrom(event.target.value)}
-          />
-          <input
-            className="input"
-            style={{ width: 120 }}
-            inputMode="decimal"
-            placeholder="fim (s)"
-            value={to}
-            onChange={(event) => setTo(event.target.value)}
-          />
+          <label className="field-inline">
+            <span className="hint">Início (s)</span>
+            <input
+              className="input input-compact"
+              id="exclude-from"
+              inputMode="decimal"
+              value={from}
+              onChange={(event) => setFrom(event.target.value)}
+            />
+          </label>
+          <label className="field-inline">
+            <span className="hint">Fim (s)</span>
+            <input
+              className="input input-compact"
+              id="exclude-to"
+              inputMode="decimal"
+              value={to}
+              onChange={(event) => setTo(event.target.value)}
+            />
+          </label>
           <button className="btn" type="submit" disabled={busy !== null}>
             {busy === 'range' ? 'Salvando…' : 'Excluir intervalo'}
           </button>
         </form>
         {picked.size > 0 ? (
-          <div className="notice cluster" style={{ justifyContent: 'space-between' }}>
+          <div className="notice cluster cluster-spread">
             <span>
               {picked.size} frame{picked.size > 1 ? 's' : ''} selecionado
               {picked.size > 1 ? 's' : ''} · {pickedRanges().length} trecho
@@ -293,7 +297,7 @@ export default function AssetPage({ params }: { params: Promise<{ id: string }> 
             const exact = exclusions.find((entry) => sameRange(entry, range));
             return (
               <div key={scene.id} className="stack" style={{ opacity: excluded ? 0.55 : 1 }}>
-                <div className="row" style={{ borderBottom: 0, padding: 0 }}>
+                <div className="row row-flush">
                   <span className="cluster">
                     <span className="mono mute">
                       {formatTimecode(scene.startMs)}–{formatTimecode(scene.endMs)}

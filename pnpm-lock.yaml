@@ -384,6 +384,9 @@ importers:
       '@memetize/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@memetize/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@memetize/timeline':
         specifier: workspace:*
         version: link:../timeline

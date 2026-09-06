@@ -75,6 +75,7 @@ export default function LibraryPage() {
         type="button"
         className="dropzone"
         data-over={over ? 'true' : 'false'}
+        aria-busy={uploading > 0}
         onClick={() => inputRef.current?.click()}
         onDragOver={(event) => {
           event.preventDefault();
@@ -110,7 +111,15 @@ export default function LibraryPage() {
       ) : null}
 
       {assets === null ? (
-        <p className="mute">Carregando…</p>
+        <div className="grid" role="status" aria-label="Carregando biblioteca">
+          {['a', 'b', 'c', 'd', 'e', 'f'].map((key) => (
+            <div key={key} className="card skeleton" aria-hidden="true">
+              <div className="thumb" />
+              <span className="skel skel-title" />
+              <span className="skel skel-meta" />
+            </div>
+          ))}
+        </div>
       ) : assets.length === 0 ? (
         <div className="empty">
           A biblioteca está vazia. Adicione vídeos para começar um catálogo.
@@ -121,7 +130,7 @@ export default function LibraryPage() {
             <Link key={asset.id} href={`/assets/${asset.id}`} className="card">
               <Thumb path={asset.thumbnailPath} alt={asset.filename} />
               <div className="card-title">{asset.filename}</div>
-              <div className="cluster" style={{ justifyContent: 'space-between' }}>
+              <div className="cluster cluster-spread">
                 <StatusPill
                   label={ASSET_STATUS_LABEL[asset.status] ?? asset.status}
                   tone={assetTone(asset.status)}

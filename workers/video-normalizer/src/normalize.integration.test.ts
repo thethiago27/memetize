@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { probeVideo } from '@memetize/media-catalog';
+import { requireIntegrationDependency } from '@memetize/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { normalizeVideo } from './normalize';
 
@@ -28,7 +29,9 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-describe.skipIf(!ffmpegAvailable)('normalizeVideo (integration)', () => {
+const available = requireIntegrationDependency('ffmpeg', ffmpegAvailable);
+
+describe.skipIf(!available)('normalizeVideo (integration)', () => {
   let tmp: string;
   let source: string;
 

@@ -15,7 +15,7 @@ export function JobsTab({ jobs }: { jobs: ProjectJob[] }) {
             />
             <span>{JOB_LABEL[job.type] ?? job.type}</span>
           </span>
-          <span className="mono mute small">
+          <span className={job.errorCode ? 'mono small err' : 'mono mute small'}>
             {job.errorCode
               ? `${job.errorCode} ${job.errorMessage ?? ''}`
               : new Date(job.createdAt).toLocaleString('pt-BR')}

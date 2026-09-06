@@ -14,6 +14,7 @@ import {
   resolveSourceTimeline,
   setProjectStatus,
   timelineFile,
+  timelineVersionFile,
 } from '@memetize/projects';
 import { validateTimeline } from '@memetize/renderer';
 import { ensureDir } from '@memetize/shared';
@@ -137,9 +138,16 @@ export function createEffectsHandler(): JobHandler {
       ),
     );
 
+    // Written under its version (spec sections 34, 54) and at the stable cache
+    // path, the same as the Director does.
+    const serialized = JSON.stringify(result.timeline, null, 2);
+    const versionFile = timelineVersionFile(ctx.config, projectId, published.version as number);
+    await ensureDir(dirname(versionFile.absolute));
+    await writeFile(versionFile.absolute, serialized);
+
     const tlFile = timelineFile(ctx.config, projectId);
     await ensureDir(dirname(tlFile.absolute));
-    await writeFile(tlFile.absolute, JSON.stringify(result.timeline, null, 2));
+    await writeFile(tlFile.absolute, serialized);
 
     ctx.logger.info('effects_completed', {
       projectId,

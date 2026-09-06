@@ -5,7 +5,7 @@ import type { AppConfig } from '@memetize/shared';
 import { eq } from 'drizzle-orm';
 import { ProjectBusyError } from './busy';
 import { lockProject } from './coordinate';
-import { audioDir, renderDir } from './paths';
+import { audioDir, renderDir, timelineDir } from './paths';
 import { getProject } from './projects';
 
 export interface DeleteProjectArgs {
@@ -57,6 +57,7 @@ export async function deleteProject({
   const dirs = [
     audioDir(config, projectId).absolute,
     renderDir(config, projectId).absolute,
+    timelineDir(config, projectId).absolute,
     join(config.storageDir, 'cache', projectId),
   ];
   await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));

@@ -24,6 +24,7 @@ import {
   listNarrativeSegments,
   listSegmentMatches,
   timelineFile,
+  timelineVersionFile,
 } from '@memetize/projects';
 import { ensureDir } from '@memetize/shared';
 import { filterBannedCandidates } from './bans';
@@ -293,9 +294,18 @@ export function createDirectorHandler(): JobHandler {
       ),
     );
 
+    // The timeline document is written twice (spec sections 34, 54): once under
+    // its version at `storage/timelines/{projectId}/v{n}.json`, which the spec's
+    // storage layout calls for and which keeps every version on disk, and once
+    // at the stable cache path for tooling that does not track versions.
+    const serialized = JSON.stringify(timeline, null, 2);
+    const versionFile = timelineVersionFile(ctx.config, projectId, version);
+    await ensureDir(dirname(versionFile.absolute));
+    await writeFile(versionFile.absolute, serialized);
+
     const tlFile = timelineFile(ctx.config, projectId);
     await ensureDir(dirname(tlFile.absolute));
-    await writeFile(tlFile.absolute, JSON.stringify(timeline, null, 2));
+    await writeFile(tlFile.absolute, serialized);
 
     ctx.logger.info('director_completed', {
       projectId,

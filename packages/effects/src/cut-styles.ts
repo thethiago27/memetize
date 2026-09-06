@@ -48,8 +48,18 @@ export function resolveCutStyles(timeline: Timeline, context: CutStylesContext):
 
   const sorted = [...timeline.clips].sort((a, b) => a.timeline.startMs - b.timeline.startMs);
 
+  // Resolve each clip's bounds once, from the clip as it arrived. When the
+  // moment's real range is unknown `boundsFor` falls back to the clip's own
+  // source, and `resolveClipStyle` normalizes that source back to
+  // `[startMs, startMs + slot]` — so asking again afterwards returned bounds
+  // exactly as wide as the take, leaving no handle on either side and
+  // downgrading every overlapping transition on the second pass.
+  const boundsByClipId = new Map(sorted.map((clip) => [clip.id, boundsFor(clip, bounds)]));
+  const boundsOf = (clip: TimelineClip): CutSourceBounds =>
+    boundsByClipId.get(clip.id) ?? boundsFor(clip, bounds);
+
   const shaped = sorted.map((clip) => {
-    const result = resolveClipStyle(clip, beatMs, boundsFor(clip, bounds));
+    const result = resolveClipStyle(clip, beatMs, boundsOf(clip));
     if (result.decision) cuts.push(result.decision);
     return result;
   });
@@ -62,10 +72,8 @@ export function resolveCutStyles(timeline: Timeline, context: CutStylesContext):
     const { transitionOut, decision } = resolveTransition({
       clip: current.clip,
       shape: current.shape,
-      bounds: boundsFor(current.clip, bounds),
-      next: next
-        ? { clip: next.clip, shape: next.shape, bounds: boundsFor(next.clip, bounds) }
-        : null,
+      bounds: boundsOf(current.clip),
+      next: next ? { clip: next.clip, shape: next.shape, bounds: boundsOf(next.clip) } : null,
       beatMs,
     });
     if (decision) cuts.push(decision);

@@ -2,6 +2,7 @@ export * from './config';
 export * from './fs';
 export * from './hash';
 export * from './ids';
+export * from './integration-gate';
 export * from './logger';
 export * from './python';
 export * from './storage';

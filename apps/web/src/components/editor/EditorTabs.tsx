@@ -53,6 +53,9 @@ export function EditorTabs({
             type="button"
             role="tab"
             className="tab"
+            id={`tab-${key}`}
+            aria-selected={tab === key}
+            aria-controls={`panel-${key}`}
             data-active={tab === key ? 'true' : 'false'}
             onClick={() => onTab(key)}
           >
@@ -61,41 +64,43 @@ export function EditorTabs({
         ))}
       </div>
 
-      {tab === 'narrativa' ? (
-        <NarrativeTab
-          segments={detail.narrative}
-          selectedSegmentId={selectedSegmentId}
-          onSelectSegment={onSelectSegment}
-        />
-      ) : null}
+      <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+        {tab === 'narrativa' ? (
+          <NarrativeTab
+            segments={detail.narrative}
+            selectedSegmentId={selectedSegmentId}
+            onSelectSegment={onSelectSegment}
+          />
+        ) : null}
 
-      {tab === 'analise' ? (
-        <AnalysisPanel
-          audio={detail.audio}
-          lyrics={detail.lyrics}
-          subtitles={detail.subtitles ?? null}
-          editWindow={detail.editWindow}
-          manualWindow={detail.manualWindow ?? null}
-          positionMs={transport.positionMs}
-          locked={actions.timelineLocked}
-          onSeek={transport.seek}
-          onSetWindow={onSetWindow}
-          onClearWindow={onClearWindow}
-        />
-      ) : null}
+        {tab === 'analise' ? (
+          <AnalysisPanel
+            audio={detail.audio}
+            lyrics={detail.lyrics}
+            subtitles={detail.subtitles ?? null}
+            editWindow={detail.editWindow}
+            manualWindow={detail.manualWindow ?? null}
+            positionMs={transport.positionMs}
+            locked={actions.timelineLocked}
+            onSeek={transport.seek}
+            onSetWindow={onSetWindow}
+            onClearWindow={onClearWindow}
+          />
+        ) : null}
 
-      {tab === 'renders' ? <RendersTab renders={detail.renders ?? []} /> : null}
+        {tab === 'renders' ? <RendersTab renders={detail.renders ?? []} /> : null}
 
-      {tab === 'memoria' ? (
-        <MemoryTab
-          feedback={detail.feedback ?? []}
-          momentName={momentName}
-          saving={actions.isBusy('note')}
-          onNote={onNote}
-        />
-      ) : null}
+        {tab === 'memoria' ? (
+          <MemoryTab
+            feedback={detail.feedback ?? []}
+            momentName={momentName}
+            saving={actions.isBusy('note')}
+            onNote={onNote}
+          />
+        ) : null}
 
-      {tab === 'jobs' ? <JobsTab jobs={detail.jobs} /> : null}
+        {tab === 'jobs' ? <JobsTab jobs={detail.jobs} /> : null}
+      </div>
     </section>
   );
 }

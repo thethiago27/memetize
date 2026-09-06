@@ -30,11 +30,11 @@ export function MemoryTab({
         }}
       >
         <input
-          className="input"
-          style={{ flex: 1, minWidth: 240 }}
+          className="input input-grow"
           value={note}
           onChange={(event) => setNote(event.target.value)}
           placeholder="Uma instrução para o Director lembrar neste projeto"
+          aria-label="Nota para o Director"
           maxLength={2000}
         />
         <button className="btn" type="submit" disabled={saving || !note.trim()}>

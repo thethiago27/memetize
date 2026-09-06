@@ -24,6 +24,7 @@ export function Nav() {
         <Link
           key={link.href}
           href={link.href}
+          aria-current={link.match(pathname) ? 'page' : undefined}
           data-active={link.match(pathname) ? 'true' : 'false'}
         >
           {link.label}

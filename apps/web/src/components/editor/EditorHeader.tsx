@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { formatTimecode, type ProjectDetail } from '../../lib/api';
 import { PROJECT_STATUS_LABEL, projectTone, shortName } from '../../lib/labels';
 import type { EditorActions } from '../../lib/use-editor-actions';
+import { Dialog } from '../Dialog';
 import { StatusPill } from '../StatusPill';
 
 const RATINGS = [1, 2, 3, 4, 5] as const;
@@ -49,7 +50,7 @@ export function EditorHeader({
     <>
       <div className="editor-head">
         <div className="editor-head-main">
-          <Link className="back" href="/" title="Voltar aos projetos">
+          <Link className="back" href="/" aria-label="Voltar aos projetos">
             ←
           </Link>
           <h1 className="headline headline-sm" title={detail.project.filename}>
@@ -111,41 +112,44 @@ export function EditorHeader({
       </div>
 
       {confirmDelete ? (
-        <div className="overlay">
-          <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="delete-title">
-            <h2 className="section-title" id="delete-title">
-              Excluir projeto?
-            </h2>
-            <p>
-              <strong>{name}</strong> será removido com a música, a análise, as timelines e os
-              renders. Isso não pode ser desfeito.
-            </p>
-            <p className="mute small">
-              A memória editorial (avaliações, trocas, notas) é mantida para os próximos projetos.
-            </p>
-            <div className="cluster" style={{ justifyContent: 'flex-end' }}>
-              <button
-                className="btn btn-ghost"
-                type="button"
-                disabled={actions.isBusy('delete')}
-                onClick={() => setConfirmDelete(false)}
-              >
-                Cancelar
-              </button>
-              <button
-                className="btn btn-danger"
-                type="button"
-                disabled={actions.isBusy('delete')}
-                onClick={async () => {
-                  const ok = await onDelete();
-                  if (!ok) setConfirmDelete(false);
-                }}
-              >
-                {actions.isBusy('delete') ? 'Excluindo…' : 'Excluir projeto'}
-              </button>
-            </div>
+        <Dialog
+          labelledBy="delete-title"
+          onClose={() => {
+            if (!actions.isBusy('delete')) setConfirmDelete(false);
+          }}
+        >
+          <h2 className="section-title" id="delete-title">
+            Excluir projeto?
+          </h2>
+          <p>
+            <strong>{name}</strong> será removido com a música, a análise, as timelines e os
+            renders. Isso não pode ser desfeito.
+          </p>
+          <p className="hint">
+            A memória editorial (avaliações, trocas, notas) é mantida para os próximos projetos.
+          </p>
+          <div className="cluster cluster-end">
+            <button
+              className="btn btn-ghost"
+              type="button"
+              disabled={actions.isBusy('delete')}
+              onClick={() => setConfirmDelete(false)}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn btn-danger"
+              type="button"
+              disabled={actions.isBusy('delete')}
+              onClick={async () => {
+                const ok = await onDelete();
+                if (!ok) setConfirmDelete(false);
+              }}
+            >
+              {actions.isBusy('delete') ? 'Excluindo…' : 'Excluir projeto'}
+            </button>
           </div>
-        </div>
+        </Dialog>
       ) : null}
     </>
   );

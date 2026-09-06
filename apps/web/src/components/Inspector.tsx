@@ -60,7 +60,7 @@ export function Inspector({
         {segment?.lyrics ? <p className="quote">“{segment.lyrics}”</p> : null}
         {segment?.meaning ? <p className="small">{segment.meaning}</p> : null}
         {segment && segment.visualIdeas.length > 0 ? (
-          <p className="mute small">Ideias visuais: {segment.visualIdeas.join(' · ')}</p>
+          <p className="hint">Ideias visuais: {segment.visualIdeas.join(' · ')}</p>
         ) : null}
       </div>
 

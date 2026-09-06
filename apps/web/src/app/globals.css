@@ -40,7 +40,7 @@
   --fn-other: var(--color-fn-other);
   --radius: 8px;
   --space: 8px;
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --strip-h: 84px;
   --playhead: var(--signal);
   --mast-h: 58px;
@@ -80,6 +80,10 @@ textarea {
 
 button {
   cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 :focus-visible {
@@ -145,6 +149,10 @@ p {
   font-weight: 600;
 }
 
+.nav a:hover {
+  color: var(--ink);
+}
+
 .nav a[data-active="true"] {
   color: var(--ink);
   background: var(--panel-2);
@@ -169,6 +177,17 @@ p {
   flex-wrap: wrap;
 }
 
+.page-head > .stack {
+  min-width: 0;
+  flex: 1 1 20rem;
+}
+
+.lede {
+  color: var(--tape);
+  max-width: 48rem;
+  overflow-wrap: anywhere;
+}
+
 .headline {
   font-family: var(--font-slate), "Outfit", sans-serif;
   font-size: clamp(1.8rem, 3vw, 2.6rem);
@@ -177,11 +196,6 @@ p {
   line-height: 1.1;
   text-wrap: balance;
   overflow-wrap: anywhere;
-}
-
-.lede {
-  color: var(--tape);
-  max-width: 48rem;
 }
 
 .section-title {
@@ -198,6 +212,11 @@ p {
 
 .mute {
   color: var(--mute);
+}
+
+.hint {
+  color: var(--tape);
+  font-size: 0.85rem;
 }
 
 .small {
@@ -253,6 +272,18 @@ p {
   align-items: center;
 }
 
+.cluster-spread {
+  justify-content: space-between;
+}
+
+.cluster-end {
+  justify-content: flex-end;
+}
+
+.cluster-start {
+  align-items: flex-start;
+}
+
 .notice {
   border: 1px solid var(--amber);
   border-radius: var(--radius);
@@ -275,6 +306,23 @@ p {
   border-radius: var(--radius);
 }
 
+.skeleton .skel {
+  display: block;
+  height: 10px;
+  border-radius: 4px;
+  background: var(--panel-2);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.skeleton .skel-title {
+  width: 62%;
+  height: 14px;
+}
+
+.skeleton .skel-meta {
+  width: 44%;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -295,6 +343,10 @@ p {
   background: color-mix(in srgb, var(--signal) 10%, transparent);
 }
 
+.btn:active:not(:disabled) {
+  background: color-mix(in srgb, var(--signal) 16%, transparent);
+}
+
 .btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -307,6 +359,10 @@ p {
 
 .btn-primary:hover:not(:disabled) {
   background: color-mix(in srgb, var(--signal) 86%, white);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: color-mix(in srgb, var(--signal) 78%, white);
 }
 
 .btn-danger {
@@ -402,7 +458,7 @@ p {
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   padding: calc(var(--space) * 1.5);
-  transition: border-color 0.15s ease;
+  transition: border-color 150ms var(--ease);
 }
 
 .card:hover {
@@ -454,6 +510,19 @@ p {
   color: var(--tape);
 }
 
+.field-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--tape);
+}
+
+.row-flush {
+  border-bottom: 0;
+  padding: 0;
+}
+
 .input {
   background: var(--bay);
   border: 1px solid var(--rule);
@@ -461,6 +530,16 @@ p {
   border-radius: var(--radius);
   padding: 8px 10px;
   width: 100%;
+}
+
+.input-compact {
+  width: 7.5rem;
+}
+
+.input-grow {
+  flex: 1;
+  min-width: 240px;
+  width: auto;
 }
 
 .dropzone {
@@ -475,6 +554,10 @@ p {
   background: var(--panel);
 }
 
+.dropzone:hover {
+  border-color: var(--tape);
+}
+
 .dropzone[data-over="true"] {
   border-color: var(--amber);
   background: color-mix(in srgb, var(--signal) 6%, transparent);
@@ -484,14 +567,24 @@ p {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
   display: grid;
   place-items: center;
   z-index: 20;
   padding: calc(var(--space) * 2);
 }
 
+.overlay-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.6);
+  cursor: default;
+}
+
 .dialog {
+  position: relative;
+  z-index: 1;
   width: min(100%, 480px);
   background: var(--panel);
   border: 1px solid var(--rule);
@@ -499,7 +592,6 @@ p {
   padding: calc(var(--space) * 3);
   display: grid;
   gap: calc(var(--space) * 2);
-  box-shadow: var(--shadow);
 }
 
 /* Toasts */
@@ -515,16 +607,14 @@ p {
 
 .toast {
   background: var(--panel-2);
-  border: 1px solid var(--rule);
-  border-left: 3px solid var(--ok);
+  border: 1px solid var(--ok);
   border-radius: var(--radius);
   padding: 10px 14px;
-  box-shadow: var(--shadow);
-  animation: rise 0.18s ease-out;
+  animation: rise 180ms var(--ease);
 }
 
 .toast[data-tone="bad"] {
-  border-left-color: var(--cut);
+  border-color: var(--cut);
 }
 
 @keyframes rise {
@@ -571,14 +661,17 @@ p {
   color: var(--amber);
 }
 
-.step[data-state="RUNNING"] .step-bar,
-.step[data-state="PENDING"] .step-bar {
+.step[data-state="RUNNING"] .step-bar {
   background: var(--amber);
   animation: pulse 1.2s ease-in-out infinite;
 }
 
 .step[data-state="PENDING"] {
-  color: var(--amber);
+  color: var(--tape);
+}
+
+.step[data-state="PENDING"] .step-bar {
+  background: var(--amber);
 }
 
 .step[data-state="FAILED"] {
@@ -590,8 +683,6 @@ p {
 }
 
 .step-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -700,7 +791,7 @@ p {
   height: 100%;
   object-fit: contain;
   display: block;
-  background: #000;
+  background: var(--well);
 }
 
 .screen-empty {
@@ -939,17 +1030,22 @@ p {
 .narrative-row {
   width: 100%;
   text-align: left;
-  border: 0;
+  border: 1px solid transparent;
   background: transparent;
   color: inherit;
   font: inherit;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius);
+  padding: 4px 8px;
+}
+
+.narrative-row:hover {
+  background: var(--panel-2);
 }
 
 .narrative-row[data-selected="true"] {
-  box-shadow: inset 2px 0 0 var(--amber);
-  background: color-mix(in srgb, var(--amber) 8%, transparent);
+  background: color-mix(in srgb, var(--signal) 8%, transparent);
+  border-color: var(--signal);
 }
 
 .legend {
@@ -1000,8 +1096,6 @@ p {
 }
 
 .quote {
-  border-left: 3px solid var(--rule);
-  padding-left: 10px;
   color: var(--tape);
   font-style: italic;
 }
@@ -1014,7 +1108,9 @@ p {
 .star {
   background: transparent;
   border: 0;
-  padding: 2px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 4px;
   color: var(--rule);
   font-size: 1.3rem;
   line-height: 1;
@@ -1035,6 +1131,11 @@ p {
   border-bottom: 1px solid var(--rule);
 }
 
+.panel > [role="tabpanel"] {
+  display: grid;
+  gap: calc(var(--space) * 1.5);
+}
+
 .tab {
   background: transparent;
   border: 0;
@@ -1042,6 +1143,10 @@ p {
   padding: 8px 14px;
   color: var(--mute);
   font-weight: 600;
+}
+
+.tab:hover {
+  color: var(--tape);
 }
 
 .tab[data-active="true"] {
@@ -1378,12 +1483,6 @@ p {
   right: 3px;
 }
 
-.analysis .window-editor .field-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .analysis .window-editor .input {
   width: 96px;
   padding: 4px 8px;
@@ -1410,6 +1509,16 @@ p {
 }
 
 /* Below 960px the editor stops fitting the viewport and stacks. */
+@media (max-width: 640px) {
+  .mast {
+    gap: var(--space);
+    padding: 0 calc(var(--space) * 2);
+  }
+  .nav {
+    gap: var(--space);
+  }
+}
+
 @media (max-width: 960px) {
   .editor-shell {
     height: auto;

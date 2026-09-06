@@ -1,12 +1,15 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runPythonWorker } from '@memetize/shared';
+import { requireIntegrationDependency, runPythonWorker } from '@memetize/shared';
 import { describe, expect, it } from 'vitest';
 
 const WORKER_DIR = fileURLToPath(new URL('..', import.meta.url));
 // Only run once the Python environment has been provisioned (`uv sync`).
-const pyEnvReady = existsSync(join(WORKER_DIR, '.venv'));
+const pyEnvReady = requireIntegrationDependency(
+  'the audio-analyzer Python virtualenv (pnpm py:sync)',
+  existsSync(join(WORKER_DIR, '.venv')),
+);
 
 describe.skipIf(!pyEnvReady)('audio-analyzer python worker (integration)', () => {
   it('emits a valid WorkerResult with integer-ms beats/sections over the protocol', async () => {

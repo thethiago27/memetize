@@ -118,7 +118,7 @@ export default function ProjectEditorPage({ params }: { params: Promise<{ id: st
         {error}
       </p>
     );
-  if (!detail) return <p className="mute">Carregando…</p>;
+  if (!detail) return <div className="empty">Carregando o corte…</div>;
 
   const stale =
     detail.timeline != null &&
