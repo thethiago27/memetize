@@ -29,6 +29,7 @@ import {
 import type { TimelineEffect } from '@memetize/timeline';
 import type { Command } from 'commander';
 import { buildContext, type CliContext } from '../context';
+import { drainEntity } from '../drain';
 
 interface CreateOptions {
   wait: boolean;
@@ -61,13 +62,7 @@ export function registerProjectCommands(program: Command): void {
         process.stdout.write(`Ingested ${row.filename} as ${row.id}\n`);
 
         if (options.wait) {
-          const outcomes = await ctx.orchestrator.drain({ entityId: row.id });
-          const failed = outcomes.find((outcome) => outcome.status === 'FAILED');
-          if (failed) {
-            process.stdout.write(
-              `Pipeline failed at ${failed.job.type}: ${failed.error?.code ?? ''} ${failed.error?.message ?? ''}\n`,
-            );
-          }
+          await drainEntity(ctx, row.id);
           await printProjectDetails(ctx, row.id);
         } else {
           process.stdout.write(
@@ -130,13 +125,7 @@ export function registerProjectCommands(program: Command): void {
         process.stdout.write(`Enqueued a new DIRECTOR run for ${projectId}...\n`);
 
         if (options.wait) {
-          const outcomes = await ctx.orchestrator.drain({ entityId: projectId });
-          const failed = outcomes.find((outcome) => outcome.status === 'FAILED');
-          if (failed) {
-            process.stdout.write(
-              `Pipeline failed at ${failed.job.type}: ${failed.error?.code ?? ''} ${failed.error?.message ?? ''}\n`,
-            );
-          }
+          await drainEntity(ctx, projectId);
           await printProjectDetails(ctx, projectId);
         } else {
           process.stdout.write("Run 'memetize worker run' to process.\n");
@@ -166,13 +155,7 @@ export function registerProjectCommands(program: Command): void {
         process.stdout.write(`Enqueued a new RENDER run for ${projectId}...\n`);
 
         if (options.wait) {
-          const outcomes = await ctx.orchestrator.drain({ entityId: projectId });
-          const failed = outcomes.find((outcome) => outcome.status === 'FAILED');
-          if (failed) {
-            process.stdout.write(
-              `Pipeline failed at ${failed.job.type}: ${failed.error?.code ?? ''} ${failed.error?.message ?? ''}\n`,
-            );
-          }
+          await drainEntity(ctx, projectId);
           await printProjectDetails(ctx, projectId);
         } else {
           process.stdout.write("Run 'memetize worker run' to process.\n");
@@ -251,13 +234,7 @@ export function registerProjectCommands(program: Command): void {
           }
 
           if (options.wait) {
-            const outcomes = await ctx.orchestrator.drain({ entityId: projectId });
-            const failed = outcomes.find((outcome) => outcome.status === 'FAILED');
-            if (failed) {
-              process.stdout.write(
-                `Pipeline failed at ${failed.job.type}: ${failed.error?.code ?? ''} ${failed.error?.message ?? ''}\n`,
-              );
-            }
+            await drainEntity(ctx, projectId);
             await printProjectDetails(ctx, projectId);
           } else {
             process.stdout.write("Run 'memetize worker run' to process.\n");
@@ -301,13 +278,7 @@ export function registerProjectCommands(program: Command): void {
         process.stdout.write(`Reprocessing ${projectId} from ${options.from}...\n`);
 
         if (options.wait) {
-          const outcomes = await ctx.orchestrator.drain({ entityId: projectId });
-          const failed = outcomes.find((outcome) => outcome.status === 'FAILED');
-          if (failed) {
-            process.stdout.write(
-              `Pipeline failed at ${failed.job.type}: ${failed.error?.code ?? ''} ${failed.error?.message ?? ''}\n`,
-            );
-          }
+          await drainEntity(ctx, projectId);
           await printProjectDetails(ctx, projectId);
         } else {
           process.stdout.write("Run 'memetize worker run' to process.\n");

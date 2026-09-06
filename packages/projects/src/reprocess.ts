@@ -1,13 +1,7 @@
 import type { JobType } from '@memetize/contracts';
 import type { Executor } from '@memetize/database';
-import {
-  cancelActiveJobsForEntity,
-  countRunningForEntity,
-  enqueueJob,
-  stepKeyFor,
-} from '@memetize/job-system';
+import { startReprocess } from '@memetize/job-system';
 import { ProjectBusyError, ProjectStateError } from './busy';
-import { lockProject, startProjectGeneration } from './coordinate';
 import { getProjectAudio } from './projects';
 import { getLatestTimeline } from './timeline';
 import { getLatestEditWindow } from './window';
@@ -88,23 +82,15 @@ export async function reprocessProject(
   }
 
   return db.transaction(async (tx) => {
-    await lockProject(tx, projectId);
-    // A RUNNING SUBTITLES job blocks render the same way other stage jobs do
-    // (translated-subtitles spec) without cancelling the translation.
-    const busyTypes = from === 'render' ? [...stageJobs, 'SUBTITLES' as const] : stageJobs;
-    if ((await countRunningForEntity(tx, projectId, busyTypes)) > 0) {
-      throw new ProjectBusyError(projectId);
-    }
-    const cancelled = await cancelActiveJobsForEntity(tx, projectId, stageJobs, ['PENDING']);
-    const generationId = await startProjectGeneration(tx, projectId);
-    const enqueue = (type: JobType, input: Record<string, unknown>) =>
-      enqueueJob(tx, {
-        type,
-        entityId: projectId,
-        input,
-        generationId,
-        stepKey: stepKeyFor(type),
-      });
+    const { generationId, cancelled, enqueue } = await startReprocess(tx, {
+      kind: 'project',
+      entityId: projectId,
+      supersededTypes: stageJobs,
+      // A RUNNING SUBTITLES job blocks render the same way other stage jobs do
+      // (translated-subtitles spec) without cancelling the translation.
+      busyTypes: from === 'render' ? [...stageJobs, 'SUBTITLES' as const] : stageJobs,
+      busyError: (entityId) => new ProjectBusyError(entityId),
+    });
 
     switch (from) {
       case 'render': {
@@ -159,6 +145,6 @@ export async function reprocessProject(
         });
         break;
     }
-    return { generationId, cancelled: cancelled.length };
+    return { generationId, cancelled };
   });
 }

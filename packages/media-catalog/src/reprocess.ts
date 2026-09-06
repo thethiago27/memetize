@@ -1,14 +1,6 @@
 import type { JobType } from '@memetize/contracts';
 import type { Executor } from '@memetize/database';
-import {
-  cancelActiveJobsForEntity,
-  countRunningForEntity,
-  enqueueJob,
-  ensureEntityExecution,
-  lockEntity,
-  startGeneration,
-  stepKeyFor,
-} from '@memetize/job-system';
+import { startReprocess } from '@memetize/job-system';
 import { getAsset } from './assets';
 
 export const REPROCESS_STAGES = [
@@ -87,15 +79,12 @@ export async function reprocessAsset(
   }
 
   return db.transaction(async (tx) => {
-    await ensureEntityExecution(tx, 'asset', assetId);
-    await lockEntity(tx, 'asset', assetId);
-    if ((await countRunningForEntity(tx, assetId, stageJobs)) > 0) {
-      throw new AssetBusyError(assetId);
-    }
-    await cancelActiveJobsForEntity(tx, assetId, stageJobs, ['PENDING']);
-    const generationId = await startGeneration(tx, 'asset', assetId);
-    const enqueue = (type: JobType, input: Record<string, unknown>) =>
-      enqueueJob(tx, { type, entityId: assetId, input, generationId, stepKey: stepKeyFor(type) });
+    const { generationId, enqueue } = await startReprocess(tx, {
+      kind: 'asset',
+      entityId: assetId,
+      supersededTypes: stageJobs,
+      busyError: (entityId) => new AssetBusyError(entityId),
+    });
 
     switch (from) {
       case 'vision':

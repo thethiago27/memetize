@@ -13,15 +13,6 @@ export function listJobsForEntity(db: Executor, entityId: string): Promise<JobRo
   });
 }
 
-/** Count of not-yet-terminal jobs for an entity; used to drive `--wait` drains. */
-export async function countActiveForEntity(db: Database, entityId: string): Promise<number> {
-  const rows = await db
-    .select({ value: count() })
-    .from(jobs)
-    .where(and(eq(jobs.entityId, entityId), inArray(jobs.status, ['PENDING', 'RUNNING'])));
-  return Number(rows[0]?.value ?? 0);
-}
-
 /** Count of RUNNING jobs for an entity among the given types (F09 busy check). */
 export async function countRunningForEntity(
   db: Executor,

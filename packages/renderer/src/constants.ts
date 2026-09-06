@@ -42,12 +42,8 @@ export const RENDERER_VERSION = WORKER_VERSION.RENDER;
 export const OUTPUT_VIDEO_CODEC = 'h264';
 export const OUTPUT_AUDIO_CODEC = 'aac';
 
-/**
- * Cut styles (cut-styles spec). A transition may never take more than this
- * fraction of the smaller neighboring slot; the Effects resolver plans
- * against the same number, and `validateTimeline` enforces it.
- */
-export const MAX_TRANSITION_SLOT_FRACTION = 1 / 3;
+/** The transition cap lives with the timeline schema; re-exported for callers here. */
+export { MAX_TRANSITION_SLOT_FRACTION } from '@memetize/timeline';
 
 /** `xfade=transition=` names for the overlapping styles. */
 export const XFADE_TRANSITION_BY_STYLE = {

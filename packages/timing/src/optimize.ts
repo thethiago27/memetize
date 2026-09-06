@@ -1,7 +1,7 @@
 import type { Timeline, TimelineClip, TimelineRange } from '@memetize/timeline';
 import {
+  isPunchlineFunction,
   MIN_TIMED_CLIP_MS,
-  PUNCHLINE_FUNCTIONS,
   PUNCHLINE_SNAP_WINDOW_MS,
   SNAP_WINDOW_MS,
 } from './constants';
@@ -197,8 +197,7 @@ function isPunchlineClip(
   clip: TimelineClip,
   segmentFunctionById: ReadonlyMap<string, string>,
 ): boolean {
-  const narrativeFunction = segmentFunctionById.get(clip.reason.segmentId);
-  return narrativeFunction ? PUNCHLINE_FUNCTIONS.has(narrativeFunction.toLowerCase()) : false;
+  return isPunchlineFunction(segmentFunctionById.get(clip.reason.segmentId));
 }
 
 function findSnapTarget(

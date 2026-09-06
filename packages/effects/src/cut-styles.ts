@@ -192,7 +192,8 @@ function speedEffect(clip: TimelineClip, factor: number, requested: ClipStyle): 
   };
 }
 
-function isCutEffect(effect: TimelineEffect): boolean {
+/** A `hold` or `speed` effect: the two the cut-style resolver owns and rewrites. */
+export function isCutEffect(effect: TimelineEffect): boolean {
   return effect.type === 'hold' || effect.type === 'speed';
 }
 

@@ -43,13 +43,3 @@ export class GenerationSupersededError extends Error {
     this.name = 'GenerationSupersededError';
   }
 }
-
-/** A command refused because a job for the entity is still RUNNING (F09). */
-export class EntityBusyError extends Error {
-  readonly code = 'ENTITY_BUSY';
-
-  constructor(entityId: string) {
-    super(`entity ${entityId} has a job running; wait for it to finish before changing it`);
-    this.name = 'EntityBusyError';
-  }
-}

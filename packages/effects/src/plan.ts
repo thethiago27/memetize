@@ -1,15 +1,15 @@
 import type { Timeline, TimelineClip, TimelineEffect } from '@memetize/timeline';
 import {
   HIGH_ENERGY,
+  isPunchlineFunction,
   MIN_ZOOM_MS,
-  PUNCHLINE_FUNCTIONS,
   ZOOM_FROM,
   ZOOM_TAIL_FRACTION,
   ZOOM_TAIL_MS,
   ZOOM_TO,
   ZOOM_TO_HIGH,
 } from './constants';
-import { resolveCutStyles } from './cut-styles';
+import { isCutEffect, resolveCutStyles } from './cut-styles';
 import type { EffectsContext, EffectsResult, PlannedEffect } from './types';
 
 /**
@@ -34,10 +34,6 @@ export function planEffects(timeline: Timeline, context: EffectsContext): Effect
   return { timeline: { ...resolved.timeline, clips }, planned, cuts: resolved.cuts };
 }
 
-function isCutEffect(effect: TimelineEffect): boolean {
-  return effect.type === 'hold' || effect.type === 'speed';
-}
-
 /**
  * The zoom window ends where a hold starts (zooming a frozen frame reads
  * as a glitch) and is skipped entirely on a slowed-down clip, whose
@@ -50,7 +46,7 @@ function planPunchlineZoom(
 ): PlannedEffect | null {
   const segment = context.segmentById.get(clip.reason.segmentId);
   if (!segment) return null;
-  if (!PUNCHLINE_FUNCTIONS.has(segment.narrativeFunction.toLowerCase())) return null;
+  if (!isPunchlineFunction(segment.narrativeFunction)) return null;
   if (cutEffects.some((effect) => effect.type === 'speed' && Number(effect.factor) < 1)) {
     return null;
   }

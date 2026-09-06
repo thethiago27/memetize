@@ -15,6 +15,7 @@ import {
 } from '@memetize/media-catalog';
 import type { Command } from 'commander';
 import { buildContext, type CliContext } from '../context';
+import { drainEntity } from '../drain';
 
 interface AddOptions {
   wait: boolean;
@@ -48,13 +49,7 @@ export function registerAssetCommands(program: Command): void {
         );
 
         if (options.wait) {
-          const outcomes = await ctx.orchestrator.drain({ entityId: row.id });
-          const failed = outcomes.find((outcome) => outcome.status === 'FAILED');
-          if (failed) {
-            process.stdout.write(
-              `Pipeline failed at ${failed.job.type}: ${failed.error?.code ?? ''} ${failed.error?.message ?? ''}\n`,
-            );
-          }
+          await drainEntity(ctx, row.id);
           await printAssetDetails(ctx, row.id);
         } else {
           process.stdout.write("Enqueued normalization. Run 'memetize worker run' to process.\n");
@@ -128,13 +123,7 @@ export function registerAssetCommands(program: Command): void {
         process.stdout.write(`Reprocessing ${assetId} from ${options.from}...\n`);
 
         if (options.wait) {
-          const outcomes = await ctx.orchestrator.drain({ entityId: assetId });
-          const failed = outcomes.find((outcome) => outcome.status === 'FAILED');
-          if (failed) {
-            process.stdout.write(
-              `Pipeline failed at ${failed.job.type}: ${failed.error?.code ?? ''} ${failed.error?.message ?? ''}\n`,
-            );
-          }
+          await drainEntity(ctx, assetId);
           await printAssetDetails(ctx, assetId);
         } else {
           process.stdout.write("Run 'memetize worker run' to process.\n");

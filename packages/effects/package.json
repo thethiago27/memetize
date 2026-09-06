@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@memetize/contracts": "workspace:*",
     "@memetize/renderer": "workspace:*",
     "@memetize/timeline": "workspace:*"
   },

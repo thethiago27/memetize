@@ -4,8 +4,8 @@
  * agree on the same punchline zoom window.
  */
 
-/** Same punchline proxy as the Timing Optimizer (phase 8). */
-export const PUNCHLINE_FUNCTIONS: ReadonlySet<string> = new Set(['payoff', 'punchline', 'climax']);
+/** The punchline proxy lives in `@memetize/contracts`; both planners share it. */
+export { isPunchlineFunction, PUNCHLINE_FUNCTIONS } from '@memetize/contracts';
 
 /** Canonical spec §34 example window: 1850 - 1200. */
 export const ZOOM_TAIL_MS = 650;
@@ -38,8 +38,8 @@ export const TRANSITION_CLAMP_MS = {
   flash: { min: 80, max: 160 },
 } as const;
 
-/** The renderer's cap on a transition versus the smaller neighboring slot. */
-export { MAX_TRANSITION_SLOT_FRACTION } from '@memetize/renderer';
+/** The cap on a transition versus the smaller neighboring slot (timeline time model). */
+export { MAX_TRANSITION_SLOT_FRACTION } from '@memetize/timeline';
 
 export const HOLD_BEAT_FRACTION = 1;
 export const HOLD_CLAMP_MS = { min: 200, max: 600 } as const;

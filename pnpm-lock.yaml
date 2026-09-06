@@ -217,6 +217,9 @@ importers:
 
   packages/effects:
     dependencies:
+      '@memetize/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@memetize/renderer':
         specifier: workspace:*
         version: link:../renderer

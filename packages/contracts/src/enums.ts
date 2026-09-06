@@ -65,3 +65,19 @@ export type ProjectStatus = z.infer<typeof ProjectStatus>;
 /** Where a project's lyrics came from (spec section 26). */
 export const LyricSource = z.enum(['USER', 'TRANSCRIPT', 'FIXTURE']);
 export type LyricSource = z.infer<typeof LyricSource>;
+
+/**
+ * `narrative_segments.narrativeFunction` values (free text, no typed field
+ * exists) treated as the "punchline" proxy — spec section 32's canonical
+ * example is aligning a visual punchline to a musical downbeat.
+ *
+ * Lives here because the Timing Optimizer and the Effects Planner both align to
+ * it; they each carried their own copy, so the two could disagree about what a
+ * punchline is while both claiming to align to the same thing.
+ */
+export const PUNCHLINE_FUNCTIONS: ReadonlySet<string> = new Set(['payoff', 'punchline', 'climax']);
+
+/** Whether a segment's narrative function reads as a punchline. */
+export function isPunchlineFunction(narrativeFunction: string | null | undefined): boolean {
+  return narrativeFunction ? PUNCHLINE_FUNCTIONS.has(narrativeFunction.toLowerCase()) : false;
+}

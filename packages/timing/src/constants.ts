@@ -15,9 +15,5 @@ export const DOWNBEAT_MERGE_TOLERANCE_MS = 10;
  * no matching entry (and therefore no measured onset strength) in `beats`. */
 export const DOWNBEAT_STRENGTH = 1;
 
-/**
- * `narrative_segments.narrativeFunction` values (free text, no typed field
- * exists) treated as the "punchline" proxy — spec section 32's canonical
- * example is aligning a visual punchline to a musical downbeat.
- */
-export const PUNCHLINE_FUNCTIONS: ReadonlySet<string> = new Set(['payoff', 'punchline', 'climax']);
+/** The punchline proxy lives in `@memetize/contracts`; both planners share it. */
+export { isPunchlineFunction, PUNCHLINE_FUNCTIONS } from '@memetize/contracts';

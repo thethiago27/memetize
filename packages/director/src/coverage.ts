@@ -130,12 +130,7 @@ function resolveSegment(
     catalog: readonly string[];
   },
 ): { clips: ResolvedCoverageClip[]; decisions: CoverageDecision[] } {
-  const candidates = orderedCandidates(
-    segment.id,
-    context.pickMomentId,
-    context.match,
-    context.moments,
-  );
+  const candidates = orderedCandidates(context.pickMomentId, context.match, context.moments);
   const poolIds = new Set(candidates);
   const catalogCandidates = context.catalog.filter(
     (momentId) => !poolIds.has(momentId) && context.moments.has(momentId),
@@ -194,7 +189,6 @@ function resolveSegment(
 }
 
 function orderedCandidates(
-  _segmentId: string,
   pickMomentId: string | undefined,
   match: AssembleSegmentMatch | undefined,
   moments: ReadonlyMap<string, AssembleMoment>,

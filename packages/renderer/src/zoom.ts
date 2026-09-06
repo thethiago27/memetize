@@ -1,4 +1,5 @@
 import type { TimelineCanvas, TimelineClip, TimelineEffect } from '@memetize/timeline';
+import { toSeconds } from './cuts';
 
 export interface ParsedZoom {
   startMs: number;
@@ -47,8 +48,4 @@ export function buildZoomFilter(
     `scale=w='iw*(${z})':h='ih*(${z})':eval=frame,` +
     `crop=${width}:${height}:x='(iw-${width})/2':y='(ih-${height})/2'`
   );
-}
-
-function toSeconds(ms: number): string {
-  return (ms / 1000).toFixed(3);
 }

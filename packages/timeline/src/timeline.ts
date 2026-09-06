@@ -76,6 +76,16 @@ export type TimelineEffect = z.infer<typeof TimelineEffect>;
  * from and the Effects resolver validates against real source handles.
  * Both enums are exported as arrays too so label maps can iterate them.
  */
+/**
+ * A transition may never take more than this fraction of the smaller of the two
+ * slots it joins. It lives with the timeline schema because it is part of the
+ * time model a `Timeline` has to satisfy: the Effects resolver plans against it
+ * and `validateTimeline` enforces it. It used to live in `@memetize/renderer`
+ * and be re-exported by `@memetize/effects`, which made the planner depend on
+ * the renderer — and so on its canvas/FFmpeg toolchain — for one number.
+ */
+export const MAX_TRANSITION_SLOT_FRACTION = 1 / 3;
+
 export const TRANSITION_STYLES = ['hard', 'dip_black', 'flash', 'crossfade', 'whip'] as const;
 export const TransitionStyle = z.enum(TRANSITION_STYLES);
 export type TransitionStyle = z.infer<typeof TransitionStyle>;
