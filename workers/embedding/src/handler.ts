@@ -109,7 +109,17 @@ export function createEmbedHandler(): JobHandler {
       });
     }
 
-    const persisted = await replaceEmbeddings(ctx.db, { assetId, model, modelVersion, embeddings });
+    // Vectors and the READY transition commit together with the job completion,
+    // only while this attempt still owns the lease and its generation is
+    // current (F08/F09). READY only once every moment has all three embeddings
+    // (spec section 40).
+    const published = await ctx.publish(async ({ tx }) => {
+      const persisted = await replaceEmbeddings(tx, { assetId, model, modelVersion, embeddings });
+      if (persisted.length === moments.length * EMBEDDING_TYPES.length) {
+        await setAssetStatus(tx, assetId, 'READY');
+      }
+      return { assetId, embeddingCount: persisted.length, model, modelVersion };
+    });
 
     for (const [momentId, texts] of textsByMoment) {
       const debugFile = embeddingDebugFile(ctx.config, assetId, momentId);
@@ -124,17 +134,12 @@ export function createEmbedHandler(): JobHandler {
       );
     }
 
-    // READY only once every moment has all three embeddings (spec section 40).
-    if (persisted.length === moments.length * EMBEDDING_TYPES.length) {
-      await setAssetStatus(ctx.db, assetId, 'READY');
-    }
-
     ctx.logger.info('embed_completed', {
       assetId,
-      embeddingCount: persisted.length,
+      embeddingCount: published.embeddingCount,
       model,
       modelVersion,
     });
-    return { assetId, embeddingCount: persisted.length, model, modelVersion };
+    return published;
   };
 }

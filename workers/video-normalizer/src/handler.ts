@@ -26,7 +26,7 @@ export function createNormalizeHandler(): JobHandler {
     const analysis = assetFile(ctx.config, assetId, 'analysis.mp4');
     const thumbnail = assetFile(ctx.config, assetId, 'thumbnail.jpg');
 
-    await setAssetStatus(ctx.db, assetId, 'NORMALIZING');
+    await ctx.progress(async ({ tx }) => setAssetStatus(tx, assetId, 'NORMALIZING'));
     try {
       await normalizeVideo({
         originalPath: original,
@@ -35,7 +35,8 @@ export function createNormalizeHandler(): JobHandler {
         thumbnailPath: thumbnail.absolute,
       });
     } catch (error) {
-      await setAssetStatus(ctx.db, assetId, 'FAILED');
+      // FAILED is propagated to the asset by the orchestrator's onJobFailed hook,
+      // which checks the generation is still current first (F08/F09).
       throw new JobFailure(
         'VIDEO_NORMALIZE_ERROR',
         error instanceof Error ? error.message : String(error),

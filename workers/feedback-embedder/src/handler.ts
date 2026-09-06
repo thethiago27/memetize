@@ -43,7 +43,9 @@ export function createFeedbackEmbedHandler(): JobHandler {
       return { feedbackEventId, embedded: false, polarity, model: null, modelVersion: null };
     };
     if (!polarity) return skip(`kind ${event.kind} carries no vector`);
-    if (!event.momentId || !event.assetId) return skip('event has no moment');
+    // Bound as consts so the narrowing survives into the publication closure.
+    const { momentId, assetId } = event;
+    if (!momentId || !assetId) return skip('event has no moment');
     if (!sourceText) return skip('empty context text');
 
     const { embedding: provider } = createProviders(ctx.config);
@@ -66,18 +68,23 @@ export function createFeedbackEmbedHandler(): JobHandler {
       throw new JobFailure('FEEDBACK_EMBED_ERROR', 'embedding provider returned no vector', false);
     }
 
-    await upsertFeedbackEmbedding(ctx.db, {
-      feedbackEventId,
-      momentId: event.momentId,
-      assetId: event.assetId,
-      polarity,
-      sourceText,
-      vector,
-      model,
-      modelVersion,
+    // The vector commits together with the job completion, only while this
+    // attempt still owns the lease and its generation is current (F08/F09).
+    const published = await ctx.publish(async ({ tx }) => {
+      await upsertFeedbackEmbedding(tx, {
+        feedbackEventId,
+        momentId,
+        assetId,
+        polarity,
+        sourceText,
+        vector,
+        model,
+        modelVersion,
+      });
+      return { feedbackEventId, embedded: true, polarity, model, modelVersion };
     });
 
     ctx.logger.info('feedback_embed_completed', { feedbackEventId, polarity, model, modelVersion });
-    return { feedbackEventId, embedded: true, polarity, model, modelVersion };
+    return published;
   };
 }

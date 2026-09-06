@@ -151,40 +151,54 @@ export async function resolveEditWindow(
  * Records the editor's window on the project and reruns the pipeline from
  * `narrative`, since every later stage is scoped to the window. Refuses
  * while a job is RUNNING.
+ *
+ * The whole command runs in one transaction under the per-project lock (F09):
+ * the idle check, the window write and the reprocess it implies commit or roll
+ * back together, so a `ProjectBusyError` raised by the reprocess can never
+ * leave the window changed with no pipeline re-run behind it.
  */
 export async function setManualWindow(
   db: Database,
   projectId: string,
   input: unknown,
 ): Promise<ManualWindowInput> {
-  const project = await getProject(db, projectId);
-  if (!project) throw new ManualWindowError('NOT_FOUND', `project not found: ${projectId}`);
-  const audio = await getAudioAnalysis(db, projectId);
-  if (!audio) {
-    throw new ManualWindowError('NO_AUDIO', `project ${projectId} has no audio analysis yet`);
-  }
-  const window = validateManualWindow(input, audio.durationMs);
-  await assertProjectIdle(db, projectId);
-  await db
-    .update(projects)
-    .set({
-      manualWindowStartMs: window.sourceStartMs,
-      manualWindowEndMs: window.sourceEndMs,
-      updatedAt: new Date(),
-    })
-    .where(eq(projects.id, projectId));
-  await reprocessProject(db, projectId, 'narrative');
-  return window;
+  return db.transaction(async (tx) => {
+    await lockProject(tx, projectId);
+    const project = await getProject(tx, projectId);
+    if (!project) throw new ManualWindowError('NOT_FOUND', `project not found: ${projectId}`);
+    const audio = await getAudioAnalysis(tx, projectId);
+    if (!audio) {
+      throw new ManualWindowError('NO_AUDIO', `project ${projectId} has no audio analysis yet`);
+    }
+    const window = validateManualWindow(input, audio.durationMs);
+    await assertProjectIdle(tx, projectId);
+    await tx
+      .update(projects)
+      .set({
+        manualWindowStartMs: window.sourceStartMs,
+        manualWindowEndMs: window.sourceEndMs,
+        updatedAt: new Date(),
+      })
+      .where(eq(projects.id, projectId));
+    await reprocessProject(tx, projectId, 'narrative');
+    return window;
+  });
 }
 
-/** Returns the project to the automatic window and reruns from `narrative`. */
+/**
+ * Returns the project to the automatic window and reruns from `narrative`.
+ * Same one-transaction-under-the-lock contract as `setManualWindow`.
+ */
 export async function clearManualWindow(db: Database, projectId: string): Promise<void> {
-  const project = await getProject(db, projectId);
-  if (!project) throw new ManualWindowError('NOT_FOUND', `project not found: ${projectId}`);
-  await assertProjectIdle(db, projectId);
-  await db
-    .update(projects)
-    .set({ manualWindowStartMs: null, manualWindowEndMs: null, updatedAt: new Date() })
-    .where(eq(projects.id, projectId));
-  await reprocessProject(db, projectId, 'narrative');
+  await db.transaction(async (tx) => {
+    await lockProject(tx, projectId);
+    const project = await getProject(tx, projectId);
+    if (!project) throw new ManualWindowError('NOT_FOUND', `project not found: ${projectId}`);
+    await assertProjectIdle(tx, projectId);
+    await tx
+      .update(projects)
+      .set({ manualWindowStartMs: null, manualWindowEndMs: null, updatedAt: new Date() })
+      .where(eq(projects.id, projectId));
+    await reprocessProject(tx, projectId, 'narrative');
+  });
 }

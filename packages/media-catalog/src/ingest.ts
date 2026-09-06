@@ -77,28 +77,43 @@ export async function ingestAsset({
 
   const probe = await probeVideo(original.absolute);
 
+  // The asset row, its coordination row, its first generation and its first job
+  // commit together in one transaction (F09/F10) — the same contract as project
+  // ingest: a crash cannot leave an asset with no generation and no job.
   let asset: MediaAssetRow;
   try {
-    const inserted = await db
-      .insert(mediaAssets)
-      .values({
-        id,
-        filename: displayName ?? basename(filePath),
-        originalPath: original.relative,
-        checksum,
-        durationMs: probe.durationMs,
-        width: probe.width,
-        height: probe.height,
-        fpsMilli: probe.fpsMilli,
-        contentType: EXT_CONTENT_TYPE[ext] ?? 'application/octet-stream',
-        sizeBytes: stats.size,
-        status: 'INGESTED',
-        source: source ?? null,
-      })
-      .returning();
-    const row = inserted[0];
-    if (!row) throw new Error('failed to insert media asset');
-    asset = row;
+    asset = await db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(mediaAssets)
+        .values({
+          id,
+          filename: displayName ?? basename(filePath),
+          originalPath: original.relative,
+          checksum,
+          durationMs: probe.durationMs,
+          width: probe.width,
+          height: probe.height,
+          fpsMilli: probe.fpsMilli,
+          contentType: EXT_CONTENT_TYPE[ext] ?? 'application/octet-stream',
+          sizeBytes: stats.size,
+          status: 'INGESTED',
+          source: source ?? null,
+        })
+        .returning();
+      const row = inserted[0];
+      if (!row) throw new Error('failed to insert media asset');
+
+      await ensureEntityExecution(tx, 'asset', id);
+      const generationId = await startGeneration(tx, 'asset', id);
+      await enqueueJob(tx, {
+        type: 'VIDEO_NORMALIZE',
+        entityId: id,
+        input: { assetId: id, originalPath: original.relative },
+        generationId,
+        stepKey: stepKeyFor('VIDEO_NORMALIZE'),
+      });
+      return row;
+    });
   } catch (error) {
     // Lost a race on the unique checksum: return the winner instead of failing.
     const raced = await db.query.mediaAssets.findFirst({
@@ -107,19 +122,6 @@ export async function ingestAsset({
     if (raced) return { asset: raced, created: false };
     throw error;
   }
-
-  // Coordination row, first generation and first job commit together (F09/F10).
-  await db.transaction(async (tx) => {
-    await ensureEntityExecution(tx, 'asset', id);
-    const generationId = await startGeneration(tx, 'asset', id);
-    await enqueueJob(tx, {
-      type: 'VIDEO_NORMALIZE',
-      entityId: id,
-      input: { assetId: id, originalPath: original.relative },
-      generationId,
-      stepKey: stepKeyFor('VIDEO_NORMALIZE'),
-    });
-  });
 
   return { asset, created: true };
 }

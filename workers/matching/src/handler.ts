@@ -58,7 +58,7 @@ export function createMatchHandler(): JobHandler {
 
     // Idempotent: NARRATIVE already sets this, but MATCH can also be
     // reprocessed on its own (spec section 42's `reprocess --from match`).
-    await setProjectStatus(ctx.db, projectId, 'PLANNING');
+    await ctx.progress(async ({ tx }) => setProjectStatus(tx, projectId, 'PLANNING'));
 
     // Editorial memory is read once per run and the cutoff persisted, so a
     // reprocess can be reproduced against the same feedback state.

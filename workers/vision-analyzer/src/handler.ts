@@ -35,6 +35,16 @@ export function createVisionAnalyzeHandler(): JobHandler {
     let modelVersion = '';
     let promptVersion = '';
 
+    /** One scene's analysis, held until the publication writes them together. */
+    interface AnalyzedScene {
+      sceneId: string;
+      vision: VisionSceneAnalysis;
+      visionModel: string;
+      visionVersion: string;
+      debug: Record<string, unknown>;
+    }
+    const analyzed: AnalyzedScene[] = [];
+
     try {
       for (const scene of scenes) {
         const sceneTranscript = transcript
@@ -59,35 +69,26 @@ export function createVisionAnalyzeHandler(): JobHandler {
         });
         const result = VisionSceneAnalysis.parse(analysis.result);
 
-        await updateSceneVision(ctx.db, scene.id, {
-          vision: result,
-          visionModel: analysis.model,
-          visionVersion: analysis.modelVersion,
-        });
-
         model = analysis.model;
         modelVersion = analysis.modelVersion;
         promptVersion = analysis.promptVersion;
 
-        const debugFile = visionDebugFile(ctx.config, assetId, scene.id);
-        await ensureDir(dirname(debugFile.absolute));
-        await writeFile(
-          debugFile.absolute,
-          JSON.stringify(
-            {
-              sceneId: scene.id,
-              frames: scene.frames,
-              transcript: sceneTranscript,
-              promptVersion: analysis.promptVersion,
-              model: analysis.model,
-              modelVersion: analysis.modelVersion,
-              raw: analysis.raw,
-              parsed: result,
-            },
-            null,
-            2,
-          ),
-        );
+        analyzed.push({
+          sceneId: scene.id,
+          vision: result,
+          visionModel: analysis.model,
+          visionVersion: analysis.modelVersion,
+          debug: {
+            sceneId: scene.id,
+            frames: scene.frames,
+            transcript: sceneTranscript,
+            promptVersion: analysis.promptVersion,
+            model: analysis.model,
+            modelVersion: analysis.modelVersion,
+            raw: analysis.raw,
+            parsed: result,
+          },
+        });
       }
     } catch (error) {
       throw new JobFailure(
@@ -97,12 +98,27 @@ export function createVisionAnalyzeHandler(): JobHandler {
       );
     }
 
-    // The MOMENT_EXTRACT follow-up commits with the job completion (F10), only
-    // while this attempt owns the job and its generation is current (F08/F09).
-    const result = await ctx.publish(async ({ enqueue }) => {
+    // Every scene's analysis and the MOMENT_EXTRACT follow-up commit with the
+    // job completion (F10), only while this attempt owns the job and its
+    // generation is current (F08/F09) — a partially analyzed asset is never left
+    // behind by an attempt that lost its lease.
+    const result = await ctx.publish(async ({ tx, enqueue }) => {
+      for (const scene of analyzed) {
+        await updateSceneVision(tx, scene.sceneId, {
+          vision: scene.vision,
+          visionModel: scene.visionModel,
+          visionVersion: scene.visionVersion,
+        });
+      }
       await enqueue({ type: 'MOMENT_EXTRACT', entityId: assetId, input: { assetId } });
       return { sceneCount: scenes.length, model, modelVersion, promptVersion };
     });
+
+    for (const scene of analyzed) {
+      const debugFile = visionDebugFile(ctx.config, assetId, scene.sceneId);
+      await ensureDir(dirname(debugFile.absolute));
+      await writeFile(debugFile.absolute, JSON.stringify(scene.debug, null, 2));
+    }
 
     ctx.logger.info('vision_analyze_completed', {
       sceneCount: scenes.length,

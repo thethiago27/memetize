@@ -21,6 +21,7 @@ export function createFrameExtractHandler(): JobHandler {
 
     const scenes = await listScenes(ctx.db, assetId);
     let frameCount = 0;
+    const extracted: { sceneId: string; frames: { timestampMs: number; path: string }[] }[] = [];
     try {
       for (const scene of scenes) {
         const timestamps = sampleFrameTimestamps(scene);
@@ -34,7 +35,7 @@ export function createFrameExtractHandler(): JobHandler {
           });
           frames.push({ timestampMs, path: file.relative });
         }
-        await updateSceneFrames(ctx.db, scene.id, frames);
+        extracted.push({ sceneId: scene.id, frames });
         frameCount += frames.length;
       }
     } catch (error) {
@@ -45,9 +46,17 @@ export function createFrameExtractHandler(): JobHandler {
       );
     }
 
+    // Every scene's frames commit together with the job completion, only while
+    // this attempt still owns the lease and its generation is current (F08/F09).
     // VISION_ANALYZE fan-in is enqueued from the orchestrator's post-completion hook (F10).
+    const published = await ctx.publish(async ({ tx }) => {
+      for (const scene of extracted) {
+        await updateSceneFrames(tx, scene.sceneId, scene.frames);
+      }
+      return { sceneCount: scenes.length, frameCount };
+    });
 
     ctx.logger.info('frame_extract_completed', { sceneCount: scenes.length, frameCount });
-    return { sceneCount: scenes.length, frameCount };
+    return published;
   };
 }

@@ -64,7 +64,7 @@ export function createRenderHandler(): JobHandler {
     }
     const { projectId, profile, sourceTimelineVersion, editWindowVersion } = parsed.data;
 
-    await setProjectStatus(ctx.db, projectId, 'RENDERING');
+    await ctx.progress(async ({ tx }) => setProjectStatus(tx, projectId, 'RENDERING'));
 
     const source = await resolveSourceTimeline(ctx.db, projectId, sourceTimelineVersion);
     const timelineVersion = source.row;

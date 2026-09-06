@@ -77,12 +77,28 @@ export function createLyricsHandler(): JobHandler {
       modelVersion = transcript.modelVersion;
     }
 
-    const persisted = await replaceLyrics(ctx.db, {
-      projectId,
-      source,
-      lines,
-      model,
-      modelVersion,
+    // The lyrics commit together with the job completion, only while this
+    // attempt still owns the lease and its generation is current (F08/F09).
+    // NARRATIVE fan-in is enqueued from the orchestrator's post-completion hook (F10).
+    // Write the normalized export to its own file, never onto the user's source
+    // copy (`source-lyrics.*` from ingest), so the original bytes are preserved.
+    const lrcFile = audioFile(ctx.config, projectId, 'generated-lyrics.lrc');
+    let persisted!: Awaited<ReturnType<typeof replaceLyrics>>;
+    const published = await ctx.publish(async ({ tx }) => {
+      persisted = await replaceLyrics(tx, {
+        projectId,
+        source,
+        lines,
+        model,
+        modelVersion,
+      });
+      return {
+        source,
+        lineCount: persisted.lines.length,
+        model,
+        modelVersion,
+        lrcPath: lrcFile.relative,
+      };
     });
 
     const debugFile = lyricsDebugFile(ctx.config, projectId);
@@ -92,13 +108,8 @@ export function createLyricsHandler(): JobHandler {
       JSON.stringify({ projectId, source, model, modelVersion, lines: persisted.lines }, null, 2),
     );
 
-    // Write the normalized export to its own file, never onto the user's source
-    // copy (`source-lyrics.*` from ingest), so the original bytes are preserved.
-    const lrcFile = audioFile(ctx.config, projectId, 'generated-lyrics.lrc');
     await ensureDir(dirname(lrcFile.absolute));
     await writeFile(lrcFile.absolute, formatLrc(persisted.lines), 'utf8');
-
-    // NARRATIVE fan-in is enqueued from the orchestrator's post-completion hook (F10).
 
     ctx.logger.info('lyrics_completed', {
       projectId,
@@ -106,12 +117,6 @@ export function createLyricsHandler(): JobHandler {
       lineCount: persisted.lines.length,
       lrcPath: lrcFile.relative,
     });
-    return {
-      source,
-      lineCount: persisted.lines.length,
-      model,
-      modelVersion,
-      lrcPath: lrcFile.relative,
-    };
+    return published;
   };
 }

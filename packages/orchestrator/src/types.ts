@@ -37,6 +37,16 @@ export interface JobContext {
   publish: (
     fn: (ctx: PublishContext) => Promise<Record<string, unknown>>,
   ) => Promise<Record<string, unknown>>;
+  /**
+   * Writes a mid-pipeline status (NORMALIZING, PLANNING, RENDERING…) under the
+   * entity lock, only while this attempt still owns the job's lease and its
+   * generation is the active one (F09). Returns false — without writing —
+   * when either check fails, so a superseded attempt can never drag a newer
+   * generation's entity back into one of its own progress states. Use it for
+   * every entity-status write outside `publish`; never write a status with
+   * `ctx.db` directly.
+   */
+  progress: (fn: (ctx: PublishContext) => Promise<void>) => Promise<boolean>;
 }
 
 /**

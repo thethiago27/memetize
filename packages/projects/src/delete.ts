@@ -3,7 +3,8 @@ import { join } from 'node:path';
 import { type Database, jobs, projects } from '@memetize/database';
 import type { AppConfig } from '@memetize/shared';
 import { eq } from 'drizzle-orm';
-import { assertProjectIdle } from './busy';
+import { ProjectBusyError } from './busy';
+import { lockProject } from './coordinate';
 import { audioDir, renderDir } from './paths';
 import { getProject } from './projects';
 
@@ -35,9 +36,20 @@ export async function deleteProject({
   const project = await getProject(db, projectId);
   if (!project) return false;
 
-  await assertProjectIdle(db, projectId);
-
   await db.transaction(async (tx) => {
+    await lockProject(tx, projectId);
+    // Lock every job row before deciding (F09). `claimNextJob` selects with
+    // `FOR UPDATE SKIP LOCKED`, so while this transaction holds these rows a
+    // concurrent claim skips them: no PENDING job can turn RUNNING between the
+    // idle check and the delete, which would otherwise drop a job out from
+    // under a live handler.
+    const held = await tx
+      .select({ id: jobs.id, status: jobs.status })
+      .from(jobs)
+      .where(eq(jobs.entityId, projectId))
+      .for('update');
+    if (held.some((job) => job.status === 'RUNNING')) throw new ProjectBusyError(projectId);
+
     await tx.delete(jobs).where(eq(jobs.entityId, projectId));
     await tx.delete(projects).where(eq(projects.id, projectId));
   });

@@ -32,5 +32,11 @@ export function createDirectJobContext(args: DirectJobContextArgs): JobContext {
       args.db.transaction((tx) =>
         fn({ tx, enqueue: (enqueueArgs) => enqueueJob(tx, enqueueArgs) }),
       ),
+    progress: async (fn) => {
+      await args.db.transaction((tx) =>
+        fn({ tx, enqueue: (enqueueArgs) => enqueueJob(tx, enqueueArgs) }),
+      );
+      return true;
+    },
   };
 }

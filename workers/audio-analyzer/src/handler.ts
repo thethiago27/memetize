@@ -81,35 +81,39 @@ export function createAudioAnalyzeHandler(): JobHandler {
     }
     const output = outputParse.data;
 
-    const persisted = await replaceAudioAnalysis(ctx.db, {
-      projectId,
-      durationMs: output.durationMs,
-      bpm: output.bpm,
-      beats: output.beats,
-      downbeats: output.downbeats,
-      sections: output.sections,
-      energyCurve: output.energyCurve,
-      analyzer: output.analyzer,
-      analyzerVersion: output.analyzerVersion,
+    // The analysis commits together with the job completion, only while this
+    // attempt still owns the lease and its generation is current (F08/F09).
+    // The NARRATIVE fan-in barrier runs from the orchestrator's post-completion
+    // hook, so both siblings are seen as COMPLETED (F10).
+    const published = await ctx.publish(async ({ tx }) => {
+      const persisted = await replaceAudioAnalysis(tx, {
+        projectId,
+        durationMs: output.durationMs,
+        bpm: output.bpm,
+        beats: output.beats,
+        downbeats: output.downbeats,
+        sections: output.sections,
+        energyCurve: output.energyCurve,
+        analyzer: output.analyzer,
+        analyzerVersion: output.analyzerVersion,
+      });
+      return {
+        analyzer: output.analyzer,
+        analyzerVersion: output.analyzerVersion,
+        beatCount: persisted.beats.length,
+        sectionCount: persisted.sections.length,
+      };
     });
 
     const debugFile = audioDebugFile(ctx.config, projectId);
     await ensureDir(dirname(debugFile.absolute));
     await writeFile(debugFile.absolute, JSON.stringify(output, null, 2));
 
-    // The NARRATIVE fan-in barrier now runs from the orchestrator's
-    // post-completion hook, so both siblings are seen as COMPLETED (F10).
-
     ctx.logger.info('audio_analyze_completed', {
       durationMs,
       beatCount: output.beats.length,
       sectionCount: output.sections.length,
     });
-    return {
-      analyzer: output.analyzer,
-      analyzerVersion: output.analyzerVersion,
-      beatCount: persisted.beats.length,
-      sectionCount: persisted.sections.length,
-    };
+    return published;
   };
 }

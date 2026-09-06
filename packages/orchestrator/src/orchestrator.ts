@@ -175,6 +175,42 @@ export class Orchestrator {
     });
   }
 
+  /**
+   * Mid-pipeline status write (F09): takes the entity lock, checks the job's
+   * generation is still the active one and that this attempt still owns the
+   * lease, then applies `fn`. A superseded generation or a lost lease writes
+   * nothing and returns false, so a stale attempt can never move a newer
+   * generation's entity into one of its own progress states.
+   */
+  private async markProgress(
+    job: JobRow,
+    leaseToken: string,
+    fn: (ctx: PublishContext) => Promise<void>,
+  ): Promise<boolean> {
+    const { db } = this.options;
+    try {
+      return await db.transaction(async (tx) => {
+        const kind = this.options.entityKindOf?.(job) ?? null;
+        if (kind) {
+          await ensureEntityExecution(tx, kind, job.entityId);
+          await lockEntity(tx, kind, job.entityId);
+        }
+        await assertJobOwned(tx, job.id, leaseToken);
+        if (kind) await requireActiveGeneration(tx, kind, job.entityId, job.generationId);
+        await fn({
+          tx,
+          enqueue: (args) => enqueueJob(tx, this.stampGeneration(job, args)),
+        });
+        return true;
+      });
+    } catch (error) {
+      if (error instanceof LeaseLostError || error instanceof GenerationSupersededError) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
   /** Claims and runs a single job. Returns null when nothing is claimable. */
   async runOnce(args: { entityId?: string } = {}): Promise<RunOutcome | null> {
     const { db, config, registry, scheduler } = this.options;
@@ -269,6 +305,7 @@ export class Orchestrator {
           logger,
           enqueue: (enqueueArgs) => enqueueJob(db, this.stampGeneration(job, enqueueArgs)),
           publish,
+          progress: (fn) => this.markProgress(job, leaseToken, fn),
         });
         // Handlers that did not publish themselves are completed here, under the
         // same lock/ownership/generation checks and with the same continuations.

@@ -23,7 +23,6 @@ import {
   insertTimelineVersion,
   listNarrativeSegments,
   listSegmentMatches,
-  setProjectStatus,
   timelineFile,
 } from '@memetize/projects';
 import { ensureDir } from '@memetize/shared';
@@ -214,7 +213,8 @@ export function createDirectorHandler(): JobHandler {
       });
     } catch (error) {
       if (error instanceof InsufficientCatalogError) {
-        await setProjectStatus(ctx.db, projectId, 'FAILED');
+        // FAILED is propagated to the project by the orchestrator's onJobFailed
+        // hook, which checks the generation is still current first (F08/F09).
         throw new JobFailure('INSUFFICIENT_CATALOG', error.message, false);
       }
       throw new JobFailure(

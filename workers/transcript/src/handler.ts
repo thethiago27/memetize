@@ -77,20 +77,24 @@ export function createTranscriptHandler(): JobHandler {
     }
     const output = outputParse.data;
 
-    const persisted = await replaceTranscript(ctx.db, {
-      assetId,
-      model: output.model,
-      modelVersion: output.modelVersion,
-      segments: output.segments,
+    // The segments commit together with the job completion, only while this
+    // attempt still owns the lease and its generation is current (F08/F09).
+    // VISION_ANALYZE fan-in is enqueued from the orchestrator's post-completion hook (F10).
+    const published = await ctx.publish(async ({ tx }) => {
+      const persisted = await replaceTranscript(tx, {
+        assetId,
+        model: output.model,
+        modelVersion: output.modelVersion,
+        segments: output.segments,
+      });
+      return {
+        segmentCount: persisted.length,
+        model: output.model,
+        modelVersion: output.modelVersion,
+      };
     });
 
-    // VISION_ANALYZE fan-in is enqueued from the orchestrator's post-completion hook (F10).
-
-    ctx.logger.info('transcript_persisted', { segmentCount: persisted.length });
-    return {
-      segmentCount: persisted.length,
-      model: output.model,
-      modelVersion: output.modelVersion,
-    };
+    ctx.logger.info('transcript_persisted', { segmentCount: published.segmentCount });
+    return published;
   };
 }
